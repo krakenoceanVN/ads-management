@@ -63,6 +63,7 @@
   },
   "downstream": {
     "pageTitle": "下游",
+    "loadError": "无法加载下游数据",
     "backToList": "返回下游列表",
     "adSitesOf": "{{type}} - {{adType}} 的广告位 ({{count}})",
     "monthPlaceholder": "选择月份",
@@ -75,6 +76,8 @@
     "defaultPayout": "默认分成",
     "reportTitle": "下游明细报表 {{type}} - {{adType}} ({{month}})",
     "reportFooter": "导出日期 {{date}} | Ad Management System",
+    "officialReportNote": "正式报表，仅包含已确认数据。",
+    "draftReportNote": "发送用草稿报表，包含未确认数据。",
     "siteCount": "{{count}} 个广告位",
     "adType": "广告类型",
     "type": "类型",

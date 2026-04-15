@@ -6,7 +6,7 @@ import { DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import html2pdf from 'html2pdf.js'
-import api from '../../api/axios'
+import api, { isAdmin } from '../../api/axios'
 import DashboardBottomScrollbar from '../dashboard/DashboardBottomScrollbar'
 import { withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent, toFiniteNumber } from '../../utils/numberFormat'
@@ -154,6 +154,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
   const year = month.year()
   const monthNumber = month.month() + 1
   const queryKey = ['le-dashboard', monthKey] as const
+  const isOfficialView = isAdmin()
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
   const intlLocale = language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'vi-VN'
 
@@ -207,6 +208,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
       + (downstreamColWidth * 3)
     const pageWidthPx = tableWidthPx + (pageMargin * 2) + 24
     const pageHeightPx = Math.max(1200, 220 + ((displayRows.length + 3) * 28))
+    const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
 
     const renderMoneyCell = (value: number, color = '#1f2937') => `
       <td style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: ${color};${color !== '#1f2937' ? ' font-weight: 600;' : ''}">
@@ -282,6 +284,9 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
         </h2>
         <p style="text-align: center; margin: 0 0 10px 0; color: #666; font-size: 11px;">
           ${t('downstream.lePdfNote')}
+        </p>
+        <p style="text-align: center; margin: 0 0 10px 0; color: ${isOfficialView ? '#0f766e' : '#b45309'}; font-size: 11px; font-weight: 600;">
+          ${reportNote}
         </p>
         <table class="le-report-table">
           <thead>
@@ -498,6 +503,9 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
         </Button>
         <span style={{ color: '#6b7280', fontSize: 12 }}>
           {t('downstream.leReadOnlyNote')}
+        </span>
+        <span style={{ color: isOfficialView ? '#0f766e' : '#b45309', fontSize: 12 }}>
+          {isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')}
         </span>
       </div>
       <div ref={tableHostRef} className="dashboard-table-shell">

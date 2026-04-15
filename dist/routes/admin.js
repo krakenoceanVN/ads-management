@@ -81,10 +81,13 @@ router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermis
 // ============================================================
 // GET /api/admin/downstreams
 // ============================================================
-router.get("/admin/downstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), async (_req, res) => {
+router.get("/admin/downstreams", auth_js_1.requireAuth, async (_req, res) => {
     try {
         const downstreams = await prisma_js_1.default.downstream.findMany({
-            include: { adType: true },
+            include: {
+                adType: true,
+                adSites: true,
+            },
             orderBy: { id: "asc" },
         });
         const result = downstreams.map((d) => ({
@@ -92,6 +95,7 @@ router.get("/admin/downstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePer
             ad_type_code: d.adType.code,
             downstream_type: d.downstreamType,
             payout_rate: Number(d.payoutRate),
+            site_count: d.adSites.length,
             status: d.status,
         }));
         res.json({ success: true, data: result });
@@ -104,7 +108,7 @@ router.get("/admin/downstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePer
 // ============================================================
 // GET /api/admin/downstream-periods
 // ============================================================
-router.get("/admin/downstream-periods", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), async (_req, res) => {
+router.get("/admin/downstream-periods", auth_js_1.requireAuth, async (_req, res) => {
     try {
         const periods = await prisma_js_1.default.downstreamPeriod.findMany({
             include: {
@@ -137,11 +141,12 @@ router.get("/admin/downstream-periods", auth_js_1.requireAuth, (0, auth_js_1.req
 // Query: date (optional, YYYY-MM-DD) or month (optional, YYYY-MM)
 // If neither is provided, returns the latest input per site
 // ============================================================
-router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("date").optional().isISO8601(),
     (0, express_validator_1.query)("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("month must be YYYY-MM"),
 ], handleValidation, async (req, res) => {
     try {
+        const isOfficialView = req.user?.perm_admin === true;
         const downstreamId = parseInt(req.params.downstreamId);
         const dateStr = req.query.date;
         const monthStr = req.query.month;
@@ -185,7 +190,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
         let inputsQuery = {
             where: {
                 adSiteId: { in: siteIds },
-                status: "confirmed",
+                status: isOfficialView ? "confirmed" : undefined,
             },
             orderBy: [{ adSiteId: "asc" }, { recordDate: "desc" }],
         };
@@ -195,7 +200,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             inputsQuery = {
                 where: {
                     adSiteId: { in: siteIds },
-                    status: "confirmed",
+                    status: isOfficialView ? "confirmed" : undefined,
                     recordDate: { gte: startOfDay, lt: endOfDay },
                 },
                 orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
@@ -207,7 +212,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             inputsQuery = {
                 where: {
                     adSiteId: { in: siteIds },
-                    status: "confirmed",
+                    status: isOfficialView ? "confirmed" : undefined,
                     recordDate: { gte: startOfMonth, lt: endOfMonth },
                 },
                 orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
@@ -666,7 +671,7 @@ router.post("/admin/downstream-rates", auth_js_1.requireAuth, (0, auth_js_1.requ
 // GET /api/admin/downstream-rates
 // Query: downstream_id, start_date, end_date
 // ============================================================
-router.get("/admin/downstream-rates", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.get("/admin/downstream-rates", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("downstream_id").isInt().toInt(),
     (0, express_validator_1.query)("start_date").optional().isISO8601(),
     (0, express_validator_1.query)("end_date").optional().isISO8601(),

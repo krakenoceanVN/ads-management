@@ -63,6 +63,7 @@
   },
   "downstream": {
     "pageTitle": "Hạ nguồn",
+    "loadError": "Không thể tải dữ liệu hạ nguồn",
     "backToList": "Quay lại danh sách downstream",
     "adSitesOf": "Ad Sites của {{type}} - {{adType}} ({{count}})",
     "monthPlaceholder": "Chọn tháng",
@@ -75,6 +76,8 @@
     "defaultPayout": "Payout mặc định",
     "reportTitle": "BÁO CÁO CHI TIẾT HẠ NGUỒN {{type}} - {{adType}} ({{month}})",
     "reportFooter": "Xuất ngày {{date}} | Ad Management System",
+    "officialReportNote": "Báo cáo chính thức, chỉ gồm dữ liệu đã xác nhận.",
+    "draftReportNote": "Bản nháp để gửi, gồm cả dữ liệu chưa xác nhận.",
     "siteCount": "{{count}} sites",
     "adType": "Loại quảng cáo",
     "type": "Loại",

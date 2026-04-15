@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Table } from 'antd'
+import { Alert, Table } from 'antd'
 import { Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
@@ -14,27 +14,15 @@ interface DownstreamRow {
   ad_type_code: string
   downstream_type: string
   payout_rate: number
+  site_count: number
   status: 'active' | 'inactive'
-}
-
-interface AdSiteRow {
-  id: number
-  ad_site_name: string
-  upstream_name: string
-  billing_method: string
-  downstream_ids: number[]
 }
 
 export default function DownstreamPage() {
   const { t } = useTranslation()
-  const { data: downstreams = [], isLoading: dsLoading } = useQuery({
+  const { data: downstreams = [], isLoading: dsLoading, isError: dsError } = useQuery({
     queryKey: ['admin', 'downstreams'],
     queryFn: () => api.get<ApiResponse<DownstreamRow[]>>('/api/admin/downstreams').then((r) => r.data.data ?? []),
-  })
-
-  const { data: adSites = [] } = useQuery({
-    queryKey: ['admin', 'ad-sites'],
-    queryFn: () => api.get<ApiResponse<AdSiteRow[]>>('/api/admin/ad-sites').then((r) => r.data.data ?? []),
   })
 
   const downstreamColumns: ColumnsType<DownstreamRow> = withTableEllipsis([
@@ -52,7 +40,7 @@ export default function DownstreamPage() {
       key: 'ad_sites',
       width: 80,
       render: (_: unknown, row: DownstreamRow) => {
-        const count = adSites.filter((s) => s.downstream_ids?.includes(row.id)).length
+        const count = row.site_count ?? 0
         if (count === 0) return '-'
         return <Link to={`/downstream/${row.id}`}>{t('downstream.siteCount', { count })}</Link>
       },
@@ -62,6 +50,14 @@ export default function DownstreamPage() {
   return (
     <div>
       <h2 style={{ marginBottom: 16 }}>{t('downstream.pageTitle')}</h2>
+      {dsError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t('downstream.loadError')}
+        />
+      )}
       <Table
         className="app-data-table"
         columns={downstreamColumns}
@@ -72,6 +68,7 @@ export default function DownstreamPage() {
         loading={dsLoading}
         pagination={false}
         tableLayout="fixed"
+        locale={{ emptyText: dsError ? t('downstream.loadError') : undefined }}
       />
     </div>
   )

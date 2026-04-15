@@ -92,7 +92,7 @@ export default function AppLayout() {
         ? 'admin'
         : location.pathname.startsWith('/upstream')
           ? 'up-sm'
-          : 'dash-sm')
+          : 'input-sm')
 
   const menuLabel = (emoji: string, label: string) => (
     <span className="menu-item-label">
@@ -130,12 +130,16 @@ export default function AppLayout() {
   ]
 
   const menuItems: MenuProps['items'] = [
-    {
-      key: 'dashboard',
-      icon: rootIcon('📊'),
-      label: t('nav.dashboard'),
-      children: dashboardItems,
-    },
+    ...(user?.perm_admin
+      ? [
+          {
+            key: 'dashboard',
+            icon: rootIcon('📊'),
+            label: t('nav.dashboard'),
+            children: dashboardItems,
+          },
+        ]
+      : []),
     {
       key: 'input',
       icon: rootIcon('📝'),
@@ -148,14 +152,14 @@ export default function AppLayout() {
       label: t('nav.upstream'),
       children: upstreamItems,
     },
+    {
+      key: 'downstream-menu',
+      icon: rootIcon('⬇️'),
+      label: t('nav.downstream'),
+      onClick: () => navigate('/downstream'),
+    },
     ...(user?.perm_admin
       ? [
-          {
-            key: 'downstream-menu',
-            icon: rootIcon('⬇️'),
-            label: t('nav.downstream'),
-            onClick: () => navigate('/downstream'),
-          },
           {
             key: 'admin',
             icon: rootIcon('⚙️'),

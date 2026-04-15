@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express"
 import { query, validationResult } from "express-validator"
+import { requireAuth, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDateAtHour, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
 
@@ -46,12 +47,14 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 // ============================================================
 router.get(
   "/le",
+  requireAuth,
   [
     query("month").notEmpty().withMessage("month is required").matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage("month must be YYYY-MM"),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
+      const isOfficialView = req.user?.perm_admin === true
       const monthStr = req.query.month as string
       const [year, month] = monthStr.split("-").map(Number)
       const days = getDaysInMonth(year, month)
@@ -61,7 +64,7 @@ router.get(
       const dailyInputs = await prisma.dailyInput.findMany({
         where: {
           recordDate: { gte: startOfMonth, lt: endOfMonth },
-          status: "confirmed",
+          status: isOfficialView ? "confirmed" : undefined,
           adSite: {
             upstream: {
               adTypeId: 1, // SM

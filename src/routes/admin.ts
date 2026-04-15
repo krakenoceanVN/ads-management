@@ -91,11 +91,13 @@ router.get(
 router.get(
   "/admin/downstreams",
   requireAuth,
-  requirePermission("perm_admin"),
   async (_req: Request, res: Response) => {
     try {
       const downstreams = await prisma.downstream.findMany({
-        include: { adType: true },
+        include: {
+          adType: true,
+          adSites: true,
+        },
         orderBy: { id: "asc" },
       })
 
@@ -104,6 +106,7 @@ router.get(
         ad_type_code: d.adType.code,
         downstream_type: d.downstreamType,
         payout_rate: Number(d.payoutRate),
+        site_count: d.adSites.length,
         status: d.status,
       }))
 
@@ -121,7 +124,6 @@ router.get(
 router.get(
   "/admin/downstream-periods",
   requireAuth,
-  requirePermission("perm_admin"),
   async (_req: Request, res: Response) => {
     try {
       const periods = await prisma.downstreamPeriod.findMany({
@@ -161,7 +163,6 @@ router.get(
 router.get(
   "/admin/downstream-sites/:downstreamId/inputs",
   requireAuth,
-  requirePermission("perm_admin"),
   [
     query("date").optional().isISO8601(),
     query("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("month must be YYYY-MM"),
@@ -169,6 +170,7 @@ router.get(
   handleValidation,
   async (req: AuthRequest, res: Response) => {
     try {
+      const isOfficialView = req.user?.perm_admin === true
       const downstreamId = parseInt(req.params.downstreamId as string)
       const dateStr = req.query.date as string | undefined
       const monthStr = req.query.month as string | undefined
@@ -217,7 +219,7 @@ router.get(
       let inputsQuery: any = {
         where: {
           adSiteId: { in: siteIds },
-          status: "confirmed",
+          status: isOfficialView ? "confirmed" : undefined,
         },
         orderBy: [{ adSiteId: "asc" }, { recordDate: "desc" }],
       }
@@ -228,7 +230,7 @@ router.get(
         inputsQuery = {
           where: {
             adSiteId: { in: siteIds },
-            status: "confirmed",
+            status: isOfficialView ? "confirmed" : undefined,
             recordDate: { gte: startOfDay, lt: endOfDay },
           },
           orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
@@ -239,7 +241,7 @@ router.get(
         inputsQuery = {
           where: {
             adSiteId: { in: siteIds },
-            status: "confirmed",
+            status: isOfficialView ? "confirmed" : undefined,
             recordDate: { gte: startOfMonth, lt: endOfMonth },
           },
           orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
@@ -789,7 +791,6 @@ router.post(
 router.get(
   "/admin/downstream-rates",
   requireAuth,
-  requirePermission("perm_admin"),
   [
     query("downstream_id").isInt().toInt(),
     query("start_date").optional().isISO8601(),

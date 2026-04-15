@@ -8,6 +8,7 @@ import api, { isAdmin } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
+import { formatIsoFixed, formatIsoInteger, formatIsoMoney } from '../../utils/numberFormat'
 
 interface Props {
   date: string
@@ -146,7 +147,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
         if (isConfirmed(row)) {
-          return <span>{row.existing_record?.qty ?? 0}</span>
+          return <span>{formatIsoInteger(row.existing_record?.qty ?? 0)}</span>
         }
         return (
           <InputNumber
@@ -179,7 +180,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         const row = getData(record)
         if (isConfirmed(row)) {
           const price = row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0
-          return <span>{price}</span>
+          return <span>{formatIsoFixed(price, 4)}</span>
         }
         const admin = isAdmin()
         return (
@@ -217,7 +218,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         const revenue = getRevenue(row)
         return (
           <span className="revenue-cell">
-            {revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatIsoMoney(revenue)}
           </span>
         )
       },
@@ -330,7 +331,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
                     <strong>{t('input.dayTotal')}</strong>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={qtyColumnIndex}>
-                    <strong>{totalQty.toLocaleString()}</strong>
+                    <strong>{formatIsoInteger(totalQty)}</strong>
                   </Table.Summary.Cell>
                   {middleColumns.map((column, offset) => (
                     <Table.Summary.Cell
@@ -340,7 +341,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
                   ))}
                   <Table.Summary.Cell index={revenueColumnIndex}>
                     <strong style={{ color: 'var(--color-primary)' }}>
-                      {totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatIsoMoney(totalRevenue)}
                     </strong>
                   </Table.Summary.Cell>
                   {trailingColumns.map((column, offset) => (

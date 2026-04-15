@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Table } from 'antd'
 import { Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import { formatIsoPercent } from '../utils/numberFormat'
 
 interface DownstreamRow {
   id: number
@@ -23,6 +25,7 @@ interface AdSiteRow {
 }
 
 export default function DownstreamPage() {
+  const { t } = useTranslation()
   const { data: downstreams = [], isLoading: dsLoading } = useQuery({
     queryKey: ['admin', 'downstreams'],
     queryFn: () => api.get<ApiResponse<DownstreamRow[]>>('/api/admin/downstreams').then((r) => r.data.data ?? []),
@@ -34,30 +37,30 @@ export default function DownstreamPage() {
   })
 
   const downstreamColumns: ColumnsType<DownstreamRow> = [
-    { title: 'Ad Type', dataIndex: 'ad_type_code', key: 'ad_type_code', width: 100 },
-    { title: 'Type', dataIndex: 'downstream_type', key: 'downstream_type', width: 100 },
+    { title: t('downstream.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 100 },
+    { title: t('downstream.type'), dataIndex: 'downstream_type', key: 'downstream_type', width: 100 },
     {
-      title: 'Payout Rate',
+      title: t('downstream.payoutRate'),
       dataIndex: 'payout_rate',
       key: 'payout_rate',
       width: 120,
-      render: (v: number) => `${(v * 100).toFixed(0)}%`,
+      render: (v: number) => formatIsoPercent(v),
     },
     {
-      title: 'Ad Sites',
+      title: t('downstream.adSites'),
       key: 'ad_sites',
       width: 80,
       render: (_: unknown, row: DownstreamRow) => {
         const count = adSites.filter((s) => s.downstream_ids?.includes(row.id)).length
         if (count === 0) return '-'
-        return <Link to={`/downstream/${row.id}`}>{count} sites</Link>
+        return <Link to={`/downstream/${row.id}`}>{t('downstream.siteCount', { count })}</Link>
       },
     },
   ]
 
   return (
     <div>
-      <h2 style={{ marginBottom: 16 }}>Hạ nguồn (Downstream)</h2>
+      <h2 style={{ marginBottom: 16 }}>{t('downstream.pageTitle')}</h2>
       <Table
         columns={downstreamColumns}
         dataSource={downstreams}

@@ -42,7 +42,7 @@ router.get("/le", [
         // Fetch all SM confirmed daily inputs for the month
         const dailyInputs = await prisma_js_1.default.dailyInput.findMany({
             where: {
-                recordDate: { gte: startOfMonth, lte: endOfMonth },
+                recordDate: { gte: startOfMonth, lt: endOfMonth },
                 status: "confirmed",
                 adSite: {
                     upstream: {
@@ -63,7 +63,20 @@ router.get("/le", [
                 recordDate: { gte: startOfMonth, lt: endOfMonth },
             },
         });
-        const leCostMap = new Map(leCosts.map((c) => [(0, date_js_1.formatBusinessDate)(c.recordDate), c.costAmount]));
+        const leCostMap = new Map(leCosts.map((cost) => {
+            const vendorCost = Number(cost.vendorCost ?? 0);
+            const mlCost = Number(cost.mlCost ?? 0);
+            const legacyTotalCost = Number(cost.costAmount ?? 0);
+            const hasBreakdown = vendorCost !== 0 || mlCost !== 0;
+            return [
+                (0, date_js_1.formatBusinessDate)(cost.recordDate),
+                {
+                    vendorCost: hasBreakdown ? vendorCost : legacyTotalCost,
+                    mlCost: hasBreakdown ? mlCost : 0,
+                    totalCost: hasBreakdown ? vendorCost + mlCost : legacyTotalCost,
+                },
+            ];
+        }));
         // Collect all upstream names
         const upstreamNames = new Set();
         for (const inp of dailyInputs) {
@@ -89,16 +102,20 @@ router.get("/le", [
                 upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev;
             }
             const leRevenue = smRevenue * 0.9;
-            const cost = leCostMap.get(date) ?? 0;
-            const tax = (leRevenue - cost) * 0.06;
-            const profit = leRevenue - cost - tax;
+            const downstreamCosts = leCostMap.get(date) ?? { vendorCost: 0, mlCost: 0, totalCost: 0 };
+            const taxRate = 0.06;
+            const tax = leRevenue * taxRate;
+            const profit = leRevenue - tax - downstreamCosts.totalCost;
             const profitRate = leRevenue > 0 ? profit / leRevenue : 0;
             results.push({
                 date,
                 smRevenue,
                 leRevenue,
-                cost,
+                taxRate,
                 tax,
+                vendorCost: downstreamCosts.vendorCost,
+                mlCost: downstreamCosts.mlCost,
+                totalCost: downstreamCosts.totalCost,
                 profit,
                 profitRate,
                 upstreamBreakdown,
@@ -107,7 +124,9 @@ router.get("/le", [
         // Total row
         const totalSmRevenue = results.reduce((s, r) => s + r.smRevenue, 0);
         const totalLeRevenue = results.reduce((s, r) => s + r.leRevenue, 0);
-        const totalCost = results.reduce((s, r) => s + r.cost, 0);
+        const totalVendorCost = results.reduce((s, r) => s + r.vendorCost, 0);
+        const totalMlCost = results.reduce((s, r) => s + r.mlCost, 0);
+        const totalCost = results.reduce((s, r) => s + r.totalCost, 0);
         const totalTax = results.reduce((s, r) => s + r.tax, 0);
         const totalProfit = results.reduce((s, r) => s + r.profit, 0);
         const totalProfitRate = totalLeRevenue > 0 ? totalProfit / totalLeRevenue : 0;
@@ -121,8 +140,11 @@ router.get("/le", [
             date: "TOTAL",
             smRevenue: totalSmRevenue,
             leRevenue: totalLeRevenue,
-            cost: totalCost,
+            taxRate: 0.06,
             tax: totalTax,
+            vendorCost: totalVendorCost,
+            mlCost: totalMlCost,
+            totalCost,
             profit: totalProfit,
             profitRate: totalProfitRate,
             upstreamBreakdown: totalUpstreamBreakdown,
@@ -143,20 +165,42 @@ router.get("/le", [
 });
 // ============================================================
 // POST /api/dashboard/le/cost
-// Body: { date: string, costAmount: number }
+// Body: { date: string, vendorCost?: number, mlCost?: number, costAmount?: number }
 // ============================================================
 router.post("/le/cost", async (req, res) => {
     try {
-        const { date, costAmount } = req.body;
-        if (!date || typeof costAmount !== "number") {
-            res.status(400).json({ success: false, error: "date and costAmount are required" });
+        const { date, vendorCost: rawVendorCost, mlCost: rawMlCost, costAmount, } = req.body;
+        if (!date ||
+            (typeof rawVendorCost !== "number" &&
+                typeof rawMlCost !== "number" &&
+                typeof costAmount !== "number")) {
+            res.status(400).json({
+                success: false,
+                error: "date and at least one of vendorCost, mlCost, costAmount are required",
+            });
             return;
         }
+        const vendorCost = typeof rawVendorCost === "number"
+            ? rawVendorCost
+            : typeof costAmount === "number"
+                ? costAmount
+                : 0;
+        const mlCost = typeof rawMlCost === "number" ? rawMlCost : 0;
+        const totalCost = vendorCost + mlCost;
         const recordDate = (0, date_js_1.getBusinessDateAtHour)(date, 12);
         const record = await prisma_js_1.default.lEDailyCost.upsert({
             where: { recordDate },
-            update: { costAmount },
-            create: { recordDate, costAmount },
+            update: {
+                vendorCost,
+                mlCost,
+                costAmount: totalCost,
+            },
+            create: {
+                recordDate,
+                vendorCost,
+                mlCost,
+                costAmount: totalCost,
+            },
         });
         res.json({ success: true, data: record });
     }

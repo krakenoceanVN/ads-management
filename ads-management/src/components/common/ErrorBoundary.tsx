@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react'
 import { Button, Result } from 'antd'
+import i18n from '../../i18n'
 
 interface Props {
   children: ReactNode
@@ -32,8 +33,8 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div style={{ padding: 48, textAlign: 'center' }}>
           <Result
             status="error"
-            title="Đã xảy ra lỗi"
-            subTitle={this.state.error?.message || 'Lỗi không xác định'}
+            title={i18n.t('errorBoundary.title')}
+            subTitle={this.state.error?.message || i18n.t('errorBoundary.unknown')}
             extra={
               <Button
                 type="primary"
@@ -42,7 +43,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                   window.location.reload()
                 }}
               >
-                Tải lại trang
+                {i18n.t('errorBoundary.reload')}
               </Button>
             }
           />

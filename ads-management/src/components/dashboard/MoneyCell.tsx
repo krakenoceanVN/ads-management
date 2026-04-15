@@ -1,13 +1,12 @@
+import { formatIsoMoney } from '../../utils/numberFormat'
+
 interface Props {
   value: number
   colorize?: boolean
 }
 
 export default function MoneyCell({ value, colorize }: Props) {
-  const formatted = value.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
+  const formatted = formatIsoMoney(value)
 
   if (!colorize) {
     return (

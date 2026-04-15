@@ -8,6 +8,7 @@ import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
+import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
 
 interface Props {
   adType?: AdTypeCode
@@ -18,6 +19,17 @@ interface DownstreamRow {
   ml: number
   ml_80: number
   le: number
+}
+
+interface LeDashboardRow {
+  date: string
+  leRevenue: number
+  isTotal?: boolean
+}
+
+interface LeDashboardResponse {
+  upstreamNames: string[]
+  rows: LeDashboardRow[]
 }
 
 interface DisplayFinancials {
@@ -93,13 +105,37 @@ function buildTotalUpstreamDetailBreakdown(rows: FR[]): Record<string, UpstreamD
 }
 
 function formatPv(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return formatIsoInteger(value)
 }
 
-function calculateDisplayFinancials(revenue: number, ml80 = 0, le = 0): DisplayFinancials {
-  const cost = ml80 + le
+function calculateCost(ml80 = 0, le = 0): number {
+  return ml80 + le
+}
+
+function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
+  if (adType === '360') {
+    return revenue * 0.8
+  }
+
+  return downstreamMl80
+}
+
+function calculateCostByAdType(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): number {
+  if (adType === '360') {
+    return revenue * 0.8
+  }
+
+  return calculateCost(ml80, le)
+}
+
+function calculateTax(revenue: number, cost: number): number {
+  return (revenue - cost) * 0.06
+}
+
+function calculateDisplayFinancials(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): DisplayFinancials {
+  const cost = calculateCostByAdType(adType, revenue, ml80, le)
   const grossProfit = revenue - cost
-  const tax = grossProfit * 0.06
+  const tax = calculateTax(revenue, cost)
   const netProfit = grossProfit - tax
 
   return {
@@ -114,6 +150,7 @@ function calculateDisplayFinancials(revenue: number, ml80 = 0, le = 0): DisplayF
 function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
   const { t } = useTranslation()
   const tableHostRef = useRef<HTMLDivElement | null>(null)
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['upstream-dashboard', adType, year, month],
     queryFn: () =>
@@ -130,13 +167,27 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       }).then((r) => r.data.data ?? []),
   })
 
+  const { data: leDashboardData, isLoading: isLeDashboardLoading } = useQuery({
+    queryKey: ['le-dashboard-summary-link', monthKey],
+    queryFn: () =>
+      api.get<ApiResponse<LeDashboardResponse>>('/api/dashboard/le', {
+        params: { month: monthKey },
+      }).then((r) => r.data.data),
+    enabled: adType === 'SM',
+  })
+
+  const leDashboardRows = (leDashboardData?.rows ?? []).filter((row) => !row.isTotal && row.date !== 'TOTAL')
+  const leRevenueByDate = new Map(leDashboardRows.map((row) => [row.date, row.leRevenue]))
+
   const displayRows: FR[] = rows
     .filter((r) => r.date !== 'TOTAL')
     .map((r) => {
       const downstream = downstreamRows.find((d) => d.date === r.date)
-      const ml80 = downstream?.ml_80 ?? 0
-      const le = downstream?.le ?? 0
-      const financials = calculateDisplayFinancials(r.revenue, ml80, le)
+      const ml80 = calculateMl80(adType, r.revenue, downstream?.ml_80 ?? 0)
+      const le = adType === 'SM'
+        ? (leRevenueByDate.get(r.date) ?? 0)
+        : (downstream?.le ?? 0)
+      const financials = calculateDisplayFinancials(adType, r.revenue, ml80, le)
 
       return {
         ...r,
@@ -152,8 +203,8 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const totalRevenue = displayRows.reduce((sum, row) => sum + row.revenue, 0)
   const totalML80 = displayRows.reduce((sum, row) => sum + (row.ml_80 ?? 0), 0)
   const totalLE = displayRows.reduce((sum, row) => sum + (row.le ?? 0), 0)
-  const totalCost = displayRows.reduce((sum, row) => sum + row.cost, 0)
-  const totalTax = displayRows.reduce((sum, row) => sum + row.tax, 0)
+  const totalCost = calculateCostByAdType(adType, totalRevenue, totalML80, totalLE)
+  const totalTax = calculateTax(totalRevenue, totalCost)
   const totalNetProfit = displayRows.reduce((sum, row) => sum + row.profit, 0)
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
@@ -172,7 +223,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     : []
   const upstreamLeafCount = adType === '360' ? upstreamDetailNames.length * 3 : upstreamCols.length
 
-  const monthLabel = `${year}-${String(month).padStart(2, '0')}`
+  const monthLabel = monthKey
 
   const tableWatchKey = [
     adType,
@@ -236,7 +287,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       key: 'profit_rate',
       width: 80,
       dataIndex: 'profit_rate',
-      render: (v: number) => `${(v * 100).toFixed(1)}%`,
+      render: (v: number) => formatIsoPercent(v, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
     },
     ...(adType === '360'
       ? upstreamDetailNames.map((name) => ({
@@ -244,19 +295,19 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
           key: `up_${name}`,
           children: [
             {
-              title: 'PV',
+              title: t('downstream.pv'),
               key: `up_${name}_pv`,
               width: 100,
               render: (_: unknown, row: FR) => formatPv(row.upstream_detail_breakdown?.[name]?.pv ?? 0),
             },
             {
-              title: '单价',
+              title: t('downstream.unitPrice'),
               key: `up_${name}_unit_price`,
               width: 110,
               render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.unit_price ?? 0} />,
             },
             {
-              title: '金额',
+              title: t('downstream.amount'),
               key: `up_${name}_amount`,
               width: 120,
               render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.amount ?? 0} />,
@@ -306,7 +357,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
               <div className={`kpi-icon ${typeClass}`}>{icon}</div>
               <div className="kpi-label">{card.label}</div>
               <div className="kpi-value">
-                {card.value.toLocaleString('vi-VN', { minimumFractionDigits: 2 })}
+                {formatIsoMoney(card.value)}
               </div>
               <div className="kpi-sub">{monthLabel}</div>
             </div>
@@ -325,7 +376,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
           className="dashboard-total-table dashboard-total-table--with-bottom-scroll date-col-fixed-90"
           scroll={{ x: 'max-content' }}
           sticky={{ offsetHeader: 64, offsetScroll: 17 }}
-          loading={isLoading || isDownstreamLoading}
+          loading={isLoading || isDownstreamLoading || isLeDashboardLoading}
           pagination={false}
           summary={() => {
             if (displayRows.length === 0) return null
@@ -353,7 +404,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
                     <MoneyCell value={totalNetProfit} colorize />
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={6} className="dashboard-total-cell">
-                    {`${(totalProfitRate * 100).toFixed(1)}%`}
+                    {formatIsoPercent(totalProfitRate, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </Table.Summary.Cell>
 
                   {adType === '360'

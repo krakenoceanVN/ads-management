@@ -8,6 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 
 // ============================================================
 // Shared types
@@ -113,8 +114,8 @@ function matchesAdminSearch(search: string, values: unknown[]): boolean {
   return values.some((value) => String(value ?? '').toLowerCase().includes(keyword))
 }
 
-function adminSearchPlaceholder(label: string): string {
-  return `Search ${label}...`
+function formatPriceValue(value: number): string {
+  return formatIsoNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 }
 
 // ============================================================
@@ -150,21 +151,21 @@ function AdSitesTab() {
   const createMutation = useMutation({
     mutationFn: (payload: AdSiteFormValues) => api.post('/api/admin/ad-sites', payload),
     onSuccess: () => { message.success(t('admin.created')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); closeModal() },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<AdSiteFormValues> }) =>
       api.put(`/api/admin/ad-sites/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); closeModal() },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/api/admin/ad-sites/${id}?force=1`),
     onSuccess: () => { message.success(t('admin.deleted')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }) },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      message.error(err.response?.data?.error ?? t('admin.deleted') + ' fail')
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
     },
   })
 
@@ -172,14 +173,14 @@ function AdSitesTab() {
     mutationFn: ({ id, payload }: { id: number; payload: object }) =>
       api.put(`/api/ad-sites/${id}/price`, payload),
     onSuccess: () => { message.success(t('admin.priceUpdated')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); setPriceModal(null) },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const downstreamPriceMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: object }) =>
       api.put(`/api/admin/ad-sites/${id}/downstream-price`, payload),
     onSuccess: () => { message.success(t('admin.priceUpdated')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); setDownstreamPriceModal(null) },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const openCreate = () => {
@@ -280,7 +281,7 @@ function AdSitesTab() {
       .join(', ')
 
   const columns: ColumnsType<AdSiteRow> = [
-    { title: 'Ad Type', dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
+    { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     { title: t('input.upstream'), dataIndex: 'upstream_name', key: 'upstream_name', width: 120 },
     { title: t('input.adSite'), dataIndex: 'ad_site_name', key: 'ad_site_name', width: 180, ellipsis: true },
     { title: t('admin.billingMethod'), dataIndex: 'billing_method', key: 'billing_method', width: 80 },
@@ -299,11 +300,11 @@ function AdSitesTab() {
       width: 120,
       render: (_: unknown, row: AdSiteRow) =>
         row.billing_method === 'CPM'
-          ? (row.current_unit_price ?? 0).toFixed(4)
-          : `${((row.current_ratio ?? 0) * 100).toFixed(0)}%`,
+          ? formatIsoFixed(row.current_unit_price ?? 0, 4)
+          : formatIsoPercent(row.current_ratio ?? 0),
     },
     {
-      title: 'Giá hạ nguồn',
+      title: t('admin.downstreamPrice'),
       key: 'downstream_price',
       width: 150,
       render: (_: unknown, row: AdSiteRow) => {
@@ -317,7 +318,7 @@ function AdSitesTab() {
           <a onClick={() => openDownstreamPriceModal(row)}>
             {ds.map((d) => {
               const price = row.downstream_prices?.[d.id]
-              return price !== undefined ? `${d.downstream_type}: ${price}` : d.downstream_type
+              return price !== undefined ? `${d.downstream_type}: ${formatPriceValue(price)}` : d.downstream_type
             }).join(', ')}
           </a>
         )
@@ -375,7 +376,7 @@ function AdSitesTab() {
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={adminSearchPlaceholder(t('admin.adSites'))}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.adSites') })}
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
       </div>
@@ -450,7 +451,7 @@ function AdSitesTab() {
       </Modal>
 
       <Modal
-        title={`Giá hạ nguồn — ${downstreamPriceModal?.ad_site_name}`}
+        title={t('admin.downstreamPriceTitle', { name: downstreamPriceModal?.ad_site_name ?? '' })}
         open={!!downstreamPriceModal}
         onCancel={() => setDownstreamPriceModal(null)}
         onOk={handleDownstreamPriceSubmit}
@@ -461,8 +462,8 @@ function AdSitesTab() {
             const ds = downstreams.find((d) => d.id === dsId)
             if (!ds) return null
             return (
-              <Form.Item key={dsId} name={`price_${dsId}`} label={`${ds.downstream_type} (${ds.ad_type_code})`} rules={[{ required: true, message: 'Nhập giá' }]}>
-                <InputNumber precision={2} style={{ width: '100%' }} placeholder="Nhập giá hạ nguồn" />
+              <Form.Item key={dsId} name={`price_${dsId}`} label={`${ds.downstream_type} (${ds.ad_type_code})`} rules={[{ required: true, message: t('admin.enterPrice') }]}>
+                <InputNumber precision={4} step={0.0001} style={{ width: '100%' }} placeholder={t('admin.downstreamPricePlaceholder')} />
               </Form.Item>
             )
           })}
@@ -495,7 +496,7 @@ function UpstreamsTab() {
   const createMutation = useMutation({
     mutationFn: (payload: UpstreamFormValues) => api.post('/api/admin/upstreams', payload),
     onSuccess: () => { message.success(t('admin.created')); qc.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeModal() },
-    onError: () => message.error(t('admin.created') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const updateMutation = useMutation({
@@ -503,7 +504,7 @@ function UpstreamsTab() {
       api.put(`/api/admin/upstreams/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeModal() },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      message.error(err.response?.data?.error ?? t('admin.updated') + ' fail')
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
     },
   })
 
@@ -511,7 +512,7 @@ function UpstreamsTab() {
     mutationFn: (id: number) => api.delete(`/api/admin/upstreams/${id}`),
     onSuccess: () => { message.success(t('admin.deleted')); qc.invalidateQueries({ queryKey: ['admin', 'upstreams'] }) },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      message.error(err.response?.data?.error ?? t('admin.deleted') + ' fail')
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
     },
   })
 
@@ -567,7 +568,7 @@ function UpstreamsTab() {
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={adminSearchPlaceholder(t('admin.upstreams'))}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.upstreams') })}
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUpstream')}</Button>
       </div>
@@ -619,21 +620,21 @@ function DownstreamsTab() {
   const createMutation = useMutation({
     mutationFn: (payload: DownstreamFormValues) => api.post('/api/admin/downstreams', payload),
     onSuccess: () => { message.success(t('admin.created')); qc.invalidateQueries({ queryKey: ['admin', 'downstreams'] }); closeModal() },
-    onError: () => message.error(t('admin.created') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<DownstreamFormValues> }) =>
       api.put(`/api/admin/downstreams/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'downstreams'] }); closeModal() },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/api/admin/downstreams/${id}`),
     onSuccess: () => { message.success(t('admin.deleted')); qc.invalidateQueries({ queryKey: ['admin', 'downstreams'] }) },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      message.error(err.response?.data?.error ?? t('admin.deleted') + ' fail')
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
     },
   })
 
@@ -661,7 +662,7 @@ function DownstreamsTab() {
     { title: t('admin.type'), dataIndex: 'downstream_type', key: 'downstream_type', width: 90 },
     {
       title: t('admin.payoutRate'), dataIndex: 'payout_rate', key: 'payout_rate', width: 100,
-      render: (v: number) => `${(v * 100).toFixed(0)}%`,
+      render: (v: number) => formatIsoPercent(v),
     },
     {
       title: t('admin.status'), dataIndex: 'status', key: 'status', width: 80,
@@ -686,7 +687,7 @@ function DownstreamsTab() {
       row.downstream_type,
       row.status,
       row.payout_rate,
-      `${(row.payout_rate * 100).toFixed(0)}%`,
+      formatIsoPercent(row.payout_rate),
     ])
   )
 
@@ -700,7 +701,7 @@ function DownstreamsTab() {
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={adminSearchPlaceholder(t('admin.downstreams'))}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.downstreams') })}
         />
         <Button type="primary" onClick={openCreate}>{t('admin.createDownstream')}</Button>
       </div>
@@ -772,7 +773,7 @@ function DownstreamPeriodsTab() {
       message.success(t('admin.deleted'))
       qc.invalidateQueries({ queryKey: ['admin', 'downstream-periods'] })
     },
-    onError: () => message.error(t('admin.deleted') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const handleSubmit = () => {
@@ -793,11 +794,11 @@ function DownstreamPeriodsTab() {
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     {
       title: t('admin.pctHal'), dataIndex: 'pct_hal', key: 'pct_hal', width: 70,
-      render: (v: number) => `${(v * 100).toFixed(0)}%`,
+      render: (v: number) => formatIsoPercent(v),
     },
     {
       title: t('admin.unitPrice'), dataIndex: 'unit_price', key: 'unit_price', width: 90,
-      render: (v?: number) => v?.toFixed(2) ?? '-',
+      render: (v?: number) => (v !== undefined ? formatPriceValue(v) : '-'),
     },
     { title: t('admin.startDate'), dataIndex: 'start_date', key: 'start_date', width: 110 },
     {
@@ -817,7 +818,7 @@ function DownstreamPeriodsTab() {
             }).then(() => {
               message.success(row.end_date ? t('admin.reopened') : t('admin.closed'))
               qc.invalidateQueries({ queryKey: ['admin', 'downstream-periods'] })
-            }).catch(() => message.error('fail'))
+            }).catch(() => message.error(t('admin.actionFailed')))
           }}>
             {row.end_date ? t('admin.reopen') : t('admin.close')}
           </Button>
@@ -834,7 +835,7 @@ function DownstreamPeriodsTab() {
       row.downstream_type,
       row.ad_type_code,
       row.pct_hal,
-      `${(row.pct_hal * 100).toFixed(0)}%`,
+      formatIsoPercent(row.pct_hal),
       row.unit_price,
       row.start_date,
       row.end_date ?? t('admin.current'),
@@ -850,7 +851,7 @@ function DownstreamPeriodsTab() {
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={adminSearchPlaceholder(t('admin.periodTab'))}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.periodTab') })}
         />
         <Button type="primary" onClick={() => setDrawer(true)}>{t('admin.createPeriod')}</Button>
       </div>
@@ -895,7 +896,7 @@ function DownstreamPeriodsTab() {
             <InputNumber precision={2} min={0} max={1} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="unit_price" label={t('admin.unitPrice')}>
-            <InputNumber precision={2} style={{ width: '100%' }} />
+            <InputNumber precision={4} step={0.0001} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
             name="start_date"
@@ -933,7 +934,7 @@ function UsersTab() {
     onSuccess: () => { message.success(t('admin.created')); qc.invalidateQueries({ queryKey: ['admin', 'users'] }); setModal(null); userForm.resetFields() },
     onError: (err: { response?: { status?: number } }) => {
       if (err.response?.status === 409) message.error(t('admin.userExists'))
-      else message.error(t('admin.created') + ' fail')
+      else message.error(t('admin.actionFailed'))
     },
   })
 
@@ -941,13 +942,13 @@ function UsersTab() {
     mutationFn: ({ id, payload }: { id: number; payload: Partial<UserFormValues> }) =>
       api.put(`/api/users/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'users'] }); setModal(null); userForm.resetFields() },
-    onError: () => message.error(t('admin.updated') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/api/users/${id}`),
     onSuccess: () => { message.success(t('admin.deleted')); qc.invalidateQueries({ queryKey: ['admin', 'users'] }) },
-    onError: () => message.error(t('admin.deleted') + ' fail'),
+    onError: () => message.error(t('admin.actionFailed')),
   })
 
   const openCreate = () => { setModal({}); userForm.resetFields(); userForm.setFieldsValue({ status: 'active', perm_data_input: false, perm_data_confirm: false, perm_admin: false }) }
@@ -1034,7 +1035,7 @@ function UsersTab() {
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={adminSearchPlaceholder(t('admin.users'))}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.users') })}
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUser')}</Button>
       </div>

@@ -9,6 +9,7 @@ import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
+import { formatIsoMoney } from '../utils/numberFormat'
 
 interface Props {
   adType: AdTypeCode
@@ -175,7 +176,7 @@ export default function DashboardPage({ adType }: Props) {
           <div className="kpi-icon revenue">💰</div>
           <div className="kpi-label">{t('dashboard.totalRevenue')}</div>
           <div className="kpi-value">
-            {totalRevenue.toLocaleString('vi-VN', { minimumFractionDigits: 2 })}
+            {formatIsoMoney(totalRevenue)}
           </div>
           <div className="kpi-sub">{monthLabel}</div>
         </div>
@@ -184,7 +185,7 @@ export default function DashboardPage({ adType }: Props) {
           <div className="kpi-icon expense">📤</div>
           <div className="kpi-label">{t('dashboard.totalCost')}</div>
           <div className="kpi-value">
-            {totalCost.toLocaleString('vi-VN', { minimumFractionDigits: 2 })}
+            {formatIsoMoney(totalCost)}
           </div>
           <div className="kpi-sub">{monthLabel}</div>
         </div>
@@ -193,7 +194,7 @@ export default function DashboardPage({ adType }: Props) {
           <div className="kpi-icon profit">📊</div>
           <div className="kpi-label">{t('dashboard.profitLabel')}</div>
           <div className="kpi-value">
-            {totalProfit.toLocaleString('vi-VN', { minimumFractionDigits: 2 })}
+            {formatIsoMoney(totalProfit)}
           </div>
           <div className="kpi-sub">{t('dashboard.summaryTitle')}</div>
         </div>
@@ -202,7 +203,7 @@ export default function DashboardPage({ adType }: Props) {
           <div className="kpi-icon net">🌿</div>
           <div className="kpi-label">{t('dashboard.netProfitLabel')}</div>
           <div className="kpi-value">
-            {totalNetProfit.toLocaleString('vi-VN', { minimumFractionDigits: 2 })}
+            {formatIsoMoney(totalNetProfit)}
           </div>
           <div className="kpi-sub">{monthLabel}</div>
         </div>

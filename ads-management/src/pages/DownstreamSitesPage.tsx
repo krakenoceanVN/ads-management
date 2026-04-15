@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Table, DatePicker, InputNumber, Button } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
@@ -9,6 +10,7 @@ import html2pdf from 'html2pdf.js'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
 import LESummaryTable from '../components/downstream/LESummaryTable'
+import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoNumber } from '../utils/numberFormat'
 
 interface DownstreamRow {
   id: number
@@ -115,10 +117,13 @@ function getEffectiveRate(
 }
 
 export default function DownstreamSitesPage() {
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const [selectedMonth, setSelectedMonth] = useState<string>(dayjs().format('YYYY-MM'))
   const [leMonth, setLeMonth] = useState(dayjs())
   const [explicitRates, setExplicitRates] = useState<Record<string, number>>({})
+  const language = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
+  const intlLocale = language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'vi-VN'
 
   const { data: downstreamsData } = useQuery({
     queryKey: ['admin', 'downstreams'],
@@ -129,8 +134,11 @@ export default function DownstreamSitesPage() {
   const downstream = downstreams.find((d) => d.id === Number(id))
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
-  const basePayoutRate = Number(downstream?.payout_rate ?? 0.8) * 100
-  const basePayoutLabel = Number.isInteger(basePayoutRate) ? basePayoutRate.toFixed(0) : basePayoutRate.toFixed(2)
+  const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
+  const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
+  const basePayoutLabel = Number.isInteger(basePayoutRate)
+    ? formatIsoNumber(basePayoutRate, { maximumFractionDigits: 0 })
+    : formatIsoFixed(basePayoutRate, 2)
 
   const { data: siteInputsData, isLoading } = useQuery({
     queryKey: ['admin', 'downstream-sites', id, 'inputs', selectedMonth],
@@ -235,7 +243,6 @@ export default function DownstreamSitesPage() {
       },
     }
 
-    const [y, m] = selectedMonth.split('-')
     const totalQty = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_uv || 0), 0)
     const totalML = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_ml || 0), 0)
     const totalBasePayout = totalML * (basePayoutRate / 100)
@@ -249,11 +256,11 @@ export default function DownstreamSitesPage() {
       <table class="ml-report-table">
         <thead>
           <tr style="background: #d9d9d9;">
-            <th class="col-date" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">Ngày</th>
-            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">Tổng UV</th>
-            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">Tổng ${downstream?.downstream_type || ''}</th>
+            <th class="col-date" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.date')}</th>
+            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
+            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
             <th class="col-payout" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${downstream?.downstream_type || ''}${basePayoutLabel}%</th>
-            <th class="col-adjusted" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">% điều chỉnh</th>
+            <th class="col-adjusted" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.adjustedRate')}</th>
             ${is360
               ? siteIds.map((siteId) => `
                   <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
@@ -270,9 +277,9 @@ export default function DownstreamSitesPage() {
               <th class="col-payout" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-adjusted" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               ${siteIds.map(() => `
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">PV</th>
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">单价</th>
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">金额</th>
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.pv')}</th>
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.unitPrice')}</th>
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.amount')}</th>
               `).join('')}
             </tr>
           ` : ''}
@@ -283,15 +290,15 @@ export default function DownstreamSitesPage() {
             const basePayout = r.total_ml * (basePayoutRate / 100)
             const adjustedPayout = r.total_ml * (effectiveRate / 100)
             const adjustedDisplay = r.total_ml > 0
-              ? `${effectiveRate.toFixed(0)}% | ${adjustedPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ? `${formatIsoNumber(effectiveRate, { maximumFractionDigits: 0 })}% | ${formatIsoMoney(adjustedPayout)}`
               : ''
 
             return `
             <tr style="background: ${idx % 2 === 0 ? '#fff' : '#f5f5f5'};">
               <td class="col-date" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; font-weight: 600;">${r.date}</td>
-              <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right;">${r.total_uv > 0 ? r.total_uv.toLocaleString() : ''}</td>
-              <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${r.total_ml > 0 ? r.total_ml.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-              <td class="col-payout" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #15803d; font-weight: 600;">${r.total_ml > 0 ? basePayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+              <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right;">${r.total_uv > 0 ? formatIsoInteger(r.total_uv) : ''}</td>
+              <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(r.total_ml) : ''}</td>
+              <td class="col-payout" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #15803d; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(basePayout) : ''}</td>
               <td class="col-adjusted" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; color: #7c3aed; font-weight: 600;">${adjustedDisplay}</td>
               ${is360
                 ? siteIds.map((siteId) => {
@@ -299,33 +306,33 @@ export default function DownstreamSitesPage() {
                     const unitPrice = r[`${siteId}_unit_price`]
                     const amount = r[`${siteId}_amount`]
                     return `
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${pv === '' || pv === null || pv === undefined ? '' : Number(pv).toLocaleString()}</td>
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${unitPrice === '' || unitPrice === null || unitPrice === undefined ? '' : Number(unitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${amount === '' || amount === null || amount === undefined ? '' : Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${pv === '' || pv === null || pv === undefined ? '' : formatIsoInteger(Number(pv))}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${unitPrice === '' || unitPrice === null || unitPrice === undefined ? '' : formatIsoMoney(Number(unitPrice))}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${amount === '' || amount === null || amount === undefined ? '' : formatIsoMoney(Number(amount))}</td>
                     `
                   }).join('')
                 : siteIds.map((siteId) => {
                     const value = r[String(siteId)]
-                    return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${value === '' || value === null || value === undefined ? '' : Number(value).toLocaleString()}</td>`
+                    return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
                   }).join('')}
             </tr>
           `
           }).join('')}
           <tr style="background: #e8f4e8; font-weight: bold;">
-            <td class="col-date" style="border: 1px solid #999; padding: 7px 4px; text-align: center;">TỔNG CỘNG</td>
-            <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalQty.toLocaleString()}</td>
-            <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${totalML.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            <td class="col-payout" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #15803d;">${totalBasePayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            <td class="col-adjusted" style="border: 1px solid #999; padding: 7px 4px; text-align: center; color: #7c3aed;">${totalML > 0 ? `${weightedAdjustedRate.toFixed(2)}% | ${totalAdjustedPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</td>
+            <td class="col-date" style="border: 1px solid #999; padding: 7px 4px; text-align: center;">${t('downstream.grandTotal')}</td>
+            <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${formatIsoInteger(totalQty)}</td>
+            <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${formatIsoMoney(totalML)}</td>
+            <td class="col-payout" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #15803d;">${formatIsoMoney(totalBasePayout)}</td>
+            <td class="col-adjusted" style="border: 1px solid #999; padding: 7px 4px; text-align: center; color: #7c3aed;">${totalML > 0 ? `${formatIsoFixed(weightedAdjustedRate, 2)}% | ${formatIsoMoney(totalAdjustedPayout)}` : ''}</td>
             ${is360
               ? siteIds.map((siteId) => {
                   const totalPv = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_pv`] === 'number' ? Number(r[`${siteId}_pv`]) : 0), 0)
                   const totalAmount = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_amount`] === 'number' ? Number(r[`${siteId}_amount`]) : 0), 0)
                   const totalUnitPrice = totalPv > 0 ? (totalAmount / totalPv) * 1000 : 0
                   return `
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalPv > 0 ? totalPv.toLocaleString() : ''}</td>
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalUnitPrice > 0 ? totalUnitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalAmount > 0 ? totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalPv > 0 ? formatIsoInteger(totalPv) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalUnitPrice > 0 ? formatIsoMoney(totalUnitPrice) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalAmount > 0 ? formatIsoMoney(totalAmount) : ''}</td>
                   `
                 }).join('')
               : siteIds.map((siteId) => {
@@ -333,7 +340,7 @@ export default function DownstreamSitesPage() {
                     const v = r[String(siteId)]
                     return s + (typeof v === 'number' ? v : 0)
                   }, 0)
-                  return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${colTotal > 0 ? colTotal.toLocaleString() : ''}</td>`
+                  return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
                 }).join('')}
           </tr>
         </tbody>
@@ -384,14 +391,20 @@ export default function DownstreamSitesPage() {
           }
         </style>
         <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 16px; color: #222;">
-          BÁO CÁO CHI TIẾT HẠ NGUỒN ${downstream?.downstream_type || ''} - ${downstream?.ad_type_code || ''} (${selectedMonth})
+          ${t('downstream.reportTitle', {
+            type: downstream?.downstream_type || '',
+            adType: downstream?.ad_type_code || '',
+            month: selectedMonth,
+          })}
         </h2>
         <p style="text-align: center; margin: 0 0 10px 0; color: #666; font-size: 11px;">
-          Payout mặc định: <strong>${basePayoutLabel}%</strong> &nbsp;|&nbsp; Tháng ${m}/${y}
+          ${t('downstream.defaultPayout')}: <strong>${basePayoutLabel}%</strong> &nbsp;|&nbsp; ${selectedMonth}
         </p>
         ${renderTable(adSiteIds)}
         <p style="margin-top: 10px; font-size: 10px; color: #aaa; text-align: right;">
-          Xuất ngày ${new Date().toLocaleDateString('vi-VN')} | Ad Management System
+          ${t('downstream.reportFooter', {
+            date: new Intl.DateTimeFormat(intlLocale).format(new Date()),
+          })}
         </p>
       </div>
     `
@@ -453,7 +466,9 @@ export default function DownstreamSitesPage() {
           row[String(siteId)] = adjustedUV
         }
         totalUV += adjustedUV
-        if (sitePrices.get(siteId)) {
+        if (isMl360) {
+          totalML += amount
+        } else if (sitePrices.get(siteId)) {
           totalML += adjustedUV * (sitePrices.get(siteId) ?? 0)
         }
       } else {
@@ -473,7 +488,7 @@ export default function DownstreamSitesPage() {
 
   const pivotColumns: ColumnsType<PivotRow> = [
     {
-      title: 'Date',
+      title: t('downstream.date'),
       dataIndex: 'date',
       key: 'date',
       width: 120,
@@ -481,18 +496,18 @@ export default function DownstreamSitesPage() {
       render: (v: string) => <span style={{ whiteSpace: 'nowrap' }}><strong>{v}</strong></span>,
     },
     {
-      title: 'Tổng UV',
+      title: t('downstream.totalUv'),
       dataIndex: 'total_uv',
       key: 'total_uv',
       width: 100,
-      render: (v: number) => v > 0 ? v.toLocaleString() : '-',
+      render: (v: number) => v > 0 ? formatIsoInteger(v) : '-',
     },
     {
-      title: `Tổng ${downstream?.downstream_type || ''} (${downstream?.ad_type_code || ''})`,
+      title: `${t('downstream.totalValue', { type: downstream?.downstream_type || '' })} (${downstream?.ad_type_code || ''})`,
       dataIndex: 'total_ml',
       key: 'total_ml',
       width: 150,
-      render: (v: number) => v > 0 ? v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+      render: (v: number) => v > 0 ? formatIsoMoney(v) : '-',
     },
     {
       title: `${downstream?.downstream_type || ''}${basePayoutLabel}%`,
@@ -500,12 +515,12 @@ export default function DownstreamSitesPage() {
       width: 130,
       render: (_: unknown, row: PivotRow) => {
         const v = row.total_ml * (basePayoutRate / 100)
-        return v > 0 ? v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'
+        return v > 0 ? formatIsoMoney(v) : '-'
       },
     },
     {
       title: (
-        <span>% điều chỉnh</span>
+        <span>{t('downstream.adjustedRate')}</span>
       ),
       key: 'total_ml_pct',
       width: 150,
@@ -532,7 +547,7 @@ export default function DownstreamSitesPage() {
               style={{ width: 70, backgroundColor: isExplicit ? '#fffbe6' : undefined }}
               size="small"
             />
-            <span style={{ color: '#1677ff' }}>{v > 0 ? v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</span>
+            <span style={{ color: '#1677ff' }}>{v > 0 ? formatIsoMoney(v) : '-'}</span>
           </span>
         )
       },
@@ -544,27 +559,25 @@ export default function DownstreamSitesPage() {
             key: String(siteId),
             children: [
               {
-                title: 'PV',
+                title: t('downstream.pv'),
                 dataIndex: `${siteId}_pv`,
                 key: `${siteId}_pv`,
                 width: 90,
-                render: (v: number | string) => formatDisplayValue(v, (num) => num.toLocaleString()),
+                render: (v: number | string) => formatDisplayValue(v, formatIsoInteger),
               },
               {
-                title: '单价',
+                title: t('downstream.unitPrice'),
                 dataIndex: `${siteId}_unit_price`,
                 key: `${siteId}_unit_price`,
                 width: 110,
-                render: (v: number | string) =>
-                  formatDisplayValue(v, (num) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+                render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
               },
               {
-                title: '金额',
+                title: t('downstream.amount'),
                 dataIndex: `${siteId}_amount`,
                 key: `${siteId}_amount`,
                 width: 120,
-                render: (v: number | string) =>
-                  formatDisplayValue(v, (num) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+                render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
               },
             ],
           }
@@ -573,7 +586,7 @@ export default function DownstreamSitesPage() {
             dataIndex: String(siteId),
             key: String(siteId),
             width: 80,
-            render: (v: number | string) => (v === '' ? '-' : v),
+            render: (v: number | string) => (v === '' ? '-' : formatDisplayValue(v, formatIsoInteger)),
           }
     ),
   ]
@@ -581,10 +594,16 @@ export default function DownstreamSitesPage() {
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <Link to="/downstream">← Quay lại Danh sách Downstream</Link>
+        <Link to="/downstream">← {t('downstream.backToList')}</Link>
       </div>
       <h2 style={{ marginBottom: 8 }}>
-        Ad Sites của <strong>{downstream?.downstream_type}</strong> - {downstream?.ad_type_code} ({adSiteIds.length})
+        {downstream
+          ? t('downstream.adSitesOf', {
+              type: downstream.downstream_type,
+              adType: downstream.ad_type_code,
+              count: adSiteIds.length,
+            })
+          : t('downstream.pageTitle')}
       </h2>
 
       {isLE ? (
@@ -595,9 +614,9 @@ export default function DownstreamSitesPage() {
             <DatePicker.MonthPicker
               value={dayjs(selectedMonth, 'YYYY-MM')}
               onChange={(date) => setSelectedMonth(date ? date.format('YYYY-MM') : dayjs().format('YYYY-MM'))}
-              placeholder="Chọn tháng"
+              placeholder={t('downstream.monthPlaceholder')}
             />
-            <Button type="primary" icon={<DownloadOutlined />} onClick={exportPDF}>Xuất PDF (ML)</Button>
+            <Button type="primary" icon={<DownloadOutlined />} onClick={exportPDF}>{t('downstream.exportPdfMl')}</Button>
           </div>
 
           <Table

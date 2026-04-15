@@ -8,6 +8,7 @@ import api, { isAdmin } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
+import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
 interface Props {
   date: string
@@ -127,14 +128,14 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const dirtyCount = Object.keys(drafts).length
 
   const getCPMColumn = () => ({
-    title: 'Qty',
+    title: t('input.qty'),
     key: 'qty',
     width: 130,
     render: (_: unknown, record: FlatRow) => {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (row.billing_method !== 'CPM') return null
-      if (isConfirmed(row)) return <span>{row.existing_record?.qty ?? 0}</span>
+      if (isConfirmed(row)) return <span>{formatIsoInteger(row.existing_record?.qty ?? 0)}</span>
       return (
         <InputNumber
           ref={(el) => { inputRefs.current[`${row.id}-qty`] = el as HTMLInputElement | null }}
@@ -152,14 +153,14 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   })
 
   const getUnitPriceColumn = () => ({
-    title: 'Unit Price',
+    title: t('input.unitPrice'),
     key: 'unit_price',
     width: 130,
     render: (_: unknown, record: FlatRow) => {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (row.billing_method !== 'CPM') return null
-      if (isConfirmed(row)) return <span>{(row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0).toFixed(4)}</span>
+      if (isConfirmed(row)) return <span>{formatIsoFixed(row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0, 4)}</span>
       const admin = isAdmin()
       return (
         <InputNumber
@@ -179,14 +180,14 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   })
 
   const getAmount1Column = () => ({
-    title: '金额1',
+    title: t('input.amount1'),
     key: 'amount1',
     width: 140,
     render: (_: unknown, record: FlatRow) => {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (row.billing_method !== 'RATIO') return null
-      if (isConfirmed(row)) return <span>{row.existing_record?.amount1 ?? 0}</span>
+      if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount1 ?? 0)}</span>
       return (
         <InputNumber
           ref={(el) => { inputRefs.current[`${row.id}-a1`] = el as HTMLInputElement | null }}
@@ -204,14 +205,14 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   })
 
   const getAmount2Column = () => ({
-    title: '金额2',
+    title: t('input.amount2'),
     key: 'amount2',
     width: 140,
     render: (_: unknown, record: FlatRow) => {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (row.billing_method !== 'RATIO') return null
-      if (isConfirmed(row)) return <span>{row.existing_record?.amount2 ?? 0}</span>
+      if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount2 ?? 0)}</span>
       return (
         <InputNumber
           ref={(el) => { inputRefs.current[`${row.id}-a2`] = el as HTMLInputElement | null }}
@@ -229,13 +230,13 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   })
 
   const getRatioColumn = () => ({
-    title: 'Ratio',
+    title: t('input.ratio'),
     key: 'ratio',
     width: 100,
     render: (_: unknown, record: FlatRow) => {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
-      if (isConfirmed(row)) return <span>{((row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1) * 100).toFixed(0)}%</span>
+      if (isConfirmed(row)) return <span>{formatIsoPercent(row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1)}</span>
       const admin = isAdmin()
       return (
         <InputNumber
@@ -280,7 +281,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
     },
     {
 
-      title: 'Billing',
+      title: t('admin.billingMethod'),
       key: 'billing',
       width: 80,
       render: (_: unknown, record: FlatRow) => {
@@ -305,7 +306,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         const revenue = getRevenue(row)
         return (
           <span className="revenue-cell">
-            {revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatIsoMoney(revenue)}
           </span>
         )
       },
@@ -419,10 +420,10 @@ export default function OtherInputTable({ date, search = '' }: Props) {
               <Table.Summary fixed="bottom">
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={qtyColumnIndex}>
-                    <strong>TỔNG NGÀY</strong>
+                    <strong>{t('input.dayTotal')}</strong>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={qtyColumnIndex}>
-                    <strong>{totalQty.toLocaleString()}</strong>
+                    <strong>{formatIsoInteger(totalQty)}</strong>
                   </Table.Summary.Cell>
                   {middleColumns.map((column, offset) => (
                     <Table.Summary.Cell
@@ -432,7 +433,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
                   ))}
                   <Table.Summary.Cell index={revenueColumnIndex}>
                     <strong style={{ color: 'var(--color-primary)' }}>
-                      {totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatIsoMoney(totalRevenue)}
                     </strong>
                   </Table.Summary.Cell>
                   {trailingColumns.map((column, offset) => (

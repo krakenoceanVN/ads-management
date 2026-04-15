@@ -8,6 +8,7 @@ import api, { isAdmin } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
+import { formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
 interface Props {
   date: string
@@ -139,7 +140,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        if (isConfirmed(row)) return <span>{row.existing_record?.amount1 ?? 0}</span>
+        if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount1 ?? 0)}</span>
         return (
           <InputNumber
             ref={(el) => { inputRefs.current[`${row.id}-a1`] = el as HTMLInputElement | null }}
@@ -168,7 +169,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        if (isConfirmed(row)) return <span>{row.existing_record?.amount2 ?? 0}</span>
+        if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount2 ?? 0)}</span>
         return (
           <InputNumber
             ref={(el) => { inputRefs.current[`${row.id}-a2`] = el as HTMLInputElement | null }}
@@ -197,7 +198,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        if (isConfirmed(row)) return <span>{((row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1) * 100).toFixed(0)}%</span>
+        if (isConfirmed(row)) return <span>{formatIsoPercent(row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1)}</span>
         const admin = isAdmin()
         return (
           <InputNumber
@@ -227,7 +228,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
         const revenue = getRevenue(row)
         return (
           <span className="revenue-cell">
-            {revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatIsoMoney(revenue)}
           </span>
         )
       },
@@ -338,7 +339,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={revenueColumnIndex}>
                     <strong style={{ color: 'var(--color-primary)' }}>
-                      {totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatIsoMoney(totalRevenue)}
                     </strong>
                   </Table.Summary.Cell>
                   {trailingColumns.map((column, offset) => (

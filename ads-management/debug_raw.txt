@@ -1,0 +1,1 @@
+"  queryKey: ['admin', 'ad-sites'],\n    queryFn: () =>\n      api.get<ApiResponse<AdSiteRow[]>('/api/admin/ad-sites').then((r) => r.data.data ?? []),\n  })\n\n  const { data: upstreams = [] } = useQuery({\n    queryKey: ['admin', 'upstreams'],\n    queryFn: ("

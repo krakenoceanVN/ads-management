@@ -1,3 +1,4 @@
+import TableCellText from '../common/TableCellText'
 import { formatIsoMoney } from '../../utils/numberFormat'
 
 interface Props {
@@ -10,14 +11,9 @@ export default function MoneyCell({ value, colorize }: Props) {
 
   if (!colorize) {
     return (
-      <span
-        style={{
-          fontVariantNumeric: 'tabular-nums',
-          fontWeight: 'var(--font-weight-medium)',
-        }}
-      >
+      <TableCellText value={formatted} fontWeight="var(--font-weight-medium)">
         {formatted}
-      </span>
+      </TableCellText>
     )
   }
 
@@ -29,14 +25,12 @@ export default function MoneyCell({ value, colorize }: Props) {
         : 'var(--color-text-secondary)'
 
   return (
-    <span
-      style={{
-        color,
-        fontWeight: 'var(--font-weight-semibold)',
-        fontVariantNumeric: 'tabular-nums',
-      }}
+    <TableCellText
+      value={formatted}
+      color={color}
+      fontWeight="var(--font-weight-semibold)"
     >
       {formatted}
-    </span>
+    </TableCellText>
   )
 }

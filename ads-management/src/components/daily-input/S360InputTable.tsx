@@ -2,12 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, InputNumber, Button, message, Spin, Empty, Alert } from 'antd'
-import { LockOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import api, { isAdmin } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
+import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
 interface Props {
@@ -110,7 +110,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
 
   const dirtyCount = Object.keys(drafts).length
 
-  const columns: ColumnsType<FlatRow> = [
+  const columns: ColumnsType<FlatRow> = withTableEllipsis([
     {
       title: t('input.upstream'),
       dataIndex: 'upstream_name',
@@ -272,12 +272,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
         const status = row.existing_record?.status ?? 'unconfirmed'
-        return (
-          <>
-            <StatusBadge status={status} />
-            {status === 'confirmed' && <LockOutlined style={{ marginLeft: 6, color: 'var(--color-success)' }} />}
-          </>
-        )
+        return <StatusBadge status={status} />
       },
     },
     {
@@ -313,7 +308,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
         )
       },
     },
-  ]
+  ])
 
   const rowClassName = (record: FlatRow): string => {
     if ('_isGroupHeader' in record && record._isGroupHeader) return 'group-header-row'
@@ -349,7 +344,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
 
         {rows.length > 0 && (
           <Table
-            className="has-save-bar-table"
+            className="has-save-bar-table app-data-table"
             columns={columns}
             dataSource={flatRows}
             rowKey={(record: FlatRow) => {
@@ -363,14 +358,18 @@ export default function S360InputTable({ date, search = '' }: Props) {
             loading={isLoading}
             rowClassName={rowClassName}
             pagination={false}
+            tableLayout="fixed"
             summary={() => (
               <Table.Summary fixed="bottom">
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={qtyColumnIndex}>
-                    <strong>{t('input.dayTotal')}</strong>
+                    {renderTableText(t('input.dayTotal'), { fontWeight: 'var(--font-weight-semibold)' })}
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={qtyColumnIndex}>
-                    <strong>{formatIsoInteger(rows.reduce((s: number, r: DailyInputRow) => s + (drafts[r.id]?.qty ?? r.existing_record?.qty ?? 0), 0))}</strong>
+                    {renderTableText(
+                      formatIsoInteger(rows.reduce((s: number, r: DailyInputRow) => s + (drafts[r.id]?.qty ?? r.existing_record?.qty ?? 0), 0)),
+                      { fontWeight: 'var(--font-weight-semibold)' }
+                    )}
                   </Table.Summary.Cell>
                   {middleColumns.map((column, offset) => (
                     <Table.Summary.Cell
@@ -379,9 +378,10 @@ export default function S360InputTable({ date, search = '' }: Props) {
                     />
                   ))}
                   <Table.Summary.Cell index={revenueColumnIndex}>
-                    <strong style={{ color: 'var(--color-primary)' }}>
-                      {formatIsoMoney(totalRevenue)}
-                    </strong>
+                    {renderTableText(formatIsoMoney(totalRevenue), {
+                      color: 'var(--color-primary)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                    })}
                   </Table.Summary.Cell>
                   {trailingColumns.map((column, offset) => (
                     <Table.Summary.Cell

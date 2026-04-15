@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoPercent } from '../utils/numberFormat'
 
 interface DownstreamRow {
@@ -36,7 +37,7 @@ export default function DownstreamPage() {
     queryFn: () => api.get<ApiResponse<AdSiteRow[]>>('/api/admin/ad-sites').then((r) => r.data.data ?? []),
   })
 
-  const downstreamColumns: ColumnsType<DownstreamRow> = [
+  const downstreamColumns: ColumnsType<DownstreamRow> = withTableEllipsis([
     { title: t('downstream.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 100 },
     { title: t('downstream.type'), dataIndex: 'downstream_type', key: 'downstream_type', width: 100 },
     {
@@ -56,12 +57,13 @@ export default function DownstreamPage() {
         return <Link to={`/downstream/${row.id}`}>{t('downstream.siteCount', { count })}</Link>
       },
     },
-  ]
+  ])
 
   return (
     <div>
       <h2 style={{ marginBottom: 16 }}>{t('downstream.pageTitle')}</h2>
       <Table
+        className="app-data-table"
         columns={downstreamColumns}
         dataSource={downstreams}
         rowKey="id"
@@ -69,6 +71,7 @@ export default function DownstreamPage() {
         bordered
         loading={dsLoading}
         pagination={false}
+        tableLayout="fixed"
       />
     </div>
   )

@@ -4,6 +4,7 @@ interface Props {
   tableHostRef: RefObject<HTMLElement | null>
   watchKey: string
   className?: string
+  leadingOffsetPx?: number
 }
 
 interface Metrics {
@@ -39,6 +40,7 @@ export default function DashboardBottomScrollbar({
   tableHostRef,
   watchKey,
   className,
+  leadingOffsetPx = 0,
 }: Props) {
   const scrollNodeRef = useRef<HTMLElement | null>(null)
   const dragStateRef = useRef({ startX: 0, startScrollLeft: 0 })
@@ -49,11 +51,13 @@ export default function DashboardBottomScrollbar({
   })
 
   const { thumbWidth, thumbOffset, maxScrollLeft, maxThumbOffset } = useMemo(() => {
-    const nextMaxScrollLeft = Math.max(metrics.scrollWidth - metrics.clientWidth, 0)
+    const adjustedClientWidth = Math.max(metrics.clientWidth - leadingOffsetPx, 0)
+    const adjustedScrollWidth = Math.max(metrics.scrollWidth - leadingOffsetPx, adjustedClientWidth)
+    const nextMaxScrollLeft = Math.max(adjustedScrollWidth - adjustedClientWidth, 0)
     const nextThumbWidth = nextMaxScrollLeft > 0
-      ? Math.max((metrics.clientWidth * metrics.clientWidth) / metrics.scrollWidth, 48)
-      : Math.max(metrics.clientWidth - 16, 32)
-    const nextMaxThumbOffset = Math.max(metrics.clientWidth - nextThumbWidth, 0)
+      ? Math.max((adjustedClientWidth * adjustedClientWidth) / adjustedScrollWidth, 48)
+      : Math.max(adjustedClientWidth - 16, 32)
+    const nextMaxThumbOffset = Math.max(adjustedClientWidth - nextThumbWidth, 0)
     const nextThumbOffset = nextMaxScrollLeft > 0 && nextMaxThumbOffset > 0
       ? (metrics.scrollLeft / nextMaxScrollLeft) * nextMaxThumbOffset
       : 0
@@ -64,7 +68,7 @@ export default function DashboardBottomScrollbar({
       maxScrollLeft: nextMaxScrollLeft,
       maxThumbOffset: nextMaxThumbOffset,
     }
-  }, [metrics.clientWidth, metrics.scrollLeft, metrics.scrollWidth])
+  }, [leadingOffsetPx, metrics.clientWidth, metrics.scrollLeft, metrics.scrollWidth])
 
   const isVisible = metrics.clientWidth > 0 && metrics.scrollWidth - metrics.clientWidth > OVERFLOW_TOLERANCE_PX
 
@@ -178,6 +182,7 @@ export default function DashboardBottomScrollbar({
     <div
       className={`dashboard-bottom-scrollbar${!isVisible ? ' is-hidden' : ''}${className ? ` ${className}` : ''}`}
       aria-hidden={!isVisible}
+      style={leadingOffsetPx > 0 ? { marginLeft: `${leadingOffsetPx}px` } : undefined}
     >
       <div className="dashboard-bottom-scrollbar-track" onMouseDown={handleTrackMouseDown}>
         <div

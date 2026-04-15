@@ -8,6 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 
 // ============================================================
@@ -280,7 +281,7 @@ function AdSitesTab() {
       })
       .join(', ')
 
-  const columns: ColumnsType<AdSiteRow> = [
+  const columns: ColumnsType<AdSiteRow> = withTableEllipsis([
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     { title: t('input.upstream'), dataIndex: 'upstream_name', key: 'upstream_name', width: 120 },
     { title: t('input.adSite'), dataIndex: 'ad_site_name', key: 'ad_site_name', width: 180, ellipsis: true },
@@ -352,7 +353,7 @@ function AdSitesTab() {
         </Space>
       ),
     },
-  ]
+  ])
 
   const filteredSites = sites.filter((row) =>
     matchesAdminSearch(search, [
@@ -380,7 +381,7 @@ function AdSitesTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
       </div>
-      <Table columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} />
+      <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
 
       <Modal
         title={isEdit ? t('admin.editSite') : t('admin.createSite')}
@@ -534,7 +535,7 @@ function UpstreamsTab() {
     })
   }
 
-  const columns: ColumnsType<UpstreamRow> = [
+  const columns: ColumnsType<UpstreamRow> = withTableEllipsis([
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     { title: t('admin.upstreamName'), dataIndex: 'name', key: 'name', width: 200 },
     {
@@ -552,7 +553,7 @@ function UpstreamsTab() {
         </Space>
       ),
     },
-  ]
+  ])
 
   const filteredUpstreams = upstreams.filter((row) =>
     matchesAdminSearch(search, [row.ad_type_code, row.ad_type_name, row.name, row.status])
@@ -572,7 +573,7 @@ function UpstreamsTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUpstream')}</Button>
       </div>
-      <Table columns={columns} dataSource={filteredUpstreams} rowKey="id" size="small" bordered loading={isLoading} />
+      <Table className="app-data-table" columns={columns} dataSource={filteredUpstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
 
       <Modal
         title={isEdit ? t('admin.editUpstream') : t('admin.createUpstream')}
@@ -657,7 +658,7 @@ function DownstreamsTab() {
     })
   }
 
-  const columns: ColumnsType<DownstreamRow> = [
+  const columns: ColumnsType<DownstreamRow> = withTableEllipsis([
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     { title: t('admin.type'), dataIndex: 'downstream_type', key: 'downstream_type', width: 90 },
     {
@@ -679,7 +680,7 @@ function DownstreamsTab() {
         </Space>
       ),
     },
-  ]
+  ])
 
   const filteredDownstreams = downstreams.filter((row) =>
     matchesAdminSearch(search, [
@@ -705,7 +706,7 @@ function DownstreamsTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.createDownstream')}</Button>
       </div>
-      <Table columns={columns} dataSource={filteredDownstreams} rowKey="id" size="small" bordered loading={isLoading} />
+      <Table className="app-data-table" columns={columns} dataSource={filteredDownstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
 
       <Modal
         title={isEdit ? t('admin.editDownstream') : t('admin.createDownstream')}
@@ -789,7 +790,7 @@ function DownstreamPeriodsTab() {
     })
   }
 
-  const columns: ColumnsType<DownstreamPeriodRow> = [
+  const columns: ColumnsType<DownstreamPeriodRow> = withTableEllipsis([
     { title: t('admin.downstreams'), dataIndex: 'downstream_type', key: 'downstream_type', width: 90 },
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
     {
@@ -828,7 +829,7 @@ function DownstreamPeriodsTab() {
         </div>
       ),
     },
-  ]
+  ])
 
   const filteredPeriods = periods.filter((row) =>
     matchesAdminSearch(search, [
@@ -856,7 +857,7 @@ function DownstreamPeriodsTab() {
         <Button type="primary" onClick={() => setDrawer(true)}>{t('admin.createPeriod')}</Button>
       </div>
       <Table
-        className="admin-periods-table"
+        className="admin-periods-table app-data-table"
         columns={columns}
         dataSource={filteredPeriods}
         rowKey="id"
@@ -864,6 +865,7 @@ function DownstreamPeriodsTab() {
         bordered
         loading={isLoading}
         scroll={{ x: 'max-content' }}
+        tableLayout="fixed"
       />
 
       <Drawer
@@ -983,7 +985,7 @@ function UsersTab() {
     })
   }
 
-  const columns: ColumnsType<UserRow> = [
+  const columns: ColumnsType<UserRow> = withTableEllipsis([
     { title: t('admin.username'), dataIndex: 'username', key: 'username', width: 150 },
     {
       title: t('admin.permInput'), dataIndex: 'perm_data_input', key: 'perm_data_input', width: 90,
@@ -1012,7 +1014,7 @@ function UsersTab() {
         </Space>
       ),
     },
-  ]
+  ])
 
   const filteredUsers = users.filter((row) =>
     matchesAdminSearch(search, [
@@ -1039,7 +1041,7 @@ function UsersTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUser')}</Button>
       </div>
-      <Table columns={columns} dataSource={filteredUsers} rowKey="id" size="small" bordered loading={isLoading} />
+      <Table className="app-data-table" columns={columns} dataSource={filteredUsers} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
 
       <Modal
         title={isEdit ? t('admin.editUser') : t('admin.createUser')}

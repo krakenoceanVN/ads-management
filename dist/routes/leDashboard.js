@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
+const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
 const router = (0, express_1.Router)();
@@ -31,10 +32,11 @@ const handleValidation = (req, res, next) => {
 // ============================================================
 // GET /api/dashboard/le?month=YYYY-MM
 // ============================================================
-router.get("/le", [
+router.get("/le", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage("month must be YYYY-MM"),
 ], handleValidation, async (req, res) => {
     try {
+        const isOfficialView = req.user?.perm_admin === true;
         const monthStr = req.query.month;
         const [year, month] = monthStr.split("-").map(Number);
         const days = getDaysInMonth(year, month);
@@ -43,7 +45,7 @@ router.get("/le", [
         const dailyInputs = await prisma_js_1.default.dailyInput.findMany({
             where: {
                 recordDate: { gte: startOfMonth, lt: endOfMonth },
-                status: "confirmed",
+                status: isOfficialView ? "confirmed" : undefined,
                 adSite: {
                     upstream: {
                         adTypeId: 1, // SM

@@ -10,11 +10,35 @@ import AdminPage from './pages/AdminPage'
 import YiyiInputPage from './pages/YiyiInputPage'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import { ThemeProvider } from './theme/ThemeProvider'
+import type { User } from './types'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token')
   if (!token) {
     return <Navigate to="/login" replace />
+  }
+  return children
+}
+
+function getUser(): User | null {
+  const raw = localStorage.getItem('user')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as User
+  } catch {
+    return null
+  }
+}
+
+function AppHomeRedirect() {
+  const user = getUser()
+  return <Navigate to={user?.perm_admin ? '/dashboard/sm' : '/input/sm'} replace />
+}
+
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const user = getUser()
+  if (!user?.perm_admin) {
+    return <Navigate to="/input/sm" replace />
   }
   return children
 }
@@ -36,17 +60,17 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard/sm" replace />} />
-            <Route path="dashboard/sm" element={<DashboardPage adType="SM" />} />
-            <Route path="dashboard/360" element={<DashboardPage adType="360" />} />
-            <Route path="dashboard/baidu" element={<DashboardPage adType="BAIDU_JS" />} />
-            <Route path="dashboard/other" element={<DashboardPage adType="OTHER" />} />
+            <Route index element={<AppHomeRedirect />} />
+            <Route path="dashboard/sm" element={<AdminOnlyRoute><DashboardPage adType="SM" /></AdminOnlyRoute>} />
+            <Route path="dashboard/360" element={<AdminOnlyRoute><DashboardPage adType="360" /></AdminOnlyRoute>} />
+            <Route path="dashboard/baidu" element={<AdminOnlyRoute><DashboardPage adType="BAIDU_JS" /></AdminOnlyRoute>} />
+            <Route path="dashboard/other" element={<AdminOnlyRoute><DashboardPage adType="OTHER" /></AdminOnlyRoute>} />
             <Route path="input/sm" element={<DailyInputPage adType="SM" />} />
             <Route path="input/360" element={<DailyInputPage adType="360" />} />
             <Route path="input/baidu" element={<DailyInputPage adType="BAIDU_JS" />} />
             <Route path="input/other" element={<DailyInputPage adType="OTHER" />} />
             <Route path="input/yiyi" element={<YiyiInputPage />} />
-            <Route path="admin" element={<AdminPage />} />
+            <Route path="admin" element={<AdminOnlyRoute><AdminPage /></AdminOnlyRoute>} />
             <Route path="downstream" element={<DownstreamPage />} />
             <Route path="downstream/:id" element={<DownstreamSitesPage />} />
             <Route path="upstream" element={<UpstreamDashboardPage />} />

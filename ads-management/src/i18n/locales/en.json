@@ -63,6 +63,7 @@
   },
   "downstream": {
     "pageTitle": "Downstream",
+    "loadError": "Failed to load downstream data",
     "backToList": "Back to downstream list",
     "adSitesOf": "Ad Sites of {{type}} - {{adType}} ({{count}})",
     "monthPlaceholder": "Select month",
@@ -75,6 +76,8 @@
     "defaultPayout": "Default payout",
     "reportTitle": "DOWNSTREAM DETAIL REPORT {{type}} - {{adType}} ({{month}})",
     "reportFooter": "Exported on {{date}} | Ad Management System",
+    "officialReportNote": "Official report, confirmed data only.",
+    "draftReportNote": "Draft report for sharing, including unconfirmed data.",
     "siteCount": "{{count}} sites",
     "adType": "Ad Type",
     "type": "Type",

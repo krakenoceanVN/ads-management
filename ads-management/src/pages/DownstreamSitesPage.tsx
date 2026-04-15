@@ -7,7 +7,7 @@ import { useParams, Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import html2pdf from 'html2pdf.js'
-import api from '../api/axios'
+import api, { isAdmin } from '../api/axios'
 import type { ApiResponse } from '../types'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import LESummaryTable from '../components/downstream/LESummaryTable'
@@ -125,6 +125,8 @@ export default function DownstreamSitesPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(dayjs().format('YYYY-MM'))
   const [leMonth, setLeMonth] = useState(dayjs())
   const [explicitRates, setExplicitRates] = useState<Record<string, number>>({})
+  const isOfficialView = isAdmin()
+  const canEditRates = isOfficialView
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
   const intlLocale = language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'vi-VN'
 
@@ -254,6 +256,7 @@ export default function DownstreamSitesPage() {
       return sum + (row.total_ml * (effectiveRate / 100))
     }, 0)
     const weightedAdjustedRate = totalML > 0 ? (totalAdjustedPayout / totalML) * 100 : getDefaultRateForDate(allDays[0] ?? `${year}-${String(month).padStart(2, '0')}-01`)
+    const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
 
     const renderTable = (siteIds: number[]) => `
       <table class="ml-report-table">
@@ -403,6 +406,9 @@ export default function DownstreamSitesPage() {
         <p style="text-align: center; margin: 0 0 10px 0; color: #666; font-size: 11px;">
           ${t('downstream.defaultPayout')}: <strong>${basePayoutLabel}%</strong> &nbsp;|&nbsp; ${selectedMonth}
         </p>
+        <p style="text-align: center; margin: 0 0 10px 0; color: ${isOfficialView ? '#0f766e' : '#b45309'}; font-size: 11px; font-weight: 600;">
+          ${reportNote}
+        </p>
         ${renderTable(adSiteIds)}
         <p style="margin-top: 10px; font-size: 10px; color: #aaa; text-align: right;">
           ${t('downstream.reportFooter', {
@@ -531,6 +537,14 @@ export default function DownstreamSitesPage() {
         const effectiveRate = getEffectiveRate(_index, allDays, explicitRates, getDefaultRateForDate)
         const v = row.total_ml * (effectiveRate / 100)
         const isExplicit = explicitRates[row.date] !== undefined
+        if (!canEditRates) {
+          return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>{formatIsoNumber(effectiveRate, { maximumFractionDigits: 0 })}%</span>
+              <span style={{ color: '#1677ff' }}>{v > 0 ? formatIsoMoney(v) : '-'}</span>
+            </span>
+          )
+        }
         return (
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <InputNumber
@@ -629,6 +643,9 @@ export default function DownstreamSitesPage() {
               placeholder={t('downstream.monthPlaceholder')}
             />
             <Button type="primary" icon={<DownloadOutlined />} onClick={exportPDF}>{t('downstream.exportPdfMl')}</Button>
+            <span style={{ color: isOfficialView ? '#0f766e' : '#b45309', fontSize: 12, alignSelf: 'center' }}>
+              {isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')}
+            </span>
           </div>
 
           <div ref={tableHostRef} className="dashboard-table-shell">

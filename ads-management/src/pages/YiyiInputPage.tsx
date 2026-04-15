@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, DatePicker, InputNumber, Result, Spin, Table, Typography, message } from 'antd'
+import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import SaveBar from '../components/daily-input/SaveBar'
+import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
 
 const CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const
@@ -110,6 +112,7 @@ export default function YiyiInputPage() {
     date: row.date,
   }))
   const monthDates = monthRows.map((row) => row.date)
+  const monthlyRowMap = new Map(monthlyRows.map((row) => [row.date, row]))
 
   const getDraftRow = (date: string): DraftRow => drafts[date] ?? createEmptyDraftRow()
   const getChannelValue = (date: string, channel: ChannelCode): number => getDraftRow(date)[channel] ?? 0
@@ -135,10 +138,7 @@ export default function YiyiInputPage() {
   const summaryProfit = monthRows.reduce((sum, row) => sum + getRowProfit(row.date), 0)
   const summaryTotal = summaryAmount + summaryProfit
 
-  const displayRows: TableRow[] = [
-    { key: 'summary', date: t('yiyi.summary'), isSummary: true },
-    ...monthRows,
-  ]
+  const displayRows: TableRow[] = monthRows
 
   const handleChannelChange = (date: string, channel: ChannelCode, value: number | null) => {
     setDrafts((prev) => ({
@@ -176,6 +176,18 @@ export default function YiyiInputPage() {
     })
   }
 
+  const isRowDirty = (date: string) => {
+    const row = monthlyRowMap.get(date)
+    if (!row) return false
+
+    if (getUnitPrice(date) !== (row.unit_price ?? DEFAULT_UNIT_PRICE)) return true
+    if (getProfitUnitPrice(date) !== (row.profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE)) return true
+
+    return CHANNELS.some((channel) => getChannelValue(date, channel) !== (row[channel] ?? 0))
+  }
+
+  const dirtyCount = monthRows.reduce((count, row) => count + (isRowDirty(row.date) ? 1 : 0), 0)
+
   const handleSave = () => {
     const rows: MonthlyApiRow[] = monthRows.map((row) => ({
       date: row.date,
@@ -190,7 +202,7 @@ export default function YiyiInputPage() {
     mutation.mutate({ rows })
   }
 
-  const columns: ColumnsType<TableRow> = [
+  const columns: ColumnsType<TableRow> = withTableEllipsis([
     {
       title: t('yiyi.vendorPay'),
       children: [
@@ -200,7 +212,8 @@ export default function YiyiInputPage() {
           key: 'date',
           width: 120,
           fixed: 'left',
-          render: (_: string, row) => (row.isSummary ? <strong>{t('yiyi.summary')}</strong> : <span>{row.date}</span>),
+          className: 'dashboard-date-col',
+          render: (_: string, row) => (row.isSummary ? renderTableText(t('yiyi.summary'), { fontWeight: 'var(--font-weight-semibold)' }) : renderTableText(row.date)),
         },
         {
           title: t('yiyi.qty'),
@@ -208,7 +221,7 @@ export default function YiyiInputPage() {
           width: 110,
           render: (_: unknown, row) => {
             const value = row.isSummary ? summaryQty : getRowQty(row.date)
-            return row.isSummary ? <strong>{formatQty(value)}</strong> : formatQty(value)
+            return row.isSummary ? renderTableText(formatQty(value), { fontWeight: 'var(--font-weight-semibold)' }) : renderTableText(formatQty(value))
           },
         },
         {
@@ -216,7 +229,7 @@ export default function YiyiInputPage() {
           key: 'unit_price',
           width: 120,
           render: (_: unknown, row) => {
-            if (row.isSummary) return <strong>-</strong>
+            if (row.isSummary) return renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })
 
             return (
               <InputNumber
@@ -236,7 +249,7 @@ export default function YiyiInputPage() {
           width: 120,
           render: (_: unknown, row) => {
             const value = row.isSummary ? summaryAmount : getRowAmount(row.date)
-            return row.isSummary ? <strong>{formatMoney(value)}</strong> : formatMoney(value)
+            return row.isSummary ? renderTableText(formatMoney(value), { fontWeight: 'var(--font-weight-semibold)' }) : renderTableText(formatMoney(value))
           },
         },
       ],
@@ -248,7 +261,7 @@ export default function YiyiInputPage() {
       width: 130,
       render: (_: unknown, row: TableRow) => {
         if (row.isSummary) {
-          return <strong>{formatQty(summaryChannels[channel])}</strong>
+          return renderTableText(formatQty(summaryChannels[channel]), { fontWeight: 'var(--font-weight-semibold)' })
         }
 
         return (
@@ -268,7 +281,7 @@ export default function YiyiInputPage() {
       key: 'profit_unit_price',
       width: 130,
       render: (_: unknown, row) => {
-        if (row.isSummary) return <strong>-</strong>
+        if (row.isSummary) return renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })
 
         return (
           <InputNumber
@@ -288,7 +301,7 @@ export default function YiyiInputPage() {
       width: 110,
       render: (_: unknown, row) => {
         const value = row.isSummary ? summaryProfit : getRowProfit(row.date)
-        return row.isSummary ? <strong>{formatMoney(value)}</strong> : formatMoney(value)
+        return row.isSummary ? renderTableText(formatMoney(value), { fontWeight: 'var(--font-weight-semibold)' }) : renderTableText(formatMoney(value))
       },
     },
     {
@@ -297,10 +310,10 @@ export default function YiyiInputPage() {
       width: 120,
       render: (_: unknown, row) => {
         const value = row.isSummary ? summaryTotal : getRowTotal(row.date)
-        return row.isSummary ? <strong>{formatMoney(value)}</strong> : formatMoney(value)
+        return row.isSummary ? renderTableText(formatMoney(value), { fontWeight: 'var(--font-weight-semibold)' }) : renderTableText(formatMoney(value))
       },
     },
-  ]
+  ])
 
   if (isLoading) {
     return (
@@ -326,39 +339,65 @@ export default function YiyiInputPage() {
               if (value) setSelectedMonth(value)
             }}
           />
-          <span className="page-subtitle">{t('yiyi.title')}</span>
+          <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
 
       </div>
 
       <div className="dashboard-table-shell">
-        <div style={{ marginBottom: 16, textAlign: 'right' }}>
-          <Typography.Text type="secondary">
-            {t('yiyi.formula')}
-          </Typography.Text>
-        </div>
+        <Table<TableRow>
+          columns={columns}
+          dataSource={displayRows}
+          rowKey="key"
+          bordered
+          pagination={false}
+          size="small"
+          className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll dashboard-total-table--top-summary"
+          scroll={{ x: 'max-content' }}
+          sticky={{ offsetHeader: 64, offsetScroll: 52 }}
+          tableLayout="fixed"
+          summary={() => (
+            <Table.Summary fixed="top">
+              <Table.Summary.Row className="dashboard-total-summary-row">
+                <Table.Summary.Cell index={0} className="dashboard-total-cell dashboard-date-col ant-table-cell-fix-left ant-table-cell-fix-left-last">
+                  {renderTableText(t('yiyi.summary'), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} className="dashboard-total-cell">
+                  {renderTableText(formatQty(summaryQty), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={2} className="dashboard-total-cell">
+                  {renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={3} className="dashboard-total-cell">
+                  {renderTableText(formatMoney(summaryAmount), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={4} className="dashboard-total-cell">
+                  {renderTableText(formatQty(summaryChannels['yy-02-01']), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={5} className="dashboard-total-cell">
+                  {renderTableText(formatQty(summaryChannels['yy-02-02']), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={6} className="dashboard-total-cell">
+                  {renderTableText(formatQty(summaryChannels['yy-02-03']), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={7} className="dashboard-total-cell">
+                  {renderTableText(formatQty(summaryChannels['yy-02-04']), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={8} className="dashboard-total-cell">
+                  {renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={9} className="dashboard-total-cell">
+                  {renderTableText(formatMoney(summaryProfit), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={10} className="dashboard-total-cell">
+                  {renderTableText(formatMoney(summaryTotal), { fontWeight: 'var(--font-weight-semibold)' })}
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            </Table.Summary>
+          )}
+        />
 
-      <Table<TableRow>
-        columns={columns}
-        dataSource={displayRows}
-        rowKey="key"
-        bordered
-        pagination={false}
-        size="small"
-        className="dashboard-total-table dashboard-total-table--with-bottom-scroll"
-        scroll={{ x: 'max-content' }}
-        sticky={{ offsetHeader: 64 }}
-        rowClassName={(row) => (row.isSummary ? 'dashboard-total-summary-row row-total' : '')}
-      />
-
-      <Button
-        type="primary"
-        style={{ marginTop: 20, minWidth: 180 }}
-        loading={mutation.isPending}
-        onClick={handleSave}
-      >
-        {t('yiyi.saveMonth')}
-      </Button>
+      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
       </div>
     </div>
   )

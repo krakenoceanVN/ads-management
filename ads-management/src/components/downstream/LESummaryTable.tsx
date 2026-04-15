@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button, DatePicker, Spin, Table } from 'antd'
@@ -6,6 +7,8 @@ import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import html2pdf from 'html2pdf.js'
 import api from '../../api/axios'
+import DashboardBottomScrollbar from '../dashboard/DashboardBottomScrollbar'
+import { withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent, toFiniteNumber } from '../../utils/numberFormat'
 
 const YIYI_CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const
@@ -146,6 +149,7 @@ function buildSummaryRow(rows: DailyRow[]): DailyRow {
 
 export default function LESummaryTable({ month, onMonthChange }: Props) {
   const { t, i18n } = useTranslation()
+  const tableHostRef = useRef<HTMLDivElement | null>(null)
   const monthKey = month.format('YYYY-MM')
   const year = month.year()
   const monthNumber = month.month() + 1
@@ -343,7 +347,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
     }).from(pdfHTML, 'string').save()
   }
 
-  const columns: ColumnsType<DailyRow> = [
+  const columns: ColumnsType<DailyRow> = withTableEllipsis([
     {
       title: t('downstream.date'),
       dataIndex: 'date',
@@ -448,7 +452,12 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
         },
       ],
     },
-  ]
+  ])
+  const tableWatchKey = [
+    monthKey,
+    upstreamNames.join('|'),
+    displayRows.length,
+  ].join(':')
 
   if (isLoading) {
     return (
@@ -491,16 +500,22 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           {t('downstream.leReadOnlyNote')}
         </span>
       </div>
-      <Table
-        columns={columns}
-        dataSource={displayRows}
-        rowKey={(record) => (record.isTotal ? 'le-summary' : record.date)}
-        size="small"
-        bordered
-        pagination={false}
-        scroll={{ x: 1100 + ((upstreamNames.length + 4) * 108) }}
-        rowClassName={(record) => (record.isTotal ? 'le-summary-row' : '')}
-      />
+      <div ref={tableHostRef} className="dashboard-table-shell">
+        <Table
+          className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"
+          columns={columns}
+          dataSource={displayRows}
+          rowKey={(record) => (record.isTotal ? 'le-summary' : record.date)}
+          size="small"
+          bordered
+          pagination={false}
+          sticky={{ offsetHeader: 64, offsetScroll: 17 }}
+          scroll={{ x: 1100 + ((upstreamNames.length + 4) * 108) }}
+          rowClassName={(record) => (record.isTotal ? 'le-summary-row' : '')}
+          tableLayout="fixed"
+        />
+        <DashboardBottomScrollbar tableHostRef={tableHostRef} watchKey={tableWatchKey} leadingOffsetPx={96} />
+      </div>
     </div>
   )
 }

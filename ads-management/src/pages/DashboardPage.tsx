@@ -9,6 +9,8 @@ import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
+import KpiValueText from '../components/dashboard/KpiValueText'
+import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoMoney } from '../utils/numberFormat'
 
 interface Props {
@@ -93,7 +95,7 @@ export default function DashboardPage({ adType }: Props) {
   const getDownstream = (_row: SummaryRow, key: string) =>
     (_row as unknown as Record<string, number | undefined>)[key] ?? 0
 
-  const columns: ColumnsType<FR> = [
+  const columns: ColumnsType<FR> = withTableEllipsis([
     {
       title: t('dashboard.date'),
       dataIndex: 'date',
@@ -149,7 +151,7 @@ export default function DashboardPage({ adType }: Props) {
         return <MoneyCell value={getDownstream(row, key)} />
       },
     })),
-  ]
+  ])
 
   return (
     <div className="page-shell dashboard-page-shell">
@@ -175,36 +177,28 @@ export default function DashboardPage({ adType }: Props) {
         <div className="kpi-card revenue">
           <div className="kpi-icon revenue">💰</div>
           <div className="kpi-label">{t('dashboard.totalRevenue')}</div>
-          <div className="kpi-value">
-            {formatIsoMoney(totalRevenue)}
-          </div>
+          <KpiValueText value={formatIsoMoney(totalRevenue)} />
           <div className="kpi-sub">{monthLabel}</div>
         </div>
 
         <div className="kpi-card expense">
           <div className="kpi-icon expense">📤</div>
           <div className="kpi-label">{t('dashboard.totalCost')}</div>
-          <div className="kpi-value">
-            {formatIsoMoney(totalCost)}
-          </div>
+          <KpiValueText value={formatIsoMoney(totalCost)} />
           <div className="kpi-sub">{monthLabel}</div>
         </div>
 
         <div className="kpi-card profit">
           <div className="kpi-icon profit">📊</div>
           <div className="kpi-label">{t('dashboard.profitLabel')}</div>
-          <div className="kpi-value">
-            {formatIsoMoney(totalProfit)}
-          </div>
+          <KpiValueText value={formatIsoMoney(totalProfit)} />
           <div className="kpi-sub">{t('dashboard.summaryTitle')}</div>
         </div>
 
         <div className="kpi-card net">
           <div className="kpi-icon net">🌿</div>
           <div className="kpi-label">{t('dashboard.netProfitLabel')}</div>
-          <div className="kpi-value">
-            {formatIsoMoney(totalNetProfit)}
-          </div>
+          <KpiValueText value={formatIsoMoney(totalNetProfit)} />
           <div className="kpi-sub">{monthLabel}</div>
         </div>
       </div>
@@ -212,7 +206,7 @@ export default function DashboardPage({ adType }: Props) {
       {/* Table */}
       <div ref={tableHostRef} className="dashboard-table-shell">
         <Table<FR>
-          className="dashboard-total-table dashboard-total-table--with-bottom-scroll"
+          className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"
           columns={columns}
           dataSource={displayRows as FR[]}
           rowKey="date"
@@ -222,6 +216,7 @@ export default function DashboardPage({ adType }: Props) {
           scroll={{ x: tableScrollX }}
           loading={isLoading}
           pagination={false}
+          tableLayout="fixed"
           summary={() => {
             if (!totalRow) return null
 
@@ -229,7 +224,7 @@ export default function DashboardPage({ adType }: Props) {
               <Table.Summary fixed="bottom">
                 <Table.Summary.Row className="dashboard-total-summary-row">
                   <Table.Summary.Cell index={0} className="dashboard-total-cell dashboard-date-col">
-                    <strong>{t('dashboard.total')}</strong>
+                    {renderTableText(t('dashboard.total'), { fontWeight: 'var(--font-weight-semibold)' })}
                   </Table.Summary.Cell>
 
                   {upstreamCols.map((name, idx) => (

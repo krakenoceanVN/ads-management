@@ -201,6 +201,8 @@ model YiyiDailyPricing {
 model LEDailyCost {
   id         Int      @id @default(autoincrement())
   recordDate DateTime @unique
+  vendorCost Float    @default(0)
+  mlCost     Float    @default(0)
   costAmount Float    @default(0)
   updatedAt  DateTime @updatedAt
 }

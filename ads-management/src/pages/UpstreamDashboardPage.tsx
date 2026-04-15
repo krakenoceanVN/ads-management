@@ -8,6 +8,8 @@ import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
+import KpiValueText from '../components/dashboard/KpiValueText'
+import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
 
 interface Props {
@@ -234,7 +236,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     displayRows.length,
   ].join(':')
 
-  const columns: ColumnsType<FR> = [
+  const columns: ColumnsType<FR> = withTableEllipsis([
     {
       title: t('dashboard.date'),
       dataIndex: 'date',
@@ -328,7 +330,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
         return <MoneyCell value={(row as unknown as Record<string, number | undefined>)[key] ?? 0} />
       },
     })),
-  ]
+  ])
 
   const summaryCards = [
     { key: 'revenue', label: t('dashboard.totalRevenue'), value: totalRevenue, color: 'var(--color-primary)' },
@@ -356,9 +358,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
             <div key={card.key} className={`kpi-card ${typeClass}`}>
               <div className={`kpi-icon ${typeClass}`}>{icon}</div>
               <div className="kpi-label">{card.label}</div>
-              <div className="kpi-value">
-                {formatIsoMoney(card.value)}
-              </div>
+              <KpiValueText value={formatIsoMoney(card.value)} />
               <div className="kpi-sub">{monthLabel}</div>
             </div>
           )
@@ -373,11 +373,12 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
           rowKey="date"
           size="small"
           bordered
-          className="dashboard-total-table dashboard-total-table--with-bottom-scroll date-col-fixed-90"
+          className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll date-col-fixed-90"
           scroll={{ x: 'max-content' }}
           sticky={{ offsetHeader: 64, offsetScroll: 17 }}
           loading={isLoading || isDownstreamLoading || isLeDashboardLoading}
           pagination={false}
+          tableLayout="fixed"
           summary={() => {
             if (displayRows.length === 0) return null
 
@@ -385,7 +386,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
               <Table.Summary fixed="bottom">
                 <Table.Summary.Row className="dashboard-total-summary-row">
                   <Table.Summary.Cell index={0} className="dashboard-total-cell dashboard-date-col">
-                    <strong>{t('dashboard.total')}</strong>
+                    {renderTableText(t('dashboard.total'), { fontWeight: 'var(--font-weight-semibold)' })}
                   </Table.Summary.Cell>
 
                   <Table.Summary.Cell index={1} className="dashboard-total-cell">
@@ -404,7 +405,9 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
                     <MoneyCell value={totalNetProfit} colorize />
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={6} className="dashboard-total-cell">
-                    {formatIsoPercent(totalProfitRate, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                    {renderTableText(
+                      formatIsoPercent(totalProfitRate, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                    )}
                   </Table.Summary.Cell>
 
                   {adType === '360'
@@ -414,7 +417,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
 
                         return [
                           <Table.Summary.Cell key={`sum-up-${name}-pv`} index={startIndex} className="dashboard-total-cell">
-                            <strong>{formatPv(metrics.pv)}</strong>
+                            {renderTableText(formatPv(metrics.pv), { fontWeight: 'var(--font-weight-semibold)' })}
                           </Table.Summary.Cell>,
                           <Table.Summary.Cell key={`sum-up-${name}-unit`} index={startIndex + 1} className="dashboard-total-cell">
                             <MoneyCell value={metrics.unit_price} />

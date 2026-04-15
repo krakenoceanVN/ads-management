@@ -1273,12 +1273,13 @@ html[data-theme='contrast'] .yiyi-legacy-page > .ant-card .ant-card-body > div:l
 
 .kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 	gap: 14px;
 }
 
 .kpi-card {
 	position: relative;
+	min-width: 0;
 	overflow: hidden;
 	padding: 16px;
 	border-radius: 12px;
@@ -1358,10 +1359,29 @@ html[data-theme='contrast'] .yiyi-legacy-page > .ant-card .ant-card-body > div:l
 }
 
 .kpi-value {
+	min-width: 0;
 	font-size: 31px;
 	font-weight: 800;
 	line-height: 1.15;
 	color: var(--text-primary);
+}
+
+.kpi-value-text {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: clip;
+	word-break: normal;
+	font-variant-numeric: tabular-nums;
+}
+
+.kpi-value-text.is-wrapped {
+	overflow: visible;
+	white-space: normal;
+	word-break: break-all;
+	line-height: 1.05;
 }
 
 .kpi-card.revenue .kpi-value {
@@ -1761,6 +1781,38 @@ html[data-theme='contrast'] .status-badge.is-confirmed .status-badge-label {
 	--dashboard-scrollbar-border: var(--app-scrollbar-border);
 }
 
+.app-data-table.ant-table-wrapper .ant-table-thead > tr > th,
+.app-data-table.ant-table-wrapper .ant-table-tbody > tr > td,
+.app-data-table.ant-table-wrapper .ant-table-summary .ant-table-cell {
+	overflow: hidden;
+}
+
+.app-data-table.ant-table-wrapper .app-table-cell-text,
+.app-data-table.ant-table-wrapper .app-table-header-text {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.app-data-table.ant-table-wrapper .ant-table-cell .ant-input-number,
+.app-data-table.ant-table-wrapper .ant-table-cell .ant-input,
+.app-data-table.ant-table-wrapper .ant-table-cell .ant-picker {
+	width: 100% !important;
+	max-width: 100%;
+}
+
+.app-data-table.ant-table-wrapper .ant-table-header table,
+.app-data-table.ant-table-wrapper .ant-table-body table,
+.app-data-table.ant-table-wrapper .ant-table-content table,
+.app-data-table.ant-table-wrapper .ant-table-summary table,
+.app-data-table.ant-table-wrapper .ant-table-sticky-holder table {
+	table-layout: fixed !important;
+}
+
 .dashboard-table-shell {
 	--dashboard-sticky-scroll-h: 17px;
 }
@@ -1777,6 +1829,31 @@ html[data-theme='contrast'] .status-badge.is-confirmed .status-badge-label {
 	z-index: 24;
 	background: #1e2d47 !important;
 	box-shadow: none;
+}
+
+.dashboard-total-table.ant-table-wrapper .ant-table-summary.ant-table-sticky-holder {
+	z-index: 30 !important;
+	isolation: isolate;
+}
+
+.dashboard-total-table.ant-table-wrapper .ant-table-summary > tr > th,
+.dashboard-total-table.ant-table-wrapper .ant-table-summary > tr > td,
+.dashboard-total-table.ant-table-wrapper .ant-table-summary .ant-table-cell {
+	position: sticky !important;
+	bottom: var(--dashboard-sticky-scroll-h) !important;
+	z-index: 26;
+}
+
+.dashboard-total-table.dashboard-total-table--top-summary.ant-table-wrapper .ant-table-summary {
+	top: 0 !important;
+	bottom: auto !important;
+}
+
+.dashboard-total-table.dashboard-total-table--top-summary.ant-table-wrapper .ant-table-summary > tr > th,
+.dashboard-total-table.dashboard-total-table--top-summary.ant-table-wrapper .ant-table-summary > tr > td,
+.dashboard-total-table.dashboard-total-table--top-summary.ant-table-wrapper .ant-table-summary .ant-table-cell {
+	top: 0 !important;
+	bottom: auto !important;
 }
 
 .dashboard-total-table.ant-table-wrapper .ant-table-sticky-scroll {
@@ -1859,8 +1936,34 @@ html[data-theme='contrast'] .status-badge.is-confirmed .status-badge-label {
 .dashboard-total-table.ant-table-wrapper .dashboard-total-summary-row > .dashboard-total-cell.dashboard-date-col {
 	position: sticky !important;
 	left: 0;
-	z-index: 24 !important;
+	bottom: var(--dashboard-sticky-scroll-h) !important;
+	z-index: 28 !important;
 	border-right: 1px solid #344a72 !important;
+}
+
+/* Fix Ant Design nested columns Table.Summary width mismatch on horizontal scroll */
+.dashboard-total-table.ant-table-wrapper .ant-table-header table,
+.dashboard-total-table.ant-table-wrapper .ant-table-body table,
+.dashboard-total-table.ant-table-wrapper .ant-table-content table,
+.dashboard-total-table.ant-table-wrapper .ant-table-summary table,
+.dashboard-total-table.ant-table-wrapper .ant-table-sticky-holder table {
+	width: max-content !important;
+	min-width: 100% !important;
+	table-layout: fixed !important;
+}
+
+.dashboard-total-table.ant-table-wrapper .ant-table-summary.ant-table-sticky-holder .dashboard-total-summary-row > .dashboard-total-cell {
+	z-index: 31 !important;
+}
+
+.dashboard-total-table.ant-table-wrapper .ant-table-summary.ant-table-sticky-holder .dashboard-total-summary-row > .dashboard-total-cell.dashboard-date-col.ant-table-cell-fix-start,
+.dashboard-total-table.ant-table-wrapper .ant-table-summary.ant-table-sticky-holder .dashboard-total-summary-row > .dashboard-total-cell.dashboard-date-col.ant-table-cell-fix-left {
+	z-index: 32 !important;
+}
+
+.dashboard-total-table.dashboard-total-table--top-summary.ant-table-wrapper .dashboard-total-summary-row > .dashboard-total-cell.dashboard-date-col {
+	top: 0 !important;
+	bottom: auto !important;
 }
 
 .dashboard-total-table.ant-table-wrapper .ant-table-sticky-scroll {
@@ -2016,11 +2119,13 @@ html[data-theme='contrast'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-r
 /* Keep the fixed date column fully opaque while horizontal scrolling. */
 .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
-.ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col {
+.ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+.ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col {
 	background: #172033 !important;
 }
 
-.ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col {
+.ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+.ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col {
 	z-index: 11 !important;
 }
 
@@ -2033,6 +2138,7 @@ html[data-theme='contrast'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-r
 html[data-theme='light'] .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 html[data-theme='light'] .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
 html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col,
 html[data-theme='light'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td.dashboard-date-col {
 	background: #edf4ff !important;
 }
@@ -2040,13 +2146,15 @@ html[data-theme='light'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col,
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td.dashboard-date-col {
 	background: #10243e !important;
 }
 
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
-html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col {
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col {
 	border-right: 2px solid #38d8ff !important;
 }
 
@@ -2087,7 +2195,9 @@ html[data-theme='contrast'] .dashboard-date-link {
 }
 
 .ant-table-wrapper .ant-table-cell-fix-left,
-.ant-table-wrapper .ant-table-cell-fix-right {
+.ant-table-wrapper .ant-table-cell-fix-right,
+.ant-table-wrapper .ant-table-cell-fix-start,
+.ant-table-wrapper .ant-table-cell-fix-end {
 	background: #172033 !important;
 }
 
@@ -2125,12 +2235,16 @@ html[data-theme='contrast'] .has-save-bar-table.ant-table-wrapper .ant-table-tbo
 }
 
 html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-left,
-html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-right {
+html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-right,
+html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-start,
+html[data-theme='light'] .ant-table-wrapper .ant-table-cell-fix-end {
 	background: #edf4ff !important;
 }
 
 html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-left,
-html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-right {
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-right,
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-start,
+html[data-theme='contrast'] .ant-table-wrapper .ant-table-cell-fix-end {
 	background: #10243e !important;
 }
 
@@ -2340,13 +2454,15 @@ html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col,
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td.dashboard-date-col {
 	background: #17365e !important;
 }
 
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-thead > tr > th.dashboard-date-col,
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-tbody > tr > td.dashboard-date-col,
-html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col {
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-left.dashboard-date-col,
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-start.dashboard-date-col {
 	border-right: 2px solid #7cecff !important;
 }
 
@@ -2364,7 +2480,9 @@ html[data-theme='contrast'][data-contrast-tone='strong'] .has-save-bar-table.ant
 }
 
 html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-left,
-html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-right {
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-right,
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-start,
+html[data-theme='contrast'][data-contrast-tone='strong'] .ant-table-wrapper .ant-table-cell-fix-end {
 	background: #17365e !important;
 }
 
@@ -2498,6 +2616,10 @@ html[data-theme='contrast'][data-contrast-tone='strong'] .dashboard-total-table.
 }
 
 @media (max-width: 900px) {
+	.kpi-grid {
+		grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+	}
+
 	.daily-input-toolbar {
 		top: 64px;
 		padding: 8px;
@@ -2544,6 +2666,18 @@ html[data-theme='contrast'][data-contrast-tone='strong'] .dashboard-total-table.
 @media (max-width: 640px) {
 	.summary-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.kpi-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.kpi-card {
+		padding: 14px;
+	}
+
+	.kpi-value {
+		font-size: 28px;
 	}
 
 	.page-toolbar {

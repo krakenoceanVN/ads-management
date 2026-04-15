@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Table, DatePicker, InputNumber, Button } from 'antd'
@@ -9,7 +9,9 @@ import dayjs from 'dayjs'
 import html2pdf from 'html2pdf.js'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import LESummaryTable from '../components/downstream/LESummaryTable'
+import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoNumber } from '../utils/numberFormat'
 
 interface DownstreamRow {
@@ -119,6 +121,7 @@ function getEffectiveRate(
 export default function DownstreamSitesPage() {
   const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const tableHostRef = useRef<HTMLDivElement | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(dayjs().format('YYYY-MM'))
   const [leMonth, setLeMonth] = useState(dayjs())
   const [explicitRates, setExplicitRates] = useState<Record<string, number>>({})
@@ -486,7 +489,7 @@ export default function DownstreamSitesPage() {
     return row
   })
 
-  const pivotColumns: ColumnsType<PivotRow> = [
+  const pivotColumns: ColumnsType<PivotRow> = withTableEllipsis([
     {
       title: t('downstream.date'),
       dataIndex: 'date',
@@ -589,7 +592,16 @@ export default function DownstreamSitesPage() {
             render: (v: number | string) => (v === '' ? '-' : formatDisplayValue(v, formatIsoInteger)),
           }
     ),
-  ]
+  ])
+  const tableWatchKey = [
+    id ?? '',
+    selectedMonth,
+    downstream?.downstream_type ?? '',
+    downstream?.ad_type_code ?? '',
+    is360 ? '360' : 'std',
+    adSiteIds.join('|'),
+    pivotRows.length,
+  ].join(':')
 
   return (
     <div>
@@ -619,16 +631,22 @@ export default function DownstreamSitesPage() {
             <Button type="primary" icon={<DownloadOutlined />} onClick={exportPDF}>{t('downstream.exportPdfMl')}</Button>
           </div>
 
-          <Table
-            columns={pivotColumns}
-            dataSource={pivotRows}
-            rowKey="date"
-            size="small"
-            bordered
-            loading={isLoading}
-            pagination={false}
-            scroll={{ x: 'max-content' }}
-          />
+          <div ref={tableHostRef} className="dashboard-table-shell">
+            <Table
+              className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"
+              columns={pivotColumns}
+              dataSource={pivotRows}
+              rowKey="date"
+              size="small"
+              bordered
+              loading={isLoading}
+              pagination={false}
+              sticky={{ offsetHeader: 64, offsetScroll: 17 }}
+              scroll={{ x: 'max-content' }}
+              tableLayout="fixed"
+            />
+            <DashboardBottomScrollbar tableHostRef={tableHostRef} watchKey={tableWatchKey} leadingOffsetPx={120} />
+          </div>
         </>
       )}
     </div>

@@ -9,12 +9,13 @@ const LANGUAGES = [
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation()
+  const currentLanguage = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
 
   return (
     <Segmented
       size="small"
       options={LANGUAGES}
-      value={i18n.language}
+      value={currentLanguage}
       onChange={(value) => {
         i18n.changeLanguage(value as string)
       }}

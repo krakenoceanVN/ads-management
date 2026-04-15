@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, DatePicker, InputNumber, Result, Spin, Table, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
 
 const CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const
 const DEFAULT_UNIT_PRICE = 2
@@ -45,14 +47,15 @@ function createEmptyDraftRow(): DraftRow {
 }
 
 function formatMoney(value: number): string {
-  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatIsoMoney(value)
 }
 
 function formatQty(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return formatIsoInteger(value)
 }
 
 export default function YiyiInputPage() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs())
   const [drafts, setDrafts] = useState<DraftMap>({})
@@ -95,10 +98,10 @@ export default function YiyiInputPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['yiyi-data', 'monthly', year, month] })
-      message.success('Đã lưu dữ liệu Yiyi theo tháng thành công!')
+      message.success(t('yiyi.saveSuccess'))
     },
     onError: () => {
-      message.error('Lỗi khi lưu dữ liệu Yiyi theo tháng!')
+      message.error(t('yiyi.saveFail'))
     },
   })
 
@@ -133,7 +136,7 @@ export default function YiyiInputPage() {
   const summaryTotal = summaryAmount + summaryProfit
 
   const displayRows: TableRow[] = [
-    { key: 'summary', date: '汇总', isSummary: true },
+    { key: 'summary', date: t('yiyi.summary'), isSummary: true },
     ...monthRows,
   ]
 
@@ -189,18 +192,18 @@ export default function YiyiInputPage() {
 
   const columns: ColumnsType<TableRow> = [
     {
-      title: '厂商应付',
+      title: t('yiyi.vendorPay'),
       children: [
         {
-          title: '日期',
+          title: t('yiyi.date'),
           dataIndex: 'date',
           key: 'date',
           width: 120,
           fixed: 'left',
-          render: (_: string, row) => (row.isSummary ? <strong>汇总</strong> : <span>{row.date}</span>),
+          render: (_: string, row) => (row.isSummary ? <strong>{t('yiyi.summary')}</strong> : <span>{row.date}</span>),
         },
         {
-          title: '量级',
+          title: t('yiyi.qty'),
           key: 'qty',
           width: 110,
           render: (_: unknown, row) => {
@@ -209,7 +212,7 @@ export default function YiyiInputPage() {
           },
         },
         {
-          title: '单价',
+          title: t('yiyi.unitPrice'),
           key: 'unit_price',
           width: 120,
           render: (_: unknown, row) => {
@@ -228,7 +231,7 @@ export default function YiyiInputPage() {
           },
         },
         {
-          title: '金额',
+          title: t('yiyi.amount'),
           key: 'amount',
           width: 120,
           render: (_: unknown, row) => {
@@ -261,7 +264,7 @@ export default function YiyiInputPage() {
       },
     })),
     {
-      title: '利润单价',
+      title: t('yiyi.profitUnitPrice'),
       key: 'profit_unit_price',
       width: 130,
       render: (_: unknown, row) => {
@@ -280,7 +283,7 @@ export default function YiyiInputPage() {
       },
     },
     {
-      title: '利润',
+      title: t('yiyi.profit'),
       key: 'profit',
       width: 110,
       render: (_: unknown, row) => {
@@ -289,7 +292,7 @@ export default function YiyiInputPage() {
       },
     },
     {
-      title: '总计',
+      title: t('yiyi.total'),
       key: 'total',
       width: 120,
       render: (_: unknown, row) => {
@@ -308,7 +311,7 @@ export default function YiyiInputPage() {
   }
 
   if (error) {
-    return <Result status="error" title="Lỗi khi tải dữ liệu Yiyi" />
+    return <Result status="error" title={t('yiyi.loadError')} />
   }
 
   return (
@@ -323,7 +326,7 @@ export default function YiyiInputPage() {
               if (value) setSelectedMonth(value)
             }}
           />
-          <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
+          <span className="page-subtitle">{t('yiyi.title')}</span>
         </div>
 
       </div>
@@ -331,7 +334,7 @@ export default function YiyiInputPage() {
       <div className="dashboard-table-shell">
         <div style={{ marginBottom: 16, textAlign: 'right' }}>
           <Typography.Text type="secondary">
-            金额 = 量级 × 单价 / 1000, 利润 = 量级 × 利润单价 / 1000, 总计 = 金额 + 利润
+            {t('yiyi.formula')}
           </Typography.Text>
         </div>
 
@@ -354,7 +357,7 @@ export default function YiyiInputPage() {
         loading={mutation.isPending}
         onClick={handleSave}
       >
-        Lưu Dữ Liệu Tháng
+        {t('yiyi.saveMonth')}
       </Button>
       </div>
     </div>

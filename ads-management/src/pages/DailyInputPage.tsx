@@ -13,13 +13,6 @@ interface Props {
   adType: AdTypeCode
 }
 
-const AD_TYPE_LABEL: Record<AdTypeCode, string> = {
-  SM: 'GS-SM',
-  '360': '360',
-  BAIDU_JS: 'Baidu JS',
-  OTHER: 'Other',
-}
-
 export default function DailyInputPage({ adType }: Props) {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
@@ -35,6 +28,13 @@ export default function DailyInputPage({ adType }: Props) {
 
   const disabledDate = (current: dayjs.Dayjs) => {
     return current && current > dayjs().endOf('day')
+  }
+
+  const adTypeLabels: Record<AdTypeCode, string> = {
+    SM: t('adType.gsSm'),
+    '360': t('adType.360'),
+    BAIDU_JS: t('adType.baidu'),
+    OTHER: t('adType.other'),
   }
 
   return (
@@ -55,7 +55,7 @@ export default function DailyInputPage({ adType }: Props) {
           allowClear
         />
         <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          {t('input.title', { type: AD_TYPE_LABEL[adType] })}
+          {t('input.title', { type: adTypeLabels[adType] })}
         </span>
       </div>
 

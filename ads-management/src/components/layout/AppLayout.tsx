@@ -153,7 +153,7 @@ export default function AppLayout() {
           {
             key: 'downstream-menu',
             icon: rootIcon('⬇️'),
-            label: 'Hạ nguồn',
+            label: t('nav.downstream'),
             onClick: () => navigate('/downstream'),
           },
           {
@@ -199,7 +199,7 @@ export default function AppLayout() {
           : location.pathname.startsWith('/admin')
             ? t('nav.admin')
             : location.pathname.startsWith('/downstream')
-              ? 'Hạ nguồn'
+              ? t('nav.downstream')
               : t('app.brand')
 
   const pageIcon =

@@ -41,11 +41,43 @@ router.get("/le", auth_js_1.requireAuth, [
         const [year, month] = monthStr.split("-").map(Number);
         const days = getDaysInMonth(year, month);
         const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
-        // Fetch all SM confirmed daily inputs for the month
+        const leDownstream = await prisma_js_1.default.downstream.findFirst({
+            where: {
+                downstreamType: "LE",
+                adTypeId: 1, // SM
+                status: "active",
+            },
+            include: {
+                adSites: {
+                    include: {
+                        adSite: {
+                            include: {
+                                upstream: {
+                                    select: { name: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { id: "asc" },
+        });
+        const linkedSites = (leDownstream?.adSites ?? [])
+            .map((item) => item.adSite)
+            .sort((a, b) => {
+            const upstreamCompare = a.upstream.name.localeCompare(b.upstream.name);
+            if (upstreamCompare !== 0)
+                return upstreamCompare;
+            return a.name.localeCompare(b.name);
+        });
+        const siteIds = linkedSites.map((site) => site.id);
+        const siteNames = linkedSites.map((site) => site.name);
+        // Fetch all linked LE-SM daily inputs for the month
         const dailyInputs = await prisma_js_1.default.dailyInput.findMany({
             where: {
                 recordDate: { gte: startOfMonth, lt: endOfMonth },
                 status: isOfficialView ? "confirmed" : undefined,
+                adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
                 adSite: {
                     upstream: {
                         adTypeId: 1, // SM
@@ -79,13 +111,6 @@ router.get("/le", auth_js_1.requireAuth, [
                 },
             ];
         }));
-        // Collect all upstream names
-        const upstreamNames = new Set();
-        for (const inp of dailyInputs) {
-            if (inp.adSite.upstream.name)
-                upstreamNames.add(inp.adSite.upstream.name);
-        }
-        const sortedUpstreams = Array.from(upstreamNames).sort();
         // Build per-day rows
         const results = [];
         for (const date of days) {
@@ -94,11 +119,11 @@ router.get("/le", auth_js_1.requireAuth, [
                 const rd = new Date(inp.recordDate);
                 return rd >= startOfDay && rd < endOfDay;
             });
-            // SM revenue and upstream breakdown
+            // SM revenue and ad site breakdown
             const upstreamBreakdown = {};
             let smRevenue = 0;
             for (const inp of dayInputs) {
-                const name = inp.adSite.upstream.name;
+                const name = inp.adSite.name;
                 const rev = Number(inp.revenue);
                 smRevenue += rev;
                 upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev;
@@ -155,7 +180,7 @@ router.get("/le", auth_js_1.requireAuth, [
         res.json({
             success: true,
             data: {
-                upstreamNames: sortedUpstreams,
+                upstreamNames: siteNames,
                 rows: [...results, totalRow],
             },
         });

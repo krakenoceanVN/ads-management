@@ -60,11 +60,44 @@ router.get(
       const days = getDaysInMonth(year, month)
       const { gte: startOfMonth, lt: endOfMonth } = getBusinessMonthRange(year, month)
 
-      // Fetch all SM confirmed daily inputs for the month
+      const leDownstream = await prisma.downstream.findFirst({
+        where: {
+          downstreamType: "LE",
+          adTypeId: 1, // SM
+          status: "active",
+        },
+        include: {
+          adSites: {
+            include: {
+              adSite: {
+                include: {
+                  upstream: {
+                    select: { name: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { id: "asc" },
+      })
+
+      const linkedSites = (leDownstream?.adSites ?? [])
+        .map((item) => item.adSite)
+        .sort((a, b) => {
+          const upstreamCompare = a.upstream.name.localeCompare(b.upstream.name)
+          if (upstreamCompare !== 0) return upstreamCompare
+          return a.name.localeCompare(b.name)
+        })
+      const siteIds = linkedSites.map((site) => site.id)
+      const siteNames = linkedSites.map((site) => site.name)
+
+      // Fetch all linked LE-SM daily inputs for the month
       const dailyInputs = await prisma.dailyInput.findMany({
         where: {
           recordDate: { gte: startOfMonth, lt: endOfMonth },
           status: isOfficialView ? "confirmed" : undefined,
+          adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
           adSite: {
             upstream: {
               adTypeId: 1, // SM
@@ -103,13 +136,6 @@ router.get(
         })
       )
 
-      // Collect all upstream names
-      const upstreamNames = new Set<string>()
-      for (const inp of dailyInputs) {
-        if (inp.adSite.upstream.name) upstreamNames.add(inp.adSite.upstream.name)
-      }
-      const sortedUpstreams = Array.from(upstreamNames).sort()
-
       // Build per-day rows
       const results: DailyRow[] = []
       for (const date of days) {
@@ -120,11 +146,11 @@ router.get(
           return rd >= startOfDay && rd < endOfDay
         })
 
-        // SM revenue and upstream breakdown
+        // SM revenue and ad site breakdown
         const upstreamBreakdown: Record<string, number> = {}
         let smRevenue = 0
         for (const inp of dayInputs) {
-          const name = inp.adSite.upstream.name
+          const name = inp.adSite.name
           const rev = Number(inp.revenue)
           smRevenue += rev
           upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev
@@ -186,7 +212,7 @@ router.get(
       res.json({
         success: true,
         data: {
-          upstreamNames: sortedUpstreams,
+          upstreamNames: siteNames,
           rows: [...results, totalRow],
         },
       })

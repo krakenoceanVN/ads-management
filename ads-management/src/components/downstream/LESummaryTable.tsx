@@ -11,10 +11,6 @@ import DashboardBottomScrollbar from '../dashboard/DashboardBottomScrollbar'
 import { withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent, toFiniteNumber } from '../../utils/numberFormat'
 
-const YIYI_CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const
-
-type YiyiChannel = (typeof YIYI_CHANNELS)[number]
-
 interface DailyRow {
   date: string
   smRevenue: number
@@ -44,12 +40,6 @@ interface Props {
   onMonthChange: (m: Dayjs) => void
 }
 
-type YiyiMonthlyRow = {
-  date: string
-  unit_price: number
-  profit_unit_price: number
-} & Record<YiyiChannel, number>
-
 function isSummaryRow(row: DailyRow): boolean {
   return row.isTotal === true || row.date === 'TOTAL'
 }
@@ -70,44 +60,20 @@ function formatPercent(value: unknown): string {
   })
 }
 
-function getYiyiRowQty(row: YiyiMonthlyRow): number {
-  return YIYI_CHANNELS.reduce((sum, channel) => sum + Number(row[channel] ?? 0), 0)
-}
-
-function getYiyiVendorCost(row?: YiyiMonthlyRow): number {
-  if (!row) return 0
-
-  const qty = getYiyiRowQty(row)
-  const amount = (qty * Number(row.unit_price ?? 0)) / 1000
-  const profit = (qty * Number(row.profit_unit_price ?? 0)) / 1000
-
-  return amount + profit
-}
-
 function getUpstreamTotal(row: Pick<DailyRow, 'upstreamBreakdown'>): number {
   return Object.values(row.upstreamBreakdown ?? {}).reduce((sum, value) => sum + Number(value ?? 0), 0)
 }
 
-function getDownstreamTotal(row: Pick<DailyRow, 'vendorCost' | 'mlCost'>): number {
-  return toNumber(row.vendorCost) + toNumber(row.mlCost)
-}
-
-function resolveMlCost(row: DailyRow): number {
-  return toNumber(row.mlCost)
-}
-
-function buildDisplayRow(row: DailyRow, vendorCost: number, mlCost: number): DailyRow {
-  const totalCost = toNumber(row.totalCost ?? row.cost)
-
+function buildDisplayRow(row: DailyRow): DailyRow {
   return {
     ...row,
     smRevenue: toNumber(row.smRevenue),
     leRevenue: toNumber(row.leRevenue),
     taxRate: toNumber(row.taxRate),
     tax: toNumber(row.tax),
-    vendorCost,
-    mlCost,
-    totalCost,
+    vendorCost: toNumber(row.vendorCost),
+    mlCost: toNumber(row.mlCost),
+    totalCost: toNumber(row.totalCost ?? row.cost),
     profit: toNumber(row.profit),
     profitRate: toNumber(row.profitRate),
     upstreamBreakdown: row.upstreamBreakdown ?? {},
@@ -151,8 +117,6 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
   const { t, i18n } = useTranslation()
   const tableHostRef = useRef<HTMLDivElement | null>(null)
   const monthKey = month.format('YYYY-MM')
-  const year = month.year()
-  const monthNumber = month.month() + 1
   const queryKey = ['le-dashboard', monthKey] as const
   const isOfficialView = isAdmin()
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
@@ -168,28 +132,9 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
     },
   })
 
-  const { data: yiyiRows = [] } = useQuery({
-    queryKey: ['yiyi-data', 'monthly', year, monthNumber],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data?: YiyiMonthlyRow[] }>('/api/yiyi-data/monthly', {
-        params: { year, month: monthNumber },
-      })
-      return res.data.data ?? []
-    },
-  })
-
-  const upstreamNames = data?.upstreamNames ?? []
+  const adSiteNames = data?.upstreamNames ?? []
   const sourceRows = (data?.rows ?? []).filter((row) => !isSummaryRow(row))
-  const yiyiVendorByDate = yiyiRows.reduce<Record<string, number>>((acc, row) => {
-    acc[row.date] = getYiyiVendorCost(row)
-    return acc
-  }, {})
-
-  const displayDailyRows = sourceRows.map((row) => {
-    const vendorCost = yiyiVendorByDate[row.date] ?? 0
-    const mlCost = resolveMlCost(row)
-    return buildDisplayRow(row, vendorCost, mlCost)
-  })
+  const displayDailyRows = sourceRows.map((row) => buildDisplayRow(row))
   const summaryRow = buildSummaryRow(displayDailyRows)
   const displayRows = [summaryRow, ...displayDailyRows]
 
@@ -199,13 +144,11 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
     const standardColWidth = 112
     const taxRateColWidth = 84
     const upstreamColWidth = 108
-    const downstreamColWidth = 112
     const pageMargin = 6
     const tableWidthPx = dateColWidth
       + (standardColWidth * 5)
       + taxRateColWidth
-      + ((upstreamNames.length + 1) * upstreamColWidth)
-      + (downstreamColWidth * 3)
+      + ((adSiteNames.length + 1) * upstreamColWidth)
     const pageWidthPx = tableWidthPx + (pageMargin * 2) + 24
     const pageHeightPx = Math.max(1200, 220 + ((displayRows.length + 3) * 28))
     const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
@@ -229,11 +172,8 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           ${renderMoneyCell(record.tax)}
           ${renderMoneyCell(record.totalCost, '#b45309')}
           ${renderMoneyCell(record.profit, record.profit >= 0 ? '#15803d' : '#dc2626')}
-          ${upstreamNames.map((name) => renderMoneyCell(toNumber(record.upstreamBreakdown?.[name]))).join('')}
+          ${adSiteNames.map((name) => renderMoneyCell(toNumber(record.upstreamBreakdown?.[name]))).join('')}
           ${renderMoneyCell(getUpstreamTotal(record))}
-          ${renderMoneyCell(record.vendorCost)}
-          ${renderMoneyCell(record.mlCost)}
-          ${renderMoneyCell(getDownstreamTotal(record), '#b45309')}
         </tr>
       `
     }
@@ -274,10 +214,6 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           .le-report-table td.col-upstream {
             width: ${upstreamColWidth}px;
           }
-          .le-report-table th.col-downstream,
-          .le-report-table td.col-downstream {
-            width: ${downstreamColWidth}px;
-          }
         </style>
         <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 16px; color: #222;">
           ${t('downstream.lePdfTitle', { month: monthKey })}
@@ -298,24 +234,10 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.taxAmount')}</th>
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.expense')}</th>
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.profit')}</th>
-              <th colspan="${upstreamNames.length + 1}" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.upstream')}</th>
-              <th colspan="3" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.downstreamGroup')}</th>
-            </tr>
-            <tr style="background: #ececec;">
-              <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-tax-rate" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
-              ${upstreamNames.map((name) => `
-                <th class="col-upstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${name}</th>
+              ${adSiteNames.map((name) => `
+                <th class="col-upstream" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${name}</th>
               `).join('')}
-              <th class="col-upstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
-              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.vendor')}</th>
-              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">ML</th>
-              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
+              <th class="col-upstream" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
             </tr>
           </thead>
           <tbody>
@@ -411,56 +333,22 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
         </span>
       ),
     },
+    ...adSiteNames.map((name) => ({
+      title: name,
+      key: `site-${name}`,
+      width: 108,
+      render: (_value: unknown, record: DailyRow) => formatMoney(record.upstreamBreakdown?.[name] ?? 0),
+    })),
     {
-      title: t('downstream.upstream'),
-      key: 'upstream-group',
-      children: [
-        ...upstreamNames.map((name) => ({
-          title: name,
-          key: `upstream-${name}`,
-          width: 108,
-          render: (_value: unknown, record: DailyRow) => formatMoney(record.upstreamBreakdown?.[name] ?? 0),
-        })),
-        {
-          title: t('downstream.total'),
-          key: 'upstream-total',
-          width: 108,
-          render: (_value: unknown, record: DailyRow) => formatMoney(getUpstreamTotal(record)),
-        },
-      ],
-    },
-    {
-      title: t('downstream.downstreamGroup'),
-      key: 'downstream-group',
-      children: [
-        {
-          title: t('downstream.vendor'),
-          key: 'vendorCost',
-          width: 112,
-          render: (_value: unknown, record: DailyRow) => formatMoney(record.vendorCost),
-        },
-        {
-          title: 'ML',
-          key: 'mlCost',
-          width: 112,
-          render: (_value: unknown, record: DailyRow) => formatMoney(record.mlCost),
-        },
-        {
-          title: t('downstream.total'),
-          key: 'downstream-total',
-          width: 112,
-          render: (_value: unknown, record: DailyRow) => (
-            <span style={{ color: '#b45309', fontWeight: 600 }}>
-              {formatMoney(getDownstreamTotal(record))}
-            </span>
-          ),
-        },
-      ],
+      title: t('downstream.total'),
+      key: 'site-total',
+      width: 108,
+      render: (_value: unknown, record: DailyRow) => formatMoney(getUpstreamTotal(record)),
     },
   ])
   const tableWatchKey = [
     monthKey,
-    upstreamNames.join('|'),
+    adSiteNames.join('|'),
     displayRows.length,
   ].join(':')
 
@@ -518,7 +406,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           bordered
           pagination={false}
           sticky={{ offsetHeader: 64, offsetScroll: 17 }}
-          scroll={{ x: 1100 + ((upstreamNames.length + 4) * 108) }}
+          scroll={{ x: 900 + ((adSiteNames.length + 1) * 108) }}
           rowClassName={(record) => (record.isTotal ? 'le-summary-row' : '')}
           tableLayout="fixed"
         />

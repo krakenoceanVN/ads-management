@@ -6,9 +6,9 @@ import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.
 import { UserPublic, UserStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
+import { getRequiredEnv } from "../utils/env.js"
 
 const router = Router()
-const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-production"
 const JWT_EXPIRES_IN = "8h"
 const DEFAULT_DOWNSTREAM_PRICES: Record<string, number> = {
   "18": 95,
@@ -1194,7 +1194,7 @@ router.post(
         created_at: user.createdAt,
       }
 
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+      const token = jwt.sign(payload, getRequiredEnv("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN })
 
       res.json({ success: true, token, user: payload })
     } catch (err: any) {

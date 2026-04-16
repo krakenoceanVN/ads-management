@@ -10,8 +10,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const env_js_1 = require("../utils/env.js");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-production";
 const JWT_EXPIRES_IN = "8h";
 const DEFAULT_DOWNSTREAM_PRICES = {
     "18": 95,
@@ -993,7 +993,7 @@ router.post("/auth/login", [
             last_login_at: user.lastLoginAt ?? undefined,
             created_at: user.createdAt,
         };
-        const token = jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+        const token = jsonwebtoken_1.default.sign(payload, (0, env_js_1.getRequiredEnv)("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN });
         res.json({ success: true, token, user: payload });
     }
     catch (err) {

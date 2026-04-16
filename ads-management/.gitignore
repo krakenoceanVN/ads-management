@@ -10,12 +10,6 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-.env
-.env.*
-!.env.example
-*.db
-*.sqlite
-prisma/dev.db
 *.local
 
 # Editor directories and files

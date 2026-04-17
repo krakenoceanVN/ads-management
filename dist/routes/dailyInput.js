@@ -33,17 +33,30 @@ router.get("/", [
     try {
         const dateStr = req.query.date;
         const adTypeCode = req.query.ad_type;
-        const search = req.query.search;
-        // 1. Lấy tất cả ad_sites theo ad_type + search
+        const search = req.query.search?.trim();
+        const searchFilter = search
+            ? {
+                OR: [
+                    { name: { contains: search, mode: "insensitive" } },
+                    {
+                        upstream: {
+                            name: { contains: search, mode: "insensitive" },
+                        },
+                    },
+                ],
+            }
+            : undefined;
+        // 1. Lấy tất cả ad_sites theo ad_type + search (Nguồn trên OR Ad Site)
         const adSites = await prisma_js_1.default.adSite.findMany({
             where: {
+                isActive: true,
+                isArchived: false,
                 status: "active",
-                name: search ? { contains: search } : undefined,
                 upstream: {
                     status: "active",
                     adType: { code: adTypeCode },
-                    name: search ? { contains: search } : undefined,
                 },
+                ...searchFilter,
             },
             include: {
                 upstream: { include: { adType: true } },
@@ -221,6 +234,36 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
     }
     catch (err) {
         console.error("POST /api/daily-input/batch error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// POST /api/daily-input/confirm-batch
+// Body: { ids: number[] }
+// ============================================================
+router.post("/confirm-batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [
+    (0, express_validator_1.body)("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
+    (0, express_validator_1.body)("ids.*").isInt().toInt().withMessage("all ids must be integers"),
+], handleValidation, async (req, res) => {
+    try {
+        const ids = [...new Set(req.body.ids.map(Number).filter(Number.isInteger))];
+        if (ids.length === 0) {
+            res.status(400).json({ success: false, error: "No valid ids provided" });
+            return;
+        }
+        const result = await prisma_js_1.default.dailyInput.updateMany({
+            where: {
+                id: { in: ids },
+                status: "unconfirmed",
+            },
+            data: {
+                status: "confirmed",
+            },
+        });
+        res.json({ success: true, updated: result.count });
+    }
+    catch (err) {
+        console.error("POST /api/daily-input/confirm-batch error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });

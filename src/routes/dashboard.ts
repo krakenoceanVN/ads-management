@@ -1,13 +1,9 @@
 import { Router, Request, Response } from "express"
 import { query, validationResult } from "express-validator"
-import {
-  calculateMLPayout,
-  calculateLEPayout,
-  calculateYiyiPayout,
-} from "../services/mlPayout.service.js"
+import { calculateYiyiAmount, YIYI_DEFAULT_UNIT_PRICE } from "../services/yiyiPricing.service.js"
 import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
-import { getBusinessDayRange } from "../utils/date.js"
+import { formatBusinessDate, getBusinessMonthRange } from "../utils/date.js"
 
 const router = Router()
 
@@ -17,12 +13,43 @@ const AD_TYPE_ID_MAP: Record<AdTypeCode, number> = {
   BAIDU_JS: 3,
   OTHER: 4,
 }
+
 const DEFAULT_DOWNSTREAM_PRICES: Record<string, number> = {
   "18": 95,
   "19": 16,
   "21": 80,
   "22": 75,
   "23": 70,
+}
+
+interface DailyInputWithUpstream {
+  recordDate: Date
+  revenue: unknown
+  qty: number
+  adSiteId: number
+  adSite: {
+    upstream: {
+      name: string
+    }
+    downstreams?: Array<{
+      customPrice: unknown
+      downstream: {
+        id: number
+        downstreamType: string
+      }
+    }>
+  }
+}
+
+interface PeriodWithDownstream {
+  downstreamId: number
+  pctHal: unknown
+  unitPrice: unknown
+  startDate: Date
+  endDate: Date | null
+  downstream: {
+    payoutRate: unknown
+  }
 }
 
 // ============================================================
@@ -103,6 +130,61 @@ function buildMonthlyTotal(rows: SummaryRow[]): SummaryRow {
   }
 }
 
+function groupDailyInputsByBusinessDate(inputs: DailyInputWithUpstream[]): Map<string, DailyInputWithUpstream[]> {
+  const grouped = new Map<string, DailyInputWithUpstream[]>()
+  for (const input of inputs) {
+    const date = formatBusinessDate(input.recordDate)
+    const current = grouped.get(date) ?? []
+    current.push(input)
+    grouped.set(date, current)
+  }
+  return grouped
+}
+
+function groupNumbersByBusinessDate(
+  rows: Array<{ recordDate: Date; value: number }>
+): Map<string, number> {
+  const grouped = new Map<string, number>()
+  for (const row of rows) {
+    const date = formatBusinessDate(row.recordDate)
+    grouped.set(date, (grouped.get(date) ?? 0) + row.value)
+  }
+  return grouped
+}
+
+function groupPricingByBusinessDate(
+  rows: Array<{ recordDate: Date; unitPrice: unknown }>
+): Map<string, number> {
+  const grouped = new Map<string, number>()
+  for (const row of rows) {
+    grouped.set(formatBusinessDate(row.recordDate), Number(row.unitPrice ?? YIYI_DEFAULT_UNIT_PRICE))
+  }
+  return grouped
+}
+
+function buildPeriodMap(periods: PeriodWithDownstream[]): Map<number, PeriodWithDownstream[]> {
+  const map = new Map<number, PeriodWithDownstream[]>()
+  for (const period of periods) {
+    const current = map.get(period.downstreamId) ?? []
+    current.push(period)
+    map.set(period.downstreamId, current)
+  }
+  for (const rows of map.values()) {
+    rows.sort((a, b) => b.startDate.getTime() - a.startDate.getTime())
+  }
+  return map
+}
+
+function getActivePeriodForDate(periods: PeriodWithDownstream[] | undefined, date: string): PeriodWithDownstream | undefined {
+  if (!periods || periods.length === 0) return undefined
+  const currentDate = new Date(date)
+  return periods.find(
+    (period) =>
+      period.startDate <= currentDate &&
+      (period.endDate === null || period.endDate >= currentDate)
+  )
+}
+
 const handleValidation = (req: Request, res: Response, next: Function) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -114,7 +196,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 
 // ============================================================
 // GET /api/dashboard/monthly
-// Query: year, month (1-12), ad_type (SM|360|BAIDU_JS)
+// Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // ============================================================
 router.get(
   "/monthly",
@@ -130,46 +212,116 @@ router.get(
       const month = Number(req.query.month)
       const adTypeCode = req.query.ad_type as AdTypeCode
       const adTypeId = AD_TYPE_ID_MAP[adTypeCode]
-      const activeUpstreamNames =
+      const days = getDaysInMonth(year, month)
+      const { gte: startOfMonth, lt: endOfMonth } = getBusinessMonthRange(year, month)
+
+      const [activeUpstreams, monthlyInputs, mlPeriods, lePeriods, yiyiData, yiyiPricing] = await Promise.all([
         adTypeCode === "360"
-          ? (await prisma.upstream.findMany({
+          ? prisma.upstream.findMany({
               where: {
                 adTypeId,
                 status: "active",
               },
               select: { name: true },
               orderBy: { name: "asc" },
-            })).map((upstream) => upstream.name)
-          : []
-
-      const days = getDaysInMonth(year, month)
-      const results: SummaryRow[] = []
-
-      for (const date of days) {
-        const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(date)
-
-        // Upstream breakdown — sum revenue by upstream name (confirmed only)
-        const upstreamRows = await prisma.dailyInput.groupBy({
-          by: ["adSiteId"],
+            })
+          : Promise.resolve([]),
+        prisma.dailyInput.findMany({
           where: {
-            recordDate: { gte: startOfDay, lt: endOfDay },
+            recordDate: { gte: startOfMonth, lt: endOfMonth },
             status: "confirmed",
             adSite: {
               upstream: {
-                adTypeId: adTypeId,
+                adTypeId,
                 status: "active",
               },
             },
           },
-          _sum: { revenue: true, qty: true },
-        })
+          select: {
+            recordDate: true,
+            revenue: true,
+            qty: true,
+            adSiteId: true,
+            adSite: {
+              select: {
+                upstream: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        }) as Promise<DailyInputWithUpstream[]>,
+        prisma.downstreamPeriod.findMany({
+          where: {
+            downstream: {
+              adTypeId,
+              downstreamType: "ML",
+              status: "active",
+            },
+            startDate: { lte: endOfMonth },
+            OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+          },
+          include: {
+            downstream: {
+              select: { payoutRate: true },
+            },
+          },
+        }) as Promise<PeriodWithDownstream[]>,
+        adTypeCode === "SM"
+          ? (prisma.downstreamPeriod.findMany({
+              where: {
+                downstream: {
+                  adTypeId: AD_TYPE_ID_MAP.SM,
+                  downstreamType: "LE",
+                  status: "active",
+                },
+                startDate: { lte: endOfMonth },
+                OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+              },
+              include: {
+                downstream: {
+                  select: { payoutRate: true },
+                },
+              },
+            }) as Promise<PeriodWithDownstream[]>)
+          : Promise.resolve([]),
+        adTypeCode === "SM"
+          ? prisma.yiyiDailyData.findMany({
+              where: {
+                recordDate: { gte: startOfMonth, lt: endOfMonth },
+              },
+              select: {
+                recordDate: true,
+                qty: true,
+              },
+            })
+          : Promise.resolve([]),
+        adTypeCode === "SM"
+          ? prisma.yiyiDailyPricing.findMany({
+              where: {
+                recordDate: { gte: startOfMonth, lt: endOfMonth },
+              },
+              select: {
+                recordDate: true,
+                unitPrice: true,
+              },
+            })
+          : Promise.resolve([]),
+      ])
 
-        const siteIds = upstreamRows.map((r) => r.adSiteId)
-        const sites = await prisma.adSite.findMany({
-          where: { id: { in: siteIds } },
-          include: { upstream: { select: { name: true } } },
-        })
-        const siteMap = new Map(sites.map((s) => [s.id, s]))
+      const activeUpstreamNames = activeUpstreams.map((upstream) => upstream.name)
+      const inputsByDate = groupDailyInputsByBusinessDate(monthlyInputs)
+      const mlPeriodMap = buildPeriodMap(mlPeriods)
+      const lePeriodMap = buildPeriodMap(lePeriods)
+      const yiyiQtyByDate = groupNumbersByBusinessDate(
+        yiyiData.map((row) => ({ recordDate: row.recordDate, value: row.qty }))
+      )
+      const yiyiPricingByDate = groupPricingByBusinessDate(yiyiPricing)
+
+      const results: SummaryRow[] = []
+
+      for (const date of days) {
+        const dayInputs = inputsByDate.get(date) ?? []
 
         const upstreamBreakdown: Record<string, number> = {}
         const upstreamDetailBreakdown: Record<string, { pv: number; unit_price: number; amount: number }> =
@@ -182,18 +334,23 @@ router.get(
               )
             : {}
 
-        for (const row of upstreamRows) {
-          const site = siteMap.get(row.adSiteId)
-          if (!site) continue
-          const name = site.upstream.name
-          const amount = Number(row._sum.revenue ?? 0)
-          upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + amount
+        let totalRevenue = 0
+        let totalUV = 0
+
+        for (const row of dayInputs) {
+          const upstreamName = row.adSite.upstream.name
+          const amount = Number(row.revenue ?? 0)
+          const qty = Number(row.qty ?? 0)
+
+          totalRevenue += amount
+          totalUV += qty
+          upstreamBreakdown[upstreamName] = (upstreamBreakdown[upstreamName] ?? 0) + amount
 
           if (adTypeCode === "360") {
-            const current = upstreamDetailBreakdown[name] ?? { pv: 0, unit_price: 0, amount: 0 }
-            current.pv += Number(row._sum.qty ?? 0)
+            const current = upstreamDetailBreakdown[upstreamName] ?? { pv: 0, unit_price: 0, amount: 0 }
+            current.pv += qty
             current.amount += amount
-            upstreamDetailBreakdown[name] = current
+            upstreamDetailBreakdown[upstreamName] = current
           }
         }
 
@@ -202,34 +359,27 @@ router.get(
             ? finalizeUpstreamDetailBreakdown(upstreamDetailBreakdown)
             : undefined
 
-        const totalRevenue = Object.values(upstreamBreakdown).reduce((s, v) => s + v, 0)
-
-        // ML payout — all 3 types
-        const mlResult = await calculateMLPayout(date, adTypeCode, prisma)
-        const mlPayout = mlResult.ml_payout
+        const activeMlPeriod = getActivePeriodForDate(mlPeriodMap.values().next().value, date)
+        const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? 0.8)
+        const mlPayout = totalRevenue * mlPayoutRate
 
         let cost = mlPayout
         let lePayout: number | undefined
         let yiyiPayout: number | undefined
 
         if (adTypeCode === "SM") {
-          lePayout = await calculateLEPayout(date, totalRevenue, prisma)
+          const activeLePeriod = getActivePeriodForDate(lePeriodMap.values().next().value, date)
+          const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? 0.9)
+          const leRevenue = totalRevenue * lePayoutRate
+          const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? 16)
+          const leMlCost = totalUV * mlUnitPrice / 1000
+          const leTax = (leRevenue - leMlCost) * 0.06
+          lePayout = leRevenue - leTax - leMlCost
 
-          const uvResult = await prisma.dailyInput.aggregate({
-            where: {
-              recordDate: { gte: startOfDay, lt: endOfDay },
-              status: "confirmed",
-              adSite: {
-                upstream: {
-                  adTypeId: adTypeId,
-                  status: "active",
-                },
-              },
-            },
-            _sum: { qty: true },
-          })
-          const totalUV = Number(uvResult._sum.qty ?? 0)
-          yiyiPayout = await calculateYiyiPayout(date, totalUV, prisma)
+          const yiyiQty = yiyiQtyByDate.get(date)
+          const yiyiUnitPrice = yiyiPricingByDate.get(date) ?? YIYI_DEFAULT_UNIT_PRICE
+          yiyiPayout = calculateYiyiAmount(yiyiQty ?? totalUV, yiyiUnitPrice)
+
           cost = lePayout + yiyiPayout
         }
 
@@ -280,104 +430,134 @@ router.get(
       const month = Number(req.query.month)
       const adTypeCode = req.query.ad_type as AdTypeCode
       const adTypeId = AD_TYPE_ID_MAP[adTypeCode]
-
       const days = getDaysInMonth(year, month)
-      const results: { date: string; ml: number; ml_80: number; le: number }[] = []
-      const periodCache = new Map<string, { pctHal: number; unitPrice: number }>()
-      const dailyRateCache = new Map<string, number>()
+      const { gte: startOfMonth, lt: endOfMonth } = getBusinessMonthRange(year, month)
 
-      for (const date of days) {
-        const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(date)
-
-        // Get all downstream site inputs for this date, filtered by ad_type
-        const inputs = await prisma.dailyInput.findMany({
-          where: {
-            recordDate: { gte: startOfDay, lt: endOfDay },
-            status: "confirmed",
-            adSite: {
-              status: "active",
+      const inputs = (await prisma.dailyInput.findMany({
+        where: {
+          recordDate: { gte: startOfMonth, lt: endOfMonth },
+          status: "confirmed",
+          adSite: {
+            status: "active",
+            downstreams: {
+              some: {
+                downstream: {
+                  adTypeId,
+                  status: "active",
+                },
+              },
+            },
+          },
+        },
+        select: {
+          recordDate: true,
+          qty: true,
+          adSite: {
+            select: {
               downstreams: {
-                some: {
+                where: {
                   downstream: {
-                    adTypeId: adTypeId,
+                    adTypeId,
                     status: "active",
                   },
                 },
-              },
-            },
-          },
-          include: {
-            adSite: {
-              include: {
-                downstreams: {
-                  where: {
-                    downstream: {
-                      adTypeId: adTypeId,
-                      status: "active",
+                select: {
+                  customPrice: true,
+                  downstream: {
+                    select: {
+                      id: true,
+                      downstreamType: true,
                     },
-                  },
-                  include: {
-                    downstream: true,
                   },
                 },
               },
             },
           },
-        })
+        },
+      })) as DailyInputWithUpstream[]
 
+      const downstreamIds = [...new Set(
+        inputs.flatMap((input) => input.adSite.downstreams?.map((sd) => sd.downstream.id) ?? [])
+      )]
+
+      const [periods, dailyRates] = await Promise.all([
+        downstreamIds.length > 0
+          ? (prisma.downstreamPeriod.findMany({
+              where: {
+                downstreamId: { in: downstreamIds },
+                startDate: { lte: endOfMonth },
+                OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+              },
+              include: {
+                downstream: {
+                  select: { payoutRate: true },
+                },
+              },
+            }) as Promise<PeriodWithDownstream[]>)
+          : Promise.resolve([]),
+        downstreamIds.length > 0
+          ? prisma.dailyDownstreamRate.findMany({
+              where: {
+                downstreamId: { in: downstreamIds },
+                date: { gte: startOfMonth, lt: endOfMonth },
+              },
+              select: {
+                downstreamId: true,
+                date: true,
+                effectiveRate: true,
+              },
+            })
+          : Promise.resolve([]),
+      ])
+
+      const inputsByDate = groupDailyInputsByBusinessDate(inputs)
+      const periodMap = buildPeriodMap(periods)
+      const dailyRateMap = new Map<string, number>()
+      const activePeriodCache = new Map<string, { pctHal: number; unitPrice: number }>()
+
+      for (const rate of dailyRates) {
+        dailyRateMap.set(`${rate.downstreamId}:${formatBusinessDate(rate.date)}`, Number(rate.effectiveRate))
+      }
+
+      const results: { date: string; ml: number; ml_80: number; le: number }[] = []
+
+      for (const date of days) {
+        const dayInputs = inputsByDate.get(date) ?? []
         let totalML = 0
         let totalLE = 0
 
-        for (const input of inputs) {
-          for (const sd of input.adSite.downstreams) {
+        for (const input of dayInputs) {
+          for (const sd of input.adSite.downstreams ?? []) {
             const ds = sd.downstream
             if (ds.downstreamType !== "ML" && ds.downstreamType !== "LE") continue
 
             const cacheKey = `${ds.id}:${date}`
-            let cachedPeriod = periodCache.get(cacheKey)
+            let cachedPeriod = activePeriodCache.get(cacheKey)
             if (!cachedPeriod) {
-              const activePeriod = await prisma.downstreamPeriod.findFirst({
-                where: {
-                  downstreamId: ds.id,
-                  startDate: { lte: new Date(date) },
-                  OR: [{ endDate: null }, { endDate: { gte: new Date(date) } }],
-                },
-                orderBy: { startDate: "desc" },
-              })
-
+              const activePeriod = getActivePeriodForDate(periodMap.get(ds.id), date)
               cachedPeriod = {
                 pctHal: Number(activePeriod?.pctHal ?? 1),
                 unitPrice: Number(activePeriod?.unitPrice ?? DEFAULT_DOWNSTREAM_PRICES[String(ds.id)] ?? 0),
               }
-              periodCache.set(cacheKey, cachedPeriod)
+              activePeriodCache.set(cacheKey, cachedPeriod)
             }
 
-            // Determine effective price: customPrice in AdSiteDownstream > active DownstreamPeriod > fallback defaults
             const price = sd.customPrice !== null
               ? Number(sd.customPrice)
               : cachedPeriod.unitPrice
 
             if (price <= 0) continue
 
-            let effectiveRate = dailyRateCache.get(cacheKey)
-            if (effectiveRate === undefined) {
-              const rateRecord = await prisma.dailyDownstreamRate.findFirst({
-                where: {
-                  downstreamId: ds.id,
-                  date: { gte: startOfDay, lt: endOfDay },
-                },
-              })
-              effectiveRate = rateRecord ? Number(rateRecord.effectiveRate) : cachedPeriod.pctHal * 100
-              dailyRateCache.set(cacheKey, effectiveRate)
-            }
+            const effectiveRate =
+              dailyRateMap.get(cacheKey) ??
+              cachedPeriod.pctHal * 100
 
-            // Match DownstreamSitesPage calculation: int(qty * rate/100)
             const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100))
             const mlValue = adjustedUV * price
 
             if (ds.downstreamType === "ML") {
               totalML += mlValue
-            } else if (ds.downstreamType === "LE") {
+            } else {
               totalLE += mlValue
             }
           }

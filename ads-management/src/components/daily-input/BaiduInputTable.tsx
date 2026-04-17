@@ -7,6 +7,7 @@ import api, { isAdmin } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
+import ConfirmAllButton from './ConfirmAllButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
@@ -40,6 +41,9 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
 
   const isDirty = (row: DailyInputRow) => row.id in drafts
   const isConfirmed = (row: DailyInputRow) => row.existing_record?.status === 'confirmed'
+  const unconfirmedIds = rows.flatMap((row) =>
+    row.existing_record && row.existing_record.status !== 'confirmed' ? [row.existing_record.id] : []
+  )
 
   const mutation = useMutation({
     mutationFn: (records: { ad_site_id: number; amount1?: number; amount2?: number; ratio_override?: number }[]) =>
@@ -58,6 +62,17 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       } else {
         message.error(t('input.saveFail'))
       }
+    },
+  })
+
+  const confirmAllMutation = useMutation({
+    mutationFn: (ids: number[]) => api.post('/api/daily-input/confirm-batch', { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['daily-input', 'BAIDU_JS', date] })
+      message.success(t('input.confirmAllSuccess'))
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error || t('input.confirmAllFail'))
     },
   })
 
@@ -298,6 +313,14 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       {isError && (
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <ConfirmAllButton
+          disabled={unconfirmedIds.length === 0}
+          loading={confirmAllMutation.isPending}
+          onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
+        />
+      </div>
 
       <div style={{ position: 'relative' }}>
         {isLoading && (

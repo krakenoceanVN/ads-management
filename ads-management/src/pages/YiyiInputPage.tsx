@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import ConfirmAllButton from '../components/daily-input/ConfirmAllButton'
 import SaveBar from '../components/daily-input/SaveBar'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
@@ -341,6 +342,8 @@ export default function YiyiInputPage() {
           />
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
+
+        <ConfirmAllButton disabled loading={false} onConfirm={() => Promise.resolve()} />
 
       </div>
 

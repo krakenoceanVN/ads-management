@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, InputNumber, Button, message, Spin, Empty, Alert, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import api, { isAdmin } from '../../api/axios'
+import api, { isAdmin, canConfirmInput } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
 import ConfirmAllButton from './ConfirmAllButton'
+import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
@@ -29,7 +30,10 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState<DraftOther>({})
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set())
+  const [unlockingId, setUnlockingId] = useState<number | null>(null)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const admin = isAdmin()
+  const canConfirm = canConfirmInput()
 
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ['daily-input', 'OTHER', date, search],
@@ -89,6 +93,20 @@ export default function OtherInputTable({ date, search = '' }: Props) {
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       message.error(err.response?.data?.error || t('input.confirmAllFail'))
+    },
+  })
+
+  const unlockMutation = useMutation({
+    mutationFn: (id: number) => api.put(`/api/daily-input/${id}/unconfirm`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
+      message.success(t('input.unlockSuccess'))
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error || t('input.unlockFail'))
+    },
+    onSettled: () => {
+      setUnlockingId(null)
     },
   })
 
@@ -348,25 +366,31 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         const confirmed = isConfirmed(row)
         const id = row.existing_record?.id
         if (!id) return null
+        if (confirmed) {
+          if (!admin) return null
+          return (
+            <UnlockRecordButton
+              loading={unlockingId === id && unlockMutation.isPending}
+              onConfirm={() => {
+                setUnlockingId(id)
+                return unlockMutation.mutateAsync(id)
+              }}
+            />
+          )
+        }
+        if (!canConfirm) return null
         return (
           <Button
             size="small"
             type="link"
             onClick={() => {
-              if (confirmed) {
-                api.post(`/api/daily-input/${id}/unconfirm`).then(() => {
-                  qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
-                  message.success(t('input.unconfirm') + '!')
-                })
-              } else {
-                api.post(`/api/daily-input/${id}/confirm`).then(() => {
-                  qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
-                  message.success(t('input.confirm') + '!')
-                })
-              }
+              api.post(`/api/daily-input/${id}/confirm`).then(() => {
+                qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
+                message.success(t('input.confirm') + '!')
+              })
             }}
           >
-            {confirmed ? t('input.unconfirm') : t('input.confirm')}
+            {t('input.confirm')}
           </Button>
         )
       },

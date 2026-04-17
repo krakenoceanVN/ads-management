@@ -20,6 +20,29 @@ const handleValidation = (req, res, next) => {
     }
     next();
 };
+async function unconfirmDailyInputRecord(req, res) {
+    try {
+        const id = Number(req.params.id);
+        const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Record not found" });
+            return;
+        }
+        if (existing.status !== "confirmed") {
+            res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" });
+            return;
+        }
+        const updated = await prisma_js_1.default.dailyInput.update({
+            where: { id },
+            data: { status: "unconfirmed" },
+        });
+        res.json({ success: true, data: updated, message: "Unconfirmed" });
+    }
+    catch (err) {
+        console.error("PUT /api/daily-input/:id/unconfirm error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+}
 // ============================================================
 // GET /api/daily-input
 // Query: date (YYYY-MM-DD), ad_type (SM|360|BAIDU_JS)
@@ -294,31 +317,11 @@ router.post("/:id/confirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermissi
     }
 });
 // ============================================================
-// POST /api/daily-input/:id/unconfirm
+// PUT /api/daily-input/:id/unconfirm
 // ============================================================
-router.post("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
-    try {
-        const id = Number(req.params.id);
-        const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });
-        if (!existing) {
-            res.status(404).json({ success: false, error: "Record not found" });
-            return;
-        }
-        if (existing.status !== "confirmed") {
-            res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" });
-            return;
-        }
-        await prisma_js_1.default.dailyInput.update({
-            where: { id },
-            data: { status: "unconfirmed" },
-        });
-        res.json({ success: true, message: "Unconfirmed" });
-    }
-    catch (err) {
-        console.error("POST /api/daily-input/:id/unconfirm error:", err);
-        res.status(500).json({ success: false, error: "Internal server error" });
-    }
-});
+router.put("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
+// Backward-compatible alias, still admin-only
+router.post("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
 // ============================================================
 // DELETE /api/daily-input/:id
 // ============================================================

@@ -36,4 +36,15 @@ export function isAdmin(): boolean {
   }
 }
 
+export function canConfirmInput(): boolean {
+  const user = localStorage.getItem('user')
+  if (!user) return false
+  try {
+    const parsed = JSON.parse(user) as { perm_admin?: boolean; perm_data_confirm?: boolean }
+    return parsed.perm_admin === true || parsed.perm_data_confirm === true
+  } catch {
+    return false
+  }
+}
+
 export default api

@@ -6,17 +6,24 @@ import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.
 import { UserPublic, UserStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
+import { DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import { getRequiredEnv } from "../utils/env.js"
+import { createSimpleRateLimiter } from "../utils/rateLimit.js"
 
 const router = Router()
 const JWT_EXPIRES_IN = "8h"
-const DEFAULT_DOWNSTREAM_PRICES: Record<string, number> = {
-  "18": 95,
-  "19": 16,
-  "21": 80,
-  "22": 75,
-  "23": 70,
-}
+const loginRateLimiter = createSimpleRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Too many login attempts. Please try again later.",
+  keyGenerator: (req) => {
+    const username =
+      typeof (req.body as { username?: unknown } | undefined)?.username === "string"
+        ? (req.body as { username: string }).username.trim().toLowerCase()
+        : ""
+    return `${req.ip || req.socket.remoteAddress || "unknown"}:${username || "*"}`
+  },
+})
 
 const handleValidation = (req: Request, res: Response, next: Function) => {
   const errors = validationResult(req)
@@ -34,9 +41,15 @@ router.get(
   "/admin/ad-sites",
   requireAuth,
   requirePermission("perm_admin"),
-  async (_req: Request, res: Response) => {
+  [query("archived").optional().isIn(["0", "1"])],
+  handleValidation,
+  async (req: Request, res: Response) => {
     try {
+      const archivedOnly = req.query.archived === "1"
       const sites = await prisma.adSite.findMany({
+        where: {
+          isArchived: archivedOnly,
+        },
         include: {
           upstream: {
             include: { adType: true },
@@ -67,6 +80,8 @@ router.get(
         billing_method: site.billingMethod,
         current_unit_price: site.currentUnitPrice ? Number(site.currentUnitPrice) : null,
         current_ratio: site.currentRatio ? Number(site.currentRatio) : null,
+        is_active: site.isActive,
+        is_archived: site.isArchived,
         status: site.status,
         downstream_ids: site.downstreams.map((d) => d.downstreamId),
         downstream_prices: site.downstreams.reduce((acc: Record<string, number>, d) => {
@@ -96,7 +111,13 @@ router.get(
       const downstreams = await prisma.downstream.findMany({
         include: {
           adType: true,
-          adSites: true,
+          adSites: {
+            where: {
+              adSite: {
+                isArchived: false,
+              },
+            },
+          },
         },
         orderBy: { id: "asc" },
       })
@@ -187,7 +208,12 @@ router.get(
 
       // Get ad sites linked to this downstream
       const siteDownstreams = await prisma.adSiteDownstream.findMany({
-        where: { downstreamId },
+        where: {
+          downstreamId,
+          adSite: {
+            isArchived: false,
+          },
+        },
         include: {
           adSite: {
             include: { upstream: { include: { adType: true } } },
@@ -220,6 +246,9 @@ router.get(
         where: {
           adSiteId: { in: siteIds },
           status: isOfficialView ? "confirmed" : undefined,
+          adSite: {
+            isArchived: false,
+          },
         },
         orderBy: [{ adSiteId: "asc" }, { recordDate: "desc" }],
       }
@@ -232,6 +261,9 @@ router.get(
             adSiteId: { in: siteIds },
             status: isOfficialView ? "confirmed" : undefined,
             recordDate: { gte: startOfDay, lt: endOfDay },
+            adSite: {
+              isArchived: false,
+            },
           },
           orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
         }
@@ -243,6 +275,9 @@ router.get(
             adSiteId: { in: siteIds },
             status: isOfficialView ? "confirmed" : undefined,
             recordDate: { gte: startOfMonth, lt: endOfMonth },
+            adSite: {
+              isArchived: false,
+            },
           },
           orderBy: [{ adSiteId: "asc" }, { recordDate: "asc" }],
         }
@@ -470,6 +505,7 @@ router.post(
           billingMethod: billing_method,
           currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
           currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
+          isActive: true,
           status: status ?? "active",
           downstreams: downstream_ids?.length
             ? { create: downstream_ids.map((did: number) => ({ downstreamId: did })) }
@@ -532,6 +568,78 @@ router.put(
       res.json({ success: true, message: "Ad site updated" })
     } catch (err: any) {
       console.error("PUT /api/admin/ad-sites/:id error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.put(
+  "/admin/ad-sites/:id/toggle-active",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [param("id").isInt().toInt()],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id)
+      const existing = await prisma.adSite.findUnique({ where: { id } })
+      if (!existing) {
+        res.status(404).json({ success: false, error: "Ad site not found" })
+        return
+      }
+
+      const updated = await prisma.adSite.update({
+        where: { id },
+        data: {
+          isActive: !existing.isActive,
+        },
+      })
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          is_active: updated.isActive,
+        },
+      })
+    } catch (err: any) {
+      console.error("PUT /api/admin/ad-sites/:id/toggle-active error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.put(
+  "/admin/ad-sites/:id/toggle-archive",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [param("id").isInt().toInt()],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id)
+      const existing = await prisma.adSite.findUnique({ where: { id } })
+      if (!existing) {
+        res.status(404).json({ success: false, error: "Ad site not found" })
+        return
+      }
+
+      const updated = await prisma.adSite.update({
+        where: { id },
+        data: {
+          isArchived: !existing.isArchived,
+        },
+      })
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          is_archived: updated.isArchived,
+        },
+      })
+    } catch (err: any) {
+      console.error("PUT /api/admin/ad-sites/:id/toggle-archive error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
@@ -1156,6 +1264,7 @@ router.put(
 // ============================================================
 router.post(
   "/auth/login",
+  loginRateLimiter.middleware,
   [
     body("username").notEmpty().withMessage("username required"),
     body("password").notEmpty().withMessage("password required"),
@@ -1163,9 +1272,10 @@ router.post(
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const { username, password } = req.body
+      const { username, password } = req.body as { username: string; password: string }
+      const normalizedUsername = username.trim()
 
-      const user = await prisma.user.findUnique({ where: { username } })
+      const user = await prisma.user.findUnique({ where: { username: normalizedUsername } })
       if (!user || user.status === "inactive") {
         res.status(401).json({ success: false, error: "Invalid credentials" })
         return
@@ -1195,6 +1305,7 @@ router.post(
       }
 
       const token = jwt.sign(payload, getRequiredEnv("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN })
+      loginRateLimiter.reset(req)
 
       res.json({ success: true, token, user: payload })
     } catch (err: any) {

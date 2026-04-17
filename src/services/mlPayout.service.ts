@@ -1,14 +1,8 @@
 import { PrismaClient } from "@prisma/client"
 import { MLPayoutResult, AdTypeCode } from "../types/index.js"
 import { getBusinessDayRange } from "../utils/date.js"
+import { AD_TYPE_ID_MAP } from "../utils/constants.js"
 import { calculateYiyiAmount, getYiyiDailyPricing } from "./yiyiPricing.service.js"
-
-const AD_TYPE_ID_MAP: Record<AdTypeCode, number> = {
-  SM: 1,
-  "360": 2,
-  BAIDU_JS: 3,
-  OTHER: 4,
-}
 
 /** Convert "YYYY-MM-DD" → { startOfDay, endOfDay } in business TZ */
 function dateRange(dateStr: string): { gte: Date; lt: Date } {
@@ -31,6 +25,7 @@ export async function calculateMLPayout(
       recordDate: dateRange(date),
       status: "confirmed",
       adSite: {
+        isArchived: false,
         upstream: {
           adTypeId: adTypeId,
           status: "active",
@@ -110,6 +105,7 @@ export async function calculateLEPayout(
       recordDate: dateRange(date),
       status: "confirmed",
       adSite: {
+        isArchived: false,
         upstream: {
           adTypeId: AD_TYPE_ID_MAP.SM,
           status: "active",
@@ -192,6 +188,7 @@ export async function calculateCostBreakdown(
         recordDate: dateRange(date),
         status: "confirmed",
         adSite: {
+          isArchived: false,
           upstream: {
             adTypeId: AD_TYPE_ID_MAP.SM,
             status: "active",

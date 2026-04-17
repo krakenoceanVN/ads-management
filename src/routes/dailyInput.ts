@@ -41,6 +41,8 @@ router.get(
       // 1. Lấy tất cả ad_sites theo ad_type + search
       const adSites = await prisma.adSite.findMany({
         where: {
+          isActive: true,
+          isArchived: false,
           status: "active",
           name: search ? { contains: search } : undefined,
           upstream: {
@@ -140,7 +142,8 @@ router.post(
 
       // Validate: date <= today
       const inputDate = getBusinessDayStart(date)
-      if (date > formatBusinessDate(new Date())) {
+      const todayBusinessStart = getBusinessDayStart(formatBusinessDate(new Date()))
+      if (inputDate.getTime() > todayBusinessStart.getTime()) {
         res.status(400).json({ success: false, error: "Cannot input future date" })
         return
       }
@@ -148,7 +151,11 @@ router.post(
       // Fetch all involved ad_sites
       const siteIds = records.map((r) => r.ad_site_id)
       const adSites = await prisma.adSite.findMany({
-        where: { id: { in: siteIds } },
+        where: {
+          id: { in: siteIds },
+          isActive: true,
+          isArchived: false,
+        },
         include: { upstream: { include: { adType: true } } },
       })
       const siteMap = new Map(adSites.map((s) => [s.id, s]))

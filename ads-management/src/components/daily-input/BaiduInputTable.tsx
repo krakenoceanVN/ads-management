@@ -108,6 +108,9 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
   const getData = (r: FlatRow): DailyInputRow => (r as FR)._data
 
   const dirtyCount = Object.keys(drafts).length
+  const handleStatusActionError = (err: { response?: { data?: { error?: string } } }) => {
+    message.error(err.response?.data?.error || t('input.actionFail'))
+  }
 
   const columns: ColumnsType<FlatRow> = withTableEllipsis([
     {
@@ -264,12 +267,12 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
                 api.post(`/api/daily-input/${id}/unconfirm`).then(() => {
                   qc.invalidateQueries({ queryKey: ['daily-input', 'BAIDU_JS', date] })
                   message.success(t('input.unconfirm') + '!')
-                })
+                }).catch(handleStatusActionError)
               } else {
                 api.post(`/api/daily-input/${id}/confirm`).then(() => {
                   qc.invalidateQueries({ queryKey: ['daily-input', 'BAIDU_JS', date] })
                   message.success(t('input.confirm') + '!')
-                })
+                }).catch(handleStatusActionError)
               }
             }}
           >

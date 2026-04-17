@@ -256,6 +256,10 @@ export default function OtherInputTable({ date, search = '' }: Props) {
     },
   })
 
+  const handleStatusActionError = (err: { response?: { data?: { error?: string } } }) => {
+    message.error(err.response?.data?.error || t('input.actionFail'))
+  }
+
   const columns: ColumnsType<FlatRow> = withTableEllipsis([
     {
       title: t('input.upstream'),
@@ -342,12 +346,12 @@ export default function OtherInputTable({ date, search = '' }: Props) {
                 api.post(`/api/daily-input/${id}/unconfirm`).then(() => {
                   qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
                   message.success(t('input.unconfirm') + '!')
-                })
+                }).catch(handleStatusActionError)
               } else {
                 api.post(`/api/daily-input/${id}/confirm`).then(() => {
                   qc.invalidateQueries({ queryKey: ['daily-input', 'OTHER', date] })
                   message.success(t('input.confirm') + '!')
-                })
+                }).catch(handleStatusActionError)
               }
             }}
           >

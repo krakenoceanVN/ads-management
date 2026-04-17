@@ -37,6 +37,8 @@ router.get("/", [
         // 1. Lấy tất cả ad_sites theo ad_type + search
         const adSites = await prisma_js_1.default.adSite.findMany({
             where: {
+                isActive: true,
+                isArchived: false,
                 status: "active",
                 name: search ? { contains: search } : undefined,
                 upstream: {
@@ -118,14 +120,19 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
         const userId = req.user.id;
         // Validate: date <= today
         const inputDate = (0, date_js_1.getBusinessDayStart)(date);
-        if (date > (0, date_js_1.formatBusinessDate)(new Date())) {
+        const todayBusinessStart = (0, date_js_1.getBusinessDayStart)((0, date_js_1.formatBusinessDate)(new Date()));
+        if (inputDate.getTime() > todayBusinessStart.getTime()) {
             res.status(400).json({ success: false, error: "Cannot input future date" });
             return;
         }
         // Fetch all involved ad_sites
         const siteIds = records.map((r) => r.ad_site_id);
         const adSites = await prisma_js_1.default.adSite.findMany({
-            where: { id: { in: siteIds } },
+            where: {
+                id: { in: siteIds },
+                isActive: true,
+                isArchived: false,
+            },
             include: { upstream: { include: { adType: true } } },
         });
         const siteMap = new Map(adSites.map((s) => [s.id, s]));

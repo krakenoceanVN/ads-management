@@ -8,22 +8,9 @@ import {
 import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
 import { getBusinessDayRange } from "../utils/date.js"
+import { AD_TYPE_ID_MAP, DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 
 const router = Router()
-
-const AD_TYPE_ID_MAP: Record<AdTypeCode, number> = {
-  SM: 1,
-  "360": 2,
-  BAIDU_JS: 3,
-  OTHER: 4,
-}
-const DEFAULT_DOWNSTREAM_PRICES: Record<string, number> = {
-  "18": 95,
-  "19": 16,
-  "21": 80,
-  "22": 75,
-  "23": 70,
-}
 
 // ============================================================
 // Helpers
@@ -155,6 +142,7 @@ router.get(
             recordDate: { gte: startOfDay, lt: endOfDay },
             status: "confirmed",
             adSite: {
+              isArchived: false,
               upstream: {
                 adTypeId: adTypeId,
                 status: "active",
@@ -166,7 +154,10 @@ router.get(
 
         const siteIds = upstreamRows.map((r) => r.adSiteId)
         const sites = await prisma.adSite.findMany({
-          where: { id: { in: siteIds } },
+          where: {
+            id: { in: siteIds },
+            isArchived: false,
+          },
           include: { upstream: { select: { name: true } } },
         })
         const siteMap = new Map(sites.map((s) => [s.id, s]))
@@ -220,6 +211,7 @@ router.get(
               recordDate: { gte: startOfDay, lt: endOfDay },
               status: "confirmed",
               adSite: {
+                isArchived: false,
                 upstream: {
                   adTypeId: adTypeId,
                   status: "active",
@@ -295,6 +287,7 @@ router.get(
             recordDate: { gte: startOfDay, lt: endOfDay },
             status: "confirmed",
             adSite: {
+              isArchived: false,
               status: "active",
               downstreams: {
                 some: {

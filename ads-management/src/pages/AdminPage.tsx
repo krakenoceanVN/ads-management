@@ -22,6 +22,8 @@ interface AdSiteRow {
   billing_method: 'CPM' | 'RATIO'
   current_unit_price?: number
   current_ratio?: number
+  is_active: boolean
+  is_archived: boolean
   status: 'active' | 'inactive'
   downstream_ids?: number[]
   downstream_prices?: Record<string, number>
@@ -125,6 +127,7 @@ function formatPriceValue(value: number): string {
 function AdSitesTab() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
@@ -134,8 +137,11 @@ function AdSitesTab() {
   const qc = useQueryClient()
 
   const { data: sites = [], isLoading } = useQuery({
-    queryKey: ['admin', 'ad-sites'],
-    queryFn: () => api.get<ApiResponse<AdSiteRow[]>>('/api/admin/ad-sites').then((r) => r.data.data ?? []),
+    queryKey: ['admin', 'ad-sites', showArchived ? 'archived' : 'active'],
+    queryFn: () =>
+      api.get<ApiResponse<AdSiteRow[]>>('/api/admin/ad-sites', {
+        params: { archived: showArchived ? 1 : 0 },
+      }).then((r) => r.data.data ?? []),
   })
 
   const { data: upstreams = [] } = useQuery({
@@ -181,6 +187,25 @@ function AdSitesTab() {
     mutationFn: ({ id, payload }: { id: number; payload: object }) =>
       api.put(`/api/admin/ad-sites/${id}/downstream-price`, payload),
     onSuccess: () => { message.success(t('admin.priceUpdated')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); setDownstreamPriceModal(null) },
+    onError: () => message.error(t('admin.actionFailed')),
+  })
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-archive`),
+    onSuccess: () => {
+      message.success(showArchived ? t('admin.restoreSuccess') : t('admin.archiveSuccess'))
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+    },
+    onError: () => message.error(t('admin.actionFailed')),
+  })
+
+  const activeMutation = useMutation({
+    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-active`),
+    onSuccess: (_, id) => {
+      const site = sites.find((row) => row.id === id)
+      message.success(site?.is_active ? t('admin.pauseSuccess') : t('admin.resumeSuccess'))
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+    },
     onError: () => message.error(t('admin.actionFailed')),
   })
 
@@ -326,13 +351,29 @@ function AdSitesTab() {
       },
     },
     {
-      title: t('admin.status'), dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag>,
+      title: t('admin.status'),
+      dataIndex: 'is_active',
+      key: 'is_active',
+      width: 110,
+      render: (value: boolean) => (
+        <Tag color={value ? 'green' : 'gold'}>
+          {value ? t('admin.running') : t('admin.paused')}
+        </Tag>
+      ),
     },
     {
-      title: t('input.action'), key: 'action', width: 160,
+      title: t('admin.archiveState'),
+      dataIndex: 'is_archived',
+      key: 'is_archived',
+      width: 110,
+      render: (value: boolean) => (
+        value ? <Tag color="orange">{t('admin.archived')}</Tag> : <Tag color="blue">{t('admin.inUse')}</Tag>
+      ),
+    },
+    {
+      title: t('input.action'), key: 'action', width: 360,
       render: (_: unknown, row: AdSiteRow) => (
-        <Space size="small">
+        <Space size="small" wrap>
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Button size="small" onClick={() => {
             setPriceModal(row)
@@ -341,6 +382,27 @@ function AdSitesTab() {
               new_ratio: row.current_ratio,
             })
           }}>{t('admin.price')}</Button>
+          <Popconfirm
+            title={row.is_active ? t('admin.pauseSiteConfirm') : t('admin.resumeSiteConfirm')}
+            onConfirm={() => activeMutation.mutate(row.id)}
+            okText={row.is_active ? t('admin.pauseSite') : t('admin.resumeSite')}
+            cancelText={t('admin.cancel')}
+          >
+            <Button size="small">
+              {row.is_active ? t('admin.pauseSite') : t('admin.resumeSite')}
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title={row.is_archived ? t('admin.restoreSiteConfirm') : t('admin.archiveSiteConfirm')}
+            description={row.is_archived ? undefined : t('admin.archiveSiteDesc')}
+            onConfirm={() => archiveMutation.mutate(row.id)}
+            okText={row.is_archived ? t('admin.restoreSite') : t('admin.archiveSite')}
+            cancelText={t('admin.cancel')}
+          >
+            <Button size="small" type={row.is_archived ? 'default' : 'primary'}>
+              {row.is_archived ? t('admin.restoreSite') : t('admin.archiveSite')}
+            </Button>
+          </Popconfirm>
           <Popconfirm
             title={t('admin.deleteSiteConfirm')}
             description={t('admin.deleteSiteDesc')}
@@ -362,6 +424,7 @@ function AdSitesTab() {
       row.ad_site_name,
       row.billing_method,
       row.status,
+      row.is_active ? t('admin.running') : t('admin.paused'),
       getSiteDownstreamLabel(row),
       getSiteDownstreamPriceLabel(row),
     ])
@@ -379,7 +442,12 @@ function AdSitesTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('admin.searchPlaceholder', { label: t('admin.adSites') })}
         />
-        <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
+        <Space size="small" wrap>
+          <Button onClick={() => setShowArchived((prev) => !prev)}>
+            {showArchived ? t('admin.activeSiteList') : t('admin.archiveBin')}
+          </Button>
+          {!showArchived && <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>}
+        </Space>
       </div>
       <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
 

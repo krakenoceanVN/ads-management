@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const constants_js_1 = require("../utils/constants.js");
 const router = (0, express_1.Router)();
 function getDaysInMonth(year, month) {
     const days = [];
@@ -29,6 +30,17 @@ const handleValidation = (req, res, next) => {
     }
     next();
 };
+function requireLeCostWrite(req, res, next) {
+    if (!req.user) {
+        res.status(401).json({ success: false, error: "Unauthorized" });
+        return;
+    }
+    if (!req.user.perm_data_input && !req.user.perm_admin) {
+        res.status(403).json({ success: false, error: "Permission denied" });
+        return;
+    }
+    next();
+}
 // ============================================================
 // GET /api/dashboard/le?month=YYYY-MM
 // ============================================================
@@ -44,11 +56,16 @@ router.get("/le", auth_js_1.requireAuth, [
         const leDownstream = await prisma_js_1.default.downstream.findFirst({
             where: {
                 downstreamType: "LE",
-                adTypeId: 1, // SM
+                adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
                 status: "active",
             },
             include: {
                 adSites: {
+                    where: {
+                        adSite: {
+                            isArchived: false,
+                        },
+                    },
                     include: {
                         adSite: {
                             include: {
@@ -79,8 +96,9 @@ router.get("/le", auth_js_1.requireAuth, [
                 status: isOfficialView ? "confirmed" : undefined,
                 adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
                 adSite: {
+                    isArchived: false,
                     upstream: {
-                        adTypeId: 1, // SM
+                        adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
                         status: "active",
                     },
                 },
@@ -194,7 +212,7 @@ router.get("/le", auth_js_1.requireAuth, [
 // POST /api/dashboard/le/cost
 // Body: { date: string, vendorCost?: number, mlCost?: number, costAmount?: number }
 // ============================================================
-router.post("/le/cost", async (req, res) => {
+router.post("/le/cost", auth_js_1.requireAuth, requireLeCostWrite, async (req, res) => {
     try {
         const { date, vendorCost: rawVendorCost, mlCost: rawMlCost, costAmount, } = req.body;
         if (!date ||

@@ -1,8 +1,9 @@
-import { Router, Request, Response } from "express"
+import { Router, Request, Response, NextFunction } from "express"
 import { query, validationResult } from "express-validator"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDateAtHour, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
+import { AD_TYPE_ID_MAP } from "../utils/constants.js"
 
 const router = Router()
 
@@ -42,6 +43,18 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
   next()
 }
 
+function requireLeCostWrite(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" })
+    return
+  }
+  if (!req.user.perm_data_input && !req.user.perm_admin) {
+    res.status(403).json({ success: false, error: "Permission denied" })
+    return
+  }
+  next()
+}
+
 // ============================================================
 // GET /api/dashboard/le?month=YYYY-MM
 // ============================================================
@@ -63,11 +76,16 @@ router.get(
       const leDownstream = await prisma.downstream.findFirst({
         where: {
           downstreamType: "LE",
-          adTypeId: 1, // SM
+          adTypeId: AD_TYPE_ID_MAP.SM,
           status: "active",
         },
         include: {
           adSites: {
+            where: {
+              adSite: {
+                isArchived: false,
+              },
+            },
             include: {
               adSite: {
                 include: {
@@ -99,8 +117,9 @@ router.get(
           status: isOfficialView ? "confirmed" : undefined,
           adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
           adSite: {
+            isArchived: false,
             upstream: {
-              adTypeId: 1, // SM
+              adTypeId: AD_TYPE_ID_MAP.SM,
               status: "active",
             },
           },
@@ -229,7 +248,9 @@ router.get(
 // ============================================================
 router.post(
   "/le/cost",
-  async (req: Request, res: Response) => {
+  requireAuth,
+  requireLeCostWrite,
+  async (req: AuthRequest, res: Response) => {
     try {
       const {
         date,

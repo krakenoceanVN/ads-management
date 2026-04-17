@@ -8,20 +8,8 @@ const express_validator_1 = require("express-validator");
 const mlPayout_service_js_1 = require("../services/mlPayout.service.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const constants_js_1 = require("../utils/constants.js");
 const router = (0, express_1.Router)();
-const AD_TYPE_ID_MAP = {
-    SM: 1,
-    "360": 2,
-    BAIDU_JS: 3,
-    OTHER: 4,
-};
-const DEFAULT_DOWNSTREAM_PRICES = {
-    "18": 95,
-    "19": 16,
-    "21": 80,
-    "22": 75,
-    "23": 70,
-};
 // ============================================================
 // Helpers
 // ============================================================
@@ -109,7 +97,7 @@ router.get("/monthly", [
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
+        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
         const activeUpstreamNames = adTypeCode === "360"
             ? (await prisma_js_1.default.upstream.findMany({
                 where: {
@@ -131,6 +119,7 @@ router.get("/monthly", [
                     recordDate: { gte: startOfDay, lt: endOfDay },
                     status: "confirmed",
                     adSite: {
+                        isArchived: false,
                         upstream: {
                             adTypeId: adTypeId,
                             status: "active",
@@ -141,7 +130,10 @@ router.get("/monthly", [
             });
             const siteIds = upstreamRows.map((r) => r.adSiteId);
             const sites = await prisma_js_1.default.adSite.findMany({
-                where: { id: { in: siteIds } },
+                where: {
+                    id: { in: siteIds },
+                    isArchived: false,
+                },
                 include: { upstream: { select: { name: true } } },
             });
             const siteMap = new Map(sites.map((s) => [s.id, s]));
@@ -183,6 +175,7 @@ router.get("/monthly", [
                         recordDate: { gte: startOfDay, lt: endOfDay },
                         status: "confirmed",
                         adSite: {
+                            isArchived: false,
                             upstream: {
                                 adTypeId: adTypeId,
                                 status: "active",
@@ -233,7 +226,7 @@ router.get("/downstream-monthly", [
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
+        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
         const days = getDaysInMonth(year, month);
         const results = [];
         const periodCache = new Map();
@@ -246,6 +239,7 @@ router.get("/downstream-monthly", [
                     recordDate: { gte: startOfDay, lt: endOfDay },
                     status: "confirmed",
                     adSite: {
+                        isArchived: false,
                         status: "active",
                         downstreams: {
                             some: {
@@ -295,7 +289,7 @@ router.get("/downstream-monthly", [
                         });
                         cachedPeriod = {
                             pctHal: Number(activePeriod?.pctHal ?? 1),
-                            unitPrice: Number(activePeriod?.unitPrice ?? DEFAULT_DOWNSTREAM_PRICES[String(ds.id)] ?? 0),
+                            unitPrice: Number(activePeriod?.unitPrice ?? constants_js_1.DEFAULT_DOWNSTREAM_PRICES[String(ds.id)] ?? 0),
                         };
                         periodCache.set(cacheKey, cachedPeriod);
                     }

@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
@@ -343,6 +344,8 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
 
   return (
     <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
+
       {/* Summary Cards */}
       <div className="kpi-grid">
         {summaryCards.map((card) => {
@@ -366,7 +369,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       </div>
 
       {/* Table */}
-      <div ref={tableHostRef} className="dashboard-table-shell">
+      <div ref={tableHostRef} className="dashboard-table-shell dashboard-table-shell--brand-watermark">
         <Table<FR>
           columns={columns}
           dataSource={displayRows}

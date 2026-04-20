@@ -404,7 +404,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           {isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')}
         </span>
       </div>
-      <div ref={tableHostRef} className="dashboard-table-shell">
+      <div ref={tableHostRef} className="dashboard-table-shell dashboard-table-shell--brand-watermark">
         <Table
           className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"
           columns={columns}

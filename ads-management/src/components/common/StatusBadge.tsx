@@ -8,12 +8,13 @@ interface Props {
 export default function StatusBadge({ status }: Props) {
   const { t } = useTranslation()
   const confirmed = status === 'confirmed'
+  const label = confirmed ? t('input.confirmed') : t('input.unconfirmed')
 
   return (
-    <span className={`status-badge ${confirmed ? 'is-confirmed' : 'is-unconfirmed'}`}>
+    <span className={`status-badge ${confirmed ? 'is-confirmed' : 'is-unconfirmed'}`} title={label}>
       <span className="status-badge-dot" />
       <span className="status-badge-label">
-        {confirmed ? t('input.confirmed') : t('input.unconfirmed')}
+        {label}
       </span>
       {confirmed && <LockOutlined className="status-badge-lock" />}
     </span>

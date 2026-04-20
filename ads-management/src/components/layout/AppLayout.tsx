@@ -11,8 +11,8 @@ import {
   MoonOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import brandLogoLightImage from '../../assets/krakenocen-global.png'
-import brandLogoDarkImage from '../../assets/lK72y.jpg'
+import brandLogoLightImage from '../../assets/trang-khong-logo.png'
+import brandLogoDarkImage from '../../assets/den-khong-logo.png'
 import type { User } from '../../types'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useThemeMode } from '../../theme/themeModeContext'
@@ -97,8 +97,12 @@ export default function AppLayout() {
   const menuLabel = (emoji: string, label: string) => (
     <span className="menu-item-label">
       <span className="menu-item-emoji">{emoji}</span>
-      <span>{label}</span>
+      <span className="menu-item-text" title={label}>{label}</span>
     </span>
+  )
+
+  const menuText = (label: string) => (
+    <span className="menu-item-text" title={label}>{label}</span>
   )
 
   const rootIcon = (emoji: string) => (
@@ -135,7 +139,7 @@ export default function AppLayout() {
           {
             key: 'dashboard',
             icon: rootIcon('📊'),
-            label: t('nav.dashboard'),
+            label: menuText(t('nav.dashboard')),
             children: dashboardItems,
           },
         ]
@@ -143,19 +147,19 @@ export default function AppLayout() {
     {
       key: 'input',
       icon: rootIcon('📝'),
-      label: t('nav.input'),
+      label: menuText(t('nav.input')),
       children: inputItems,
     },
     {
       key: 'upstream',
       icon: rootIcon('📈'),
-      label: t('nav.upstream'),
+      label: menuText(t('nav.upstream')),
       children: upstreamItems,
     },
     {
       key: 'downstream-menu',
       icon: rootIcon('⬇️'),
-      label: t('nav.downstream'),
+      label: menuText(t('nav.downstream')),
       onClick: () => navigate('/downstream'),
     },
     ...(user?.perm_admin
@@ -163,7 +167,7 @@ export default function AppLayout() {
           {
             key: 'admin',
             icon: rootIcon('⚙️'),
-            label: t('nav.admin'),
+            label: menuText(t('nav.admin')),
             onClick: () => navigate('/admin'),
           },
         ]
@@ -268,7 +272,7 @@ export default function AppLayout() {
           <div className="sider-logo">
             <img src={brandLogoImage} alt={t('app.brand')} className="sider-logo-image" />
           </div>
-          {!collapsed && <span className="sider-brand-text">{t('app.brand')}</span>}
+          {!collapsed && <span className="sider-brand-text" title={t('app.brand')}>{t('app.brand')}</span>}
         </div>
         <Menu
           theme={mode === 'light' ? 'light' : 'dark'}
@@ -298,9 +302,9 @@ export default function AppLayout() {
         <Header className="app-topbar">
           <div className="app-topbar-left">
             <span className="app-page-icon">{pageIcon}</span>
-            <h2 className="app-page-title">{pageTitle}</h2>
+            <h2 className="app-page-title" title={pageTitle}>{pageTitle}</h2>
           </div>
-          <Space size={14}>
+          <Space size={14} className="app-topbar-actions">
             <div className={`app-theme-switcher ${isContrastMode ? 'is-contrast' : ''}`}>
               <Tooltip
                 placement="bottom"
@@ -317,9 +321,9 @@ export default function AppLayout() {
               </Tooltip>
             </div>
             <LanguageSwitcher />
-            <span className="app-user-pill">
+            <span className="app-user-pill" title={user?.username}>
               <UserOutlined />
-              {user?.username}
+              <span className="app-user-pill-text">{user?.username}</span>
             </span>
             <Button type="text" icon={<LogoutOutlined />} className="app-logout-btn" onClick={handleLogout}>
               {t('nav.logout')}

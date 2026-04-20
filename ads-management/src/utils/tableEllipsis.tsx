@@ -21,6 +21,26 @@ function wrapHeaderTitle(title: unknown): unknown {
   return title
 }
 
+function mergeClassNames(...values: Array<string | undefined>) {
+  return values.filter(Boolean).join(' ')
+}
+
+function extractTextValue(node: ReactNode): string | null {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+
+  if (Array.isArray(node)) {
+    const parts = node
+      .map((value) => extractTextValue(value))
+      .filter((value): value is string => Boolean(value))
+
+    return parts.length > 0 ? parts.join('') : null
+  }
+
+  return null
+}
+
 function wrapRenderedNode(node: unknown): unknown {
   if (node == null || typeof node === 'boolean') return node
 
@@ -28,15 +48,23 @@ function wrapRenderedNode(node: unknown): unknown {
     return renderTableText(String(node))
   }
 
-  if (isValidElement<{ children?: ReactNode; className?: string; title?: string }>(node) && typeof node.type === 'string') {
-    const children = node.props.children
+  if (isValidElement<{ children?: ReactNode; className?: string; title?: string; href?: string; to?: unknown }>(node)) {
+    const value = extractTextValue(node.props.children)
 
-    if (typeof children === 'string' || typeof children === 'number') {
-      const value = String(children)
-      const className = ['app-table-cell-text', node.props.className].filter(Boolean).join(' ')
-
+    if (value && typeof node.type === 'string') {
       return cloneElement(node, {
-        className,
+        className: mergeClassNames(
+          'app-table-cell-text',
+          node.type === 'a' ? 'app-table-link' : undefined,
+          node.props.className,
+        ),
+        title: node.props.title ?? value,
+      })
+    }
+
+    if (value && (node.props.href != null || node.props.to != null)) {
+      return cloneElement(node, {
+        className: mergeClassNames('app-table-cell-text', 'app-table-link', node.props.className),
         title: node.props.title ?? value,
       })
     }

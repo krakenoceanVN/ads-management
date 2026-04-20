@@ -7,6 +7,7 @@ import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
@@ -155,6 +156,8 @@ export default function DashboardPage({ adType }: Props) {
 
   return (
     <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
+
       {/* Controls */}
       <div className="page-toolbar">
         <DatePicker.MonthPicker
@@ -204,7 +207,7 @@ export default function DashboardPage({ adType }: Props) {
       </div>
 
       {/* Table */}
-      <div ref={tableHostRef} className="dashboard-table-shell">
+      <div ref={tableHostRef} className="dashboard-table-shell dashboard-table-shell--brand-watermark">
         <Table<FR>
           className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"
           columns={columns}

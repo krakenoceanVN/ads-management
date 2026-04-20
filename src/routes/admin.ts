@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken"
 import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.js"
 import { UserPublic, UserStatus } from "../types/index.js"
 import prisma from "../prisma.js"
-import { formatBusinessDate, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
+import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart, getBusinessMonthRange } from "../utils/date.js"
 import { getRequiredEnv } from "../utils/env.js"
 import { DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import { createMemoryRateLimiter } from "../utils/rateLimit.js"
@@ -990,6 +990,128 @@ router.put(
       res.json({ success: true, message: "Price updated" })
     } catch (err: any) {
       console.error("PUT /api/ad-sites/:id/price error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// GET /api/admin/ad-sites/:id/reconciliation?month=YYYY-MM
+// GET /api/admin/ad-sites/:id/reconciliation?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+// ============================================================
+router.get(
+  "/admin/ad-sites/:id/reconciliation",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    query("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("month must be YYYY-MM"),
+    query("start_date").optional().isISO8601().withMessage("start_date must be YYYY-MM-DD"),
+    query("end_date").optional().isISO8601().withMessage("end_date must be YYYY-MM-DD"),
+    query().custom((_, { req }) => {
+      const queryParams = req.query ?? {}
+      const hasMonth = typeof queryParams.month === "string" && queryParams.month.length > 0
+      const hasStart = typeof queryParams.start_date === "string" && queryParams.start_date.length > 0
+      const hasEnd = typeof queryParams.end_date === "string" && queryParams.end_date.length > 0
+
+      if (!hasMonth && !(hasStart && hasEnd)) {
+        throw new Error("month or start_date/end_date is required")
+      }
+
+      if (hasStart !== hasEnd) {
+        throw new Error("start_date and end_date must be provided together")
+      }
+
+      return true
+    }),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const siteId = Number(req.params.id)
+      const monthStr = typeof req.query.month === "string" ? req.query.month : undefined
+      const startDateStr = typeof req.query.start_date === "string" ? req.query.start_date : undefined
+      const endDateStr = typeof req.query.end_date === "string" ? req.query.end_date : undefined
+
+      let startAt: Date
+      let endExclusive: Date
+
+      if (startDateStr && endDateStr) {
+        startAt = getBusinessDayStart(startDateStr)
+        endExclusive = getBusinessDayRange(endDateStr).lt
+
+        if (startAt.getTime() >= endExclusive.getTime()) {
+          res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" })
+          return
+        }
+      } else {
+        const [year, month] = String(monthStr).split("-").map(Number)
+        const range = getBusinessMonthRange(year, month)
+        startAt = range.gte
+        endExclusive = range.lt
+      }
+
+      const site = await prisma.adSite.findUnique({
+        where: { id: siteId },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+
+      if (!site) {
+        res.status(404).json({ success: false, error: "Ad site not found" })
+        return
+      }
+
+      const dailyInputs = await prisma.dailyInput.findMany({
+        where: {
+          adSiteId: siteId,
+          status: "confirmed",
+          recordDate: { gte: startAt, lt: endExclusive },
+        },
+        select: {
+          recordDate: true,
+          qty: true,
+          revenue: true,
+        },
+        orderBy: { recordDate: "asc" },
+      })
+
+      const dailyDetails = dailyInputs.map((row) => ({
+        date: formatBusinessDate(row.recordDate),
+        qty: row.qty ?? 0,
+        revenue: Number(row.revenue),
+        actualRevenue: 0,
+      }))
+
+      const totalQty = dailyDetails.reduce((sum, row) => sum + row.qty, 0)
+      const totalRevenue = dailyDetails.reduce((sum, row) => sum + row.revenue, 0)
+
+      res.json({
+        success: true,
+        data: {
+          siteInfo: {
+            id: site.id,
+            name: site.name,
+          },
+          range: {
+            startDate: startDateStr ?? `${monthStr}-01`,
+            endDate:
+              endDateStr ??
+              formatBusinessDate(new Date(endExclusive.getTime() - 1)),
+          },
+          summary: {
+            totalQty,
+            totalRevenue,
+            totalActualQty: 0,
+            totalActualRevenue: 0,
+          },
+          dailyDetails,
+        },
+      })
+    } catch (err: any) {
+      console.error("GET /api/admin/ad-sites/:id/reconciliation error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }

@@ -232,6 +232,25 @@
     "cycleHint": "点击切换主题",
     "shortcut": "快捷键 Alt+Shift+T"
   },
+  "reconciliation": {
+    "open": "对账",
+    "title": "对账 - {{name}}",
+    "month": "对账月份",
+    "range": "对账区间",
+    "totalSystem": "系统总额",
+    "totalSystemRevenue": "系统总额（收入）",
+    "totalSystemQty": "系统总额（UV）",
+    "partnerReported": "对方上报",
+    "partnerReportedRevenue": "对方上报（收入）",
+    "partnerReportedQty": "对方上报（UV）",
+    "difference": "差额",
+    "revenueDifference": "收入差额",
+    "qtyDifference": "UV 差额",
+    "day": "日期",
+    "systemQty": "UV（系统）",
+    "systemRevenue": "系统收入",
+    "loadError": "加载对账数据失败"
+  },
   "errorBoundary": {
     "title": "发生错误",
     "unknown": "未知错误",

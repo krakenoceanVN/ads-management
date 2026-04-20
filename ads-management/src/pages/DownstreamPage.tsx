@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoPercent } from '../utils/numberFormat'
 
@@ -48,8 +49,12 @@ export default function DownstreamPage() {
   ])
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>{t('downstream.pageTitle')}</h2>
+    <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
+
+      <h2 className="page-heading" style={{ marginBottom: 16 }} title={t('downstream.pageTitle')}>
+        {t('downstream.pageTitle')}
+      </h2>
       {dsError && (
         <Alert
           type="error"
@@ -58,18 +63,20 @@ export default function DownstreamPage() {
           message={t('downstream.loadError')}
         />
       )}
-      <Table
-        className="app-data-table"
-        columns={downstreamColumns}
-        dataSource={downstreams}
-        rowKey="id"
-        size="small"
-        bordered
-        loading={dsLoading}
-        pagination={false}
-        tableLayout="fixed"
-        locale={{ emptyText: dsError ? t('downstream.loadError') : undefined }}
-      />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table
+          className="app-data-table"
+          columns={downstreamColumns}
+          dataSource={downstreams}
+          rowKey="id"
+          size="small"
+          bordered
+          loading={dsLoading}
+          pagination={false}
+          tableLayout="fixed"
+          locale={{ emptyText: dsError ? t('downstream.loadError') : undefined }}
+        />
+      </div>
     </div>
   )
 }

@@ -333,6 +333,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
         if (!canConfirm) return null
         return (
           <Button
+            className="app-table-action-button daily-input-confirm-link"
             size="small"
             type="link"
             onClick={() => {
@@ -374,7 +375,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div className="daily-input-table-actions">
         <ConfirmAllButton
           disabled={unconfirmedIds.length === 0}
           loading={confirmAllMutation.isPending}
@@ -382,7 +383,7 @@ export default function S360InputTable({ date, search = '' }: Props) {
         />
       </div>
 
-      <div style={{ position: 'relative' }}>
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark" style={{ position: 'relative' }}>
         {isLoading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.8)', zIndex: 10 }}>
             <Spin />

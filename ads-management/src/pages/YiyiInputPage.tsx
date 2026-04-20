@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
+import { DatePicker, Result, Spin, Table, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import TableNumberInput from '../components/common/TableNumberInput'
 import ConfirmAllButton from '../components/daily-input/ConfirmAllButton'
 import SaveBar from '../components/daily-input/SaveBar'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
 
@@ -249,11 +251,10 @@ export default function YiyiInputPage() {
             if (row.isSummary) return renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })
 
             return (
-              <InputNumber
+              <TableNumberInput
                 min={0}
                 precision={4}
                 controls={false}
-                style={{ width: '100%' }}
                 value={getUnitPrice(row.date)}
                 onChange={(value) => handlePriceChange(row.date, 'unit_price', value)}
               />
@@ -282,11 +283,10 @@ export default function YiyiInputPage() {
         }
 
         return (
-          <InputNumber
+          <TableNumberInput
             min={0}
             precision={0}
             controls={false}
-            style={{ width: '100%' }}
             value={getChannelValue(row.date, channel)}
             onChange={(value) => handleChannelChange(row.date, channel, value)}
           />
@@ -301,11 +301,10 @@ export default function YiyiInputPage() {
         if (row.isSummary) return renderTableText('-', { fontWeight: 'var(--font-weight-semibold)' })
 
         return (
-          <InputNumber
+          <TableNumberInput
             min={0}
             precision={4}
             controls={false}
-            style={{ width: '100%' }}
             value={getProfitUnitPrice(row.date)}
             onChange={(value) => handlePriceChange(row.date, 'profit_unit_price', value)}
           />
@@ -345,7 +344,9 @@ export default function YiyiInputPage() {
   }
 
   return (
-    <div className="page-shell">
+    <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
+
       <div className="page-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <DatePicker.MonthPicker
@@ -370,7 +371,7 @@ export default function YiyiInputPage() {
 
       </div>
 
-      <div className="dashboard-table-shell">
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
         <Table<TableRow>
           columns={columns}
           dataSource={displayRows}
@@ -423,7 +424,7 @@ export default function YiyiInputPage() {
           )}
         />
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+        <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
       </div>
     </div>
   )

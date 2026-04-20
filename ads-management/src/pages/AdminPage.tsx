@@ -8,6 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 
@@ -373,7 +374,7 @@ function AdSitesTab() {
     {
       title: t('input.action'), key: 'action', width: 320,
       render: (_: unknown, row: AdSiteRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Button size="small" onClick={() => {
             setPriceModal(row)
@@ -444,7 +445,9 @@ function AdSitesTab() {
         </Button>
         <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
       </div>
-      <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
+      </div>
 
       <Modal
         title={isEdit ? t('admin.editSite') : t('admin.createSite')}
@@ -608,7 +611,7 @@ function UpstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UpstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUpstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -636,7 +639,9 @@ function UpstreamsTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUpstream')}</Button>
       </div>
-      <Table className="app-data-table" columns={columns} dataSource={filteredUpstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table className="app-data-table" columns={columns} dataSource={filteredUpstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      </div>
 
       <Modal
         title={isEdit ? t('admin.editUpstream') : t('admin.createUpstream')}
@@ -735,7 +740,7 @@ function DownstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: DownstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteDownstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -769,7 +774,9 @@ function DownstreamsTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.createDownstream')}</Button>
       </div>
-      <Table className="app-data-table" columns={columns} dataSource={filteredDownstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table className="app-data-table" columns={columns} dataSource={filteredDownstreams} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      </div>
 
       <Modal
         title={isEdit ? t('admin.editDownstream') : t('admin.createDownstream')}
@@ -919,17 +926,19 @@ function DownstreamPeriodsTab() {
         />
         <Button type="primary" onClick={() => setDrawer(true)}>{t('admin.createPeriod')}</Button>
       </div>
-      <Table
-        className="admin-periods-table app-data-table"
-        columns={columns}
-        dataSource={filteredPeriods}
-        rowKey="id"
-        size="small"
-        bordered
-        loading={isLoading}
-        scroll={{ x: 'max-content' }}
-        tableLayout="fixed"
-      />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table
+          className="admin-periods-table app-data-table"
+          columns={columns}
+          dataSource={filteredPeriods}
+          rowKey="id"
+          size="small"
+          bordered
+          loading={isLoading}
+          scroll={{ x: 'max-content' }}
+          tableLayout="fixed"
+        />
+      </div>
 
       <Drawer
         title={t('admin.createPeriodTitle')}
@@ -1070,7 +1079,7 @@ function UsersTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UserRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUserConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -1105,7 +1114,9 @@ function UsersTab() {
         />
         <Button type="primary" onClick={openCreate}>{t('admin.addUser')}</Button>
       </div>
-      <Table className="app-data-table" columns={columns} dataSource={filteredUsers} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      <div className="dashboard-table-shell dashboard-table-shell--brand-watermark">
+        <Table className="app-data-table" columns={columns} dataSource={filteredUsers} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+      </div>
 
       <Modal
         title={isEdit ? t('admin.editUser') : t('admin.createUser')}
@@ -1149,8 +1160,10 @@ function UsersTab() {
 export default function AdminPage() {
   const { t } = useTranslation()
   return (
-    <div className="admin-page">
-      <h2 style={{ marginBottom: 16 }}>{t('admin.title')}</h2>
+    <div className="page-shell admin-page dashboard-page-shell">
+      <DashboardBrandWatermark />
+
+      <h2 className="page-heading" style={{ marginBottom: 16 }} title={t('admin.title')}>{t('admin.title')}</h2>
       <Tabs
         defaultActiveKey="adsites"
         items={[

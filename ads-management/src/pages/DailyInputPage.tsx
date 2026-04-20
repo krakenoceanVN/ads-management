@@ -8,6 +8,7 @@ import SmInputTable from '../components/daily-input/SmInputTable'
 import S360InputTable from '../components/daily-input/S360InputTable'
 import BaiduInputTable from '../components/daily-input/BaiduInputTable'
 import OtherInputTable from '../components/daily-input/OtherInputTable'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 
 interface Props {
   adType: AdTypeCode
@@ -38,8 +39,10 @@ export default function DailyInputPage({ adType }: Props) {
   }
 
   return (
-    <div className="page-shell">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
+
+      <div className="page-toolbar">
         <DatePicker
           value={dayjs(date)}
           format="YYYY-MM-DD"
@@ -54,7 +57,11 @@ export default function DailyInputPage({ adType }: Props) {
           style={{ width: 220 }}
           allowClear
         />
-        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <span
+          className="page-subtitle"
+          style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}
+          title={t('input.title', { type: adTypeLabels[adType] })}
+        >
           {t('input.title', { type: adTypeLabels[adType] })}
         </span>
       </div>

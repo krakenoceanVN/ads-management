@@ -30,6 +30,10 @@
 
 	--border-color: #334155;
 	--shadow-card: 0 10px 24px rgba(2, 8, 23, 0.35);
+	--table-brand-watermark-image: url("./assets/den-khong-logo.png");
+	--table-brand-watermark-filter: grayscale(1) invert(1) brightness(1.1) contrast(1.06);
+	--table-brand-watermark-opacity: 0.15;
+	--table-brand-watermark-blend: screen;
 }
 
 html[data-theme='light'] {
@@ -51,6 +55,10 @@ html[data-theme='light'] {
 
 	--border-color: #cfdbec;
 	--shadow-card: 0 8px 24px rgba(15, 23, 42, 0.12);
+	--table-brand-watermark-image: url("./assets/trang-khong-logo.png");
+	--table-brand-watermark-filter: grayscale(1) brightness(0.72) contrast(1.08);
+	--table-brand-watermark-opacity: 0.18;
+	--table-brand-watermark-blend: multiply;
 }
 
 html[data-theme='contrast'] {
@@ -77,6 +85,10 @@ html[data-theme='contrast'] {
 
 	--border-color: #3a567a;
 	--shadow-card: 0 10px 24px rgba(2, 8, 23, 0.55);
+	--table-brand-watermark-image: url("./assets/den-khong-logo.png");
+	--table-brand-watermark-filter: grayscale(1) invert(1) brightness(1.1) contrast(1.06);
+	--table-brand-watermark-opacity: 0.15;
+	--table-brand-watermark-blend: screen;
 }
 
 html[data-theme='contrast'][data-contrast-tone='strong'] {
@@ -103,6 +115,7 @@ html[data-theme='contrast'][data-contrast-tone='strong'] {
 
 	--border-color: #6a94c0;
 	--shadow-card: 0 10px 24px rgba(2, 8, 23, 0.62);
+	--table-brand-watermark-opacity: 0.16;
 }
 
 * {
@@ -252,6 +265,9 @@ html[data-theme='contrast'] .sider-logo-image {
 	font-size: 14px;
 	font-weight: 700;
 	color: var(--text-primary);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -305,6 +321,21 @@ html[data-theme='contrast'] .sider-logo-image {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
+	min-width: 0;
+	width: 100%;
+	max-width: 100%;
+}
+
+.menu-item-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.app-menu .ant-menu-title-content {
+	min-width: 0;
+	overflow: hidden;
 }
 
 .menu-item-emoji {
@@ -388,6 +419,14 @@ html[data-theme='contrast'] .sider-logo-image {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.app-topbar-actions {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .app-page-icon {
@@ -404,9 +443,14 @@ html[data-theme='contrast'] .sider-logo-image {
 
 .app-page-title {
 	margin: 0;
+	flex: 1 1 auto;
 	font-size: 18px;
 	font-weight: 700;
 	color: var(--text-primary);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .app-user-pill {
@@ -418,6 +462,19 @@ html[data-theme='contrast'] .sider-logo-image {
 	color: var(--text-primary);
 	border: 1px solid var(--border-color);
 	background: rgba(51, 65, 85, 0.4);
+	min-width: 0;
+	max-width: min(240px, 100%);
+}
+
+.app-user-pill .anticon {
+	flex: 0 0 auto;
+}
+
+.app-user-pill-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .app-lang-switcher.ant-segmented {
@@ -656,6 +713,79 @@ html[data-theme='contrast'] .app-menu.ant-menu::-webkit-scrollbar-thumb:hover {
 
 .dashboard-page-shell {
 	margin: 0;
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+}
+
+.dashboard-page-shell > .dashboard-brand-watermark {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: min(56vw, 760px);
+	height: 260px;
+	pointer-events: none;
+	z-index: 0;
+	overflow: hidden;
+}
+
+.dashboard-page-shell > :not(.dashboard-brand-watermark) {
+	position: relative;
+	z-index: 1;
+}
+
+.dashboard-brand-watermark__art {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	opacity: 0.045;
+}
+
+.dashboard-brand-watermark__image {
+	position: absolute;
+	inset: -12% -6% -28% 18%;
+	display: block;
+	background-image: var(--dashboard-brand-watermark-image, var(--table-brand-watermark-image));
+	background-repeat: no-repeat;
+	background-position: right top;
+	background-size: contain;
+	filter: var(--table-brand-watermark-filter);
+	mix-blend-mode: var(--table-brand-watermark-blend);
+	user-select: none;
+	-webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.72) 48%, transparent 100%);
+	mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.72) 48%, transparent 100%);
+}
+
+html[data-theme='contrast'] .dashboard-brand-watermark__art {
+	opacity: 0.055;
+}
+
+html[data-theme='contrast'] .dashboard-brand-watermark__image {
+	filter: grayscale(1) invert(1) brightness(1.1) contrast(1.06);
+	mix-blend-mode: screen;
+}
+
+html[data-theme='contrast'][data-contrast-tone='strong'] .dashboard-brand-watermark__art {
+	opacity: 0.065;
+}
+
+html[data-theme='light'] .dashboard-brand-watermark__art {
+	opacity: 0.06;
+}
+
+@media (max-width: 1024px) {
+	.dashboard-page-shell > .dashboard-brand-watermark {
+		width: min(72vw, 620px);
+		height: 220px;
+	}
+}
+
+@media (max-width: 768px) {
+	.dashboard-page-shell > .dashboard-brand-watermark {
+		width: min(84vw, 520px);
+		height: 180px;
+	}
 }
 
 .page-toolbar {
@@ -1672,10 +1802,12 @@ html[data-theme='contrast'] .save-bar {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	min-width: 0;
 	max-width: 100%;
 	font-size: 13px;
 	font-weight: 700;
 	line-height: 1.2;
+	overflow: hidden;
 	white-space: nowrap;
 }
 
@@ -1689,6 +1821,10 @@ html[data-theme='contrast'] .save-bar {
 
 .status-badge-label {
 	color: #f8fafc;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .status-badge-lock.anticon {

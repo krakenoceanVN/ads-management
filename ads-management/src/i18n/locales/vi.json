@@ -232,6 +232,25 @@
     "cycleHint": "Nhấn để đổi giao diện",
     "shortcut": "Phím tắt Alt+Shift+T"
   },
+  "reconciliation": {
+    "open": "Đối soát công nợ",
+    "title": "Đối soát công nợ - {{name}}",
+    "month": "Tháng đối soát",
+    "range": "Khoảng đối soát",
+    "totalSystem": "Tổng hệ thống",
+    "totalSystemRevenue": "Tổng hệ thống (Doanh thu)",
+    "totalSystemQty": "Tổng hệ thống (UV)",
+    "partnerReported": "Đối tác báo",
+    "partnerReportedRevenue": "Đối tác báo (Doanh thu)",
+    "partnerReportedQty": "Đối tác báo (UV)",
+    "difference": "Chênh lệch",
+    "revenueDifference": "Chênh lệch doanh thu",
+    "qtyDifference": "Chênh lệch UV",
+    "day": "Ngày",
+    "systemQty": "UV (Hệ thống)",
+    "systemRevenue": "Doanh thu (Hệ thống)",
+    "loadError": "Không thể tải dữ liệu đối soát"
+  },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",
     "unknown": "Lỗi không xác định",

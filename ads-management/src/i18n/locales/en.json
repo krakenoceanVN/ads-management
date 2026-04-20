@@ -232,6 +232,25 @@
     "cycleHint": "Click to switch theme",
     "shortcut": "Shortcut Alt+Shift+T"
   },
+  "reconciliation": {
+    "open": "Reconciliation",
+    "title": "Reconciliation - {{name}}",
+    "month": "Reconciliation Month",
+    "range": "Reconciliation Range",
+    "totalSystem": "System Total",
+    "totalSystemRevenue": "System Total (Revenue)",
+    "totalSystemQty": "System Total (UV)",
+    "partnerReported": "Partner Reported",
+    "partnerReportedRevenue": "Partner Reported (Revenue)",
+    "partnerReportedQty": "Partner Reported (UV)",
+    "difference": "Difference",
+    "revenueDifference": "Revenue Difference",
+    "qtyDifference": "UV Difference",
+    "day": "Day",
+    "systemQty": "System UV",
+    "systemRevenue": "System Revenue",
+    "loadError": "Failed to load reconciliation data"
+  },
   "errorBoundary": {
     "title": "Something went wrong",
     "unknown": "Unknown error",

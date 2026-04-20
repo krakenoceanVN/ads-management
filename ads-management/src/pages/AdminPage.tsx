@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Table, Button, Modal, Form, Input, InputNumber,
-  Select, Drawer, DatePicker, Space, Tag, message, Popconfirm,
+  Select, Drawer, DatePicker, Space, Tag, Tooltip, message, Popconfirm,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { CalculatorOutlined } from '@ant-design/icons'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
+import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 
 // ============================================================
 // Shared types
@@ -131,6 +133,7 @@ function AdSitesTab() {
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
+  const [reconciliationSite, setReconciliationSite] = useState<AdSiteRow | null>(null)
   const [siteForm] = Form.useForm()
   const [priceForm] = Form.useForm()
   const [downstreamPriceForm] = Form.useForm()
@@ -382,6 +385,13 @@ function AdSitesTab() {
               new_ratio: row.current_ratio,
             })
           }}>{t('admin.price')}</Button>
+          <Tooltip title={t('reconciliation.open')}>
+            <Button
+              size="small"
+              icon={<CalculatorOutlined />}
+              onClick={() => setReconciliationSite(row)}
+            />
+          </Tooltip>
           {!row.is_archived ? (
             <Button
               size="small"
@@ -533,6 +543,13 @@ function AdSitesTab() {
           })}
         </Form>
       </Modal>
+
+      <ReconciliationDrawer
+        open={!!reconciliationSite}
+        siteId={reconciliationSite?.id}
+        siteName={reconciliationSite?.ad_site_name}
+        onClose={() => setReconciliationSite(null)}
+      />
     </>
   )
 }

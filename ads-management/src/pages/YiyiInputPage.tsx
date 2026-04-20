@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
@@ -76,8 +76,7 @@ export default function YiyiInputPage() {
     },
   })
   const monthlyRows = data ?? EMPTY_MONTHLY_ROWS
-
-  useEffect(() => {
+  const serverDrafts = useMemo(() => {
     const nextDrafts: DraftMap = {}
 
     for (const row of monthlyRows) {
@@ -91,8 +90,8 @@ export default function YiyiInputPage() {
       }
     }
 
-    setDrafts(nextDrafts)
-  }, [data])
+    return nextDrafts
+  }, [monthlyRows])
 
   const mutation = useMutation({
     mutationFn: async (payload: { rows: MonthlyApiRow[] }) => {
@@ -100,6 +99,7 @@ export default function YiyiInputPage() {
       return res.data
     },
     onSuccess: () => {
+      setDrafts({})
       qc.invalidateQueries({ queryKey: ['yiyi-data', 'monthly', year, month] })
       message.success(t('yiyi.saveSuccess'))
     },
@@ -115,7 +115,7 @@ export default function YiyiInputPage() {
   const monthDates = monthRows.map((row) => row.date)
   const monthlyRowMap = new Map(monthlyRows.map((row) => [row.date, row]))
 
-  const getDraftRow = (date: string): DraftRow => drafts[date] ?? createEmptyDraftRow()
+  const getDraftRow = (date: string): DraftRow => drafts[date] ?? serverDrafts[date] ?? createEmptyDraftRow()
   const getChannelValue = (date: string, channel: ChannelCode): number => getDraftRow(date)[channel] ?? 0
   const getUnitPrice = (date: string): number => getDraftRow(date).unit_price ?? DEFAULT_UNIT_PRICE
   const getProfitUnitPrice = (date: string): number => getDraftRow(date).profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE
@@ -337,7 +337,10 @@ export default function YiyiInputPage() {
             format="YYYY-MM"
             allowClear={false}
             onChange={(value) => {
-              if (value) setSelectedMonth(value)
+              if (value) {
+                setDrafts({})
+                setSelectedMonth(value)
+              }
             }}
           />
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>

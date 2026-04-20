@@ -95,8 +95,13 @@ export default function DashboardBottomScrollbar({
 
     if (!scrollNode) {
       host.style.setProperty('--dashboard-sticky-scroll-h', '0px')
-      setMetrics({ clientWidth: 0, scrollWidth: 0, scrollLeft: 0 })
-      return
+      const resetFrame = window.requestAnimationFrame(() => {
+        setMetrics({ clientWidth: 0, scrollWidth: 0, scrollLeft: 0 })
+      })
+
+      return () => {
+        window.cancelAnimationFrame(resetFrame)
+      }
     }
 
     const syncMetrics = () => {
@@ -136,6 +141,7 @@ export default function DashboardBottomScrollbar({
     return () => {
       scrollNode.removeEventListener('scroll', handleTableScroll)
       window.removeEventListener('resize', syncMetrics)
+      window.removeEventListener('scroll', syncMetrics, true)
       resizeObserver.disconnect()
     }
   }, [tableHostRef, watchKey])

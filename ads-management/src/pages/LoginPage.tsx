@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import brandLogoLightImage from '../assets/krakenocen-global.png'
 import brandLogoDarkImage from '../assets/lK72y.jpg'
-import { useThemeMode } from '../theme/ThemeProvider'
+import { useThemeMode } from '../theme/themeModeContext'
 import type { User } from '../types'
 
 interface LoginValues {

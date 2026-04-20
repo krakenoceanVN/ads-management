@@ -970,7 +970,8 @@ function UsersTab() {
   const handleSubmit = () => {
     userForm.validateFields().then((values) => {
       if (modal && 'id' in modal && modal.id) {
-        const { username: _u, ...payload } = values
+        const payload: Partial<UserFormValues> = { ...values }
+        delete payload.username
         updateMutation.mutate({ id: modal.id, payload })
       } else {
         createMutation.mutate({

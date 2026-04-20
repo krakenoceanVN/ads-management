@@ -92,8 +92,8 @@ export default function DashboardPage({ adType }: Props) {
   const getUpstream = (row: SummaryRow, name: string) =>
     row.upstream_breakdown?.[name] ?? 0
 
-  const getDownstream = (_row: SummaryRow, key: string) =>
-    (_row as unknown as Record<string, number | undefined>)[key] ?? 0
+  const getDownstream = (row: SummaryRow, key: string) =>
+    (row as unknown as Record<string, number | undefined>)[key] ?? 0
 
   const columns: ColumnsType<FR> = withTableEllipsis([
     {
@@ -103,7 +103,7 @@ export default function DashboardPage({ adType }: Props) {
       width: 120,
       fixed: 'left',
       className: 'dashboard-date-col',
-      render: (val: string, _row: FR) => {
+      render: (val: string) => {
         if (val === 'TOTAL') return <strong>{t('dashboard.total')}</strong>
         return (
           <a

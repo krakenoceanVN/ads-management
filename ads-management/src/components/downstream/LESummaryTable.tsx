@@ -40,6 +40,14 @@ interface Props {
   onMonthChange: (m: Dayjs) => void
 }
 
+interface Html2PdfExporter {
+  set: (options: Record<string, unknown>) => {
+    from: (source: string, type: 'string') => {
+      save: () => Promise<void> | void
+    }
+  }
+}
+
 function isSummaryRow(row: DailyRow): boolean {
   return row.isTotal === true || row.date === 'TOTAL'
 }
@@ -178,7 +186,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
       `
     }
 
-    const exporter = html2pdf() as any
+    const exporter = html2pdf() as Html2PdfExporter
     const pdfHTML = `
       <div style="font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft JhengHei', Arial, sans-serif; color: #1f2937; padding: 12px; background: #fff; width: ${tableWidthPx}px; box-sizing: border-box;">
         <style>

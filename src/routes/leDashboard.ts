@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express"
+import { Router, Request, Response, NextFunction } from "express"
 import { query, validationResult } from "express-validator"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
@@ -68,6 +68,11 @@ router.get(
         },
         include: {
           adSites: {
+            where: {
+              adSite: {
+                isArchived: false,
+              },
+            },
             include: {
               adSite: {
                 include: {
@@ -97,8 +102,9 @@ router.get(
         where: {
           recordDate: { gte: startOfMonth, lt: endOfMonth },
           status: isOfficialView ? "confirmed" : undefined,
-          adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
+          adSiteId: { in: siteIds.length > 0 ? siteIds : [-1] },
           adSite: {
+            isArchived: false,
             upstream: {
               adTypeId: 1, // SM
               status: "active",
@@ -229,7 +235,15 @@ router.get(
 // ============================================================
 router.post(
   "/le/cost",
-  async (req: Request, res: Response) => {
+  requireAuth,
+  (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.user?.perm_admin || req.user?.perm_data_input) {
+      next()
+      return
+    }
+    res.status(403).json({ success: false, error: "Permission denied" })
+  },
+  async (req: AuthRequest, res: Response) => {
     try {
       const {
         date,

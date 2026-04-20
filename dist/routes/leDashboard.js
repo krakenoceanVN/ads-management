@@ -49,6 +49,11 @@ router.get("/le", auth_js_1.requireAuth, [
             },
             include: {
                 adSites: {
+                    where: {
+                        adSite: {
+                            isArchived: false,
+                        },
+                    },
                     include: {
                         adSite: {
                             include: {
@@ -77,8 +82,9 @@ router.get("/le", auth_js_1.requireAuth, [
             where: {
                 recordDate: { gte: startOfMonth, lt: endOfMonth },
                 status: isOfficialView ? "confirmed" : undefined,
-                adSiteId: siteIds.length > 0 ? { in: siteIds } : undefined,
+                adSiteId: { in: siteIds.length > 0 ? siteIds : [-1] },
                 adSite: {
+                    isArchived: false,
                     upstream: {
                         adTypeId: 1, // SM
                         status: "active",
@@ -194,7 +200,13 @@ router.get("/le", auth_js_1.requireAuth, [
 // POST /api/dashboard/le/cost
 // Body: { date: string, vendorCost?: number, mlCost?: number, costAmount?: number }
 // ============================================================
-router.post("/le/cost", async (req, res) => {
+router.post("/le/cost", auth_js_1.requireAuth, (req, res, next) => {
+    if (req.user?.perm_admin || req.user?.perm_data_input) {
+        next();
+        return;
+    }
+    res.status(403).json({ success: false, error: "Permission denied" });
+}, async (req, res) => {
     try {
         const { date, vendorCost: rawVendorCost, mlCost: rawMlCost, costAmount, } = req.body;
         if (!date ||

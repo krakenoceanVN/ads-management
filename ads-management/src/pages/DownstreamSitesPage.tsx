@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Table, DatePicker, InputNumber, Button } from 'antd'
@@ -72,6 +72,14 @@ const EMPTY_INPUT_ROWS: DownstreamInputRow[] = []
 const EMPTY_PERIOD_ROWS: DownstreamPeriodRow[] = []
 const EMPTY_RATE_ROWS: DownstreamRateRow[] = []
 
+interface Html2PdfExporter {
+  set: (options: Record<string, unknown>) => {
+    from: (source: string, type: 'string') => {
+      save: () => Promise<void> | void
+    }
+  }
+}
+
 function formatDisplayValue(value: number | string, formatter: (n: number) => string): string {
   if (value === '' || value === null || value === undefined) return '-'
   if (typeof value !== 'number') return String(value)
@@ -124,11 +132,15 @@ export default function DownstreamSitesPage() {
   const tableHostRef = useRef<HTMLDivElement | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(dayjs().format('YYYY-MM'))
   const [leMonth, setLeMonth] = useState(dayjs())
-  const [explicitRates, setExplicitRates] = useState<Record<string, number>>({})
+  const [rateOverrides, setRateOverrides] = useState<{
+    scopeKey: string
+    values: Record<string, number>
+  }>({ scopeKey: '', values: {} })
   const isOfficialView = isAdmin()
   const canEditRates = isOfficialView
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'vi').split('-')[0]
   const intlLocale = language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'vi-VN'
+  const scopeKey = `${id ?? ''}:${selectedMonth}`
 
   const { data: downstreamsData } = useQuery({
     queryKey: ['admin', 'downstreams'],
@@ -186,18 +198,20 @@ export default function DownstreamSitesPage() {
     enabled: !!downstream && !isLE,
   })
   const savedRates = savedRatesData ?? EMPTY_RATE_ROWS
-
-  useEffect(() => {
-    setExplicitRates({})
-  }, [id, selectedMonth])
-
-  useEffect(() => {
-    const nextRates = savedRates.reduce<Record<string, number>>((acc, item) => {
+  const savedRatesMap = useMemo(() => {
+    return savedRates.reduce<Record<string, number>>((acc, item) => {
       acc[item.date] = item.effective_rate
       return acc
     }, {})
-    setExplicitRates(nextRates)
-  }, [savedRatesData])
+  }, [savedRates])
+  const activeRateOverrides = useMemo(
+    () => (rateOverrides.scopeKey === scopeKey ? rateOverrides.values : {}),
+    [rateOverrides.scopeKey, rateOverrides.values, scopeKey],
+  )
+  const explicitRates = useMemo(
+    () => ({ ...savedRatesMap, ...activeRateOverrides }),
+    [activeRateOverrides, savedRatesMap],
+  )
 
   const [year, month] = selectedMonth.split('-').map(Number)
   const relevantPeriods = downstreamPeriods
@@ -417,7 +431,7 @@ export default function DownstreamSitesPage() {
         </p>
       </div>
     `
-    const exporter = html2pdf() as any
+    const exporter = html2pdf() as Html2PdfExporter
     exporter.set(opt).from(pdfHTML, 'string').save()
   }
 
@@ -536,7 +550,7 @@ export default function DownstreamSitesPage() {
       render: (_: unknown, row: PivotRow, _index: number) => {
         const effectiveRate = getEffectiveRate(_index, allDays, explicitRates, getDefaultRateForDate)
         const v = row.total_ml * (effectiveRate / 100)
-        const isExplicit = explicitRates[row.date] !== undefined
+        const isExplicit = savedRatesMap[row.date] !== undefined || activeRateOverrides[row.date] !== undefined
         if (!canEditRates) {
           return (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -553,9 +567,12 @@ export default function DownstreamSitesPage() {
               value={effectiveRate}
               onChange={(val) => {
                 const nextValue = val ?? getDefaultRateForDate(row.date)
-                setExplicitRates((prev) => ({
-                  ...prev,
-                  [row.date]: nextValue,
+                setRateOverrides((prev) => ({
+                  scopeKey,
+                  values: {
+                    ...(prev.scopeKey === scopeKey ? prev.values : {}),
+                    [row.date]: nextValue,
+                  },
                 }))
                 if (downstream?.id && nextValue !== undefined && nextValue !== null) {
                   saveRateMutation.mutate({ date: row.date, effectiveRate: nextValue, downstreamId: downstream!.id })

@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireAuth = requireAuth;
 exports.requirePermission = requirePermission;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET ?? 'change-me-in-production';
+const env_js_1 = require("../utils/env.js");
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -14,8 +14,17 @@ function requireAuth(req, res, next) {
         res.status(401).json({ success: false, error: 'No token provided' });
         return;
     }
+    let jwtSecret;
     try {
-        const payload = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        jwtSecret = (0, env_js_1.getRequiredEnv)('JWT_SECRET');
+    }
+    catch (error) {
+        console.error('JWT_SECRET is not configured:', error);
+        res.status(500).json({ success: false, error: 'Server configuration error' });
+        return;
+    }
+    try {
+        const payload = jsonwebtoken_1.default.verify(token, jwtSecret);
         req.user = payload;
         next();
     }

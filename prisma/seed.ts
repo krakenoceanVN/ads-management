@@ -8,7 +8,12 @@ async function main() {
 
   // Clean up
   await prisma.dailyInput.deleteMany()
+  await prisma.adSiteDownstream.deleteMany()
+  await prisma.dailyDownstreamRate.deleteMany()
   await prisma.downstreamPeriod.deleteMany()
+  await prisma.lEDailyCost.deleteMany()
+  await prisma.yiyiDailyData.deleteMany()
+  await prisma.yiyiDailyPricing.deleteMany()
   await prisma.downstream.deleteMany()
   await prisma.adSite.deleteMany()
   await prisma.upstream.deleteMany()

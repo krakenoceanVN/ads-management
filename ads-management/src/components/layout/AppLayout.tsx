@@ -15,7 +15,7 @@ import brandLogoLightImage from '../../assets/krakenocen-global.png'
 import brandLogoDarkImage from '../../assets/lK72y.jpg'
 import type { User } from '../../types'
 import LanguageSwitcher from '../common/LanguageSwitcher'
-import { useThemeMode } from '../../theme/ThemeProvider'
+import { useThemeMode } from '../../theme/themeModeContext'
 
 const { Sider, Header, Content } = Layout
 const DEFAULT_SIDER_WIDTH = 220

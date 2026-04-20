@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
+import ConfirmAllButton from '../components/daily-input/ConfirmAllButton'
 import SaveBar from '../components/daily-input/SaveBar'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
@@ -75,8 +76,7 @@ export default function YiyiInputPage() {
     },
   })
   const monthlyRows = data ?? EMPTY_MONTHLY_ROWS
-
-  useEffect(() => {
+  const serverDrafts = useMemo(() => {
     const nextDrafts: DraftMap = {}
 
     for (const row of monthlyRows) {
@@ -90,8 +90,8 @@ export default function YiyiInputPage() {
       }
     }
 
-    setDrafts(nextDrafts)
-  }, [data])
+    return nextDrafts
+  }, [monthlyRows])
 
   const mutation = useMutation({
     mutationFn: async (payload: { rows: MonthlyApiRow[] }) => {
@@ -99,11 +99,27 @@ export default function YiyiInputPage() {
       return res.data
     },
     onSuccess: () => {
+      setDrafts({})
       qc.invalidateQueries({ queryKey: ['yiyi-data', 'monthly', year, month] })
       message.success(t('yiyi.saveSuccess'))
     },
     onError: () => {
       message.error(t('yiyi.saveFail'))
+    },
+  })
+
+  const confirmAllMutation = useMutation({
+    mutationFn: async (payload: { rows: MonthlyApiRow[] }) => {
+      const res = await api.post('/api/yiyi-data/monthly-batch', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setDrafts({})
+      qc.invalidateQueries({ queryKey: ['yiyi-data', 'monthly', year, month] })
+      message.success(t('input.confirmAllSuccess'))
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error || t('input.confirmAllFail'))
     },
   })
 
@@ -114,7 +130,7 @@ export default function YiyiInputPage() {
   const monthDates = monthRows.map((row) => row.date)
   const monthlyRowMap = new Map(monthlyRows.map((row) => [row.date, row]))
 
-  const getDraftRow = (date: string): DraftRow => drafts[date] ?? createEmptyDraftRow()
+  const getDraftRow = (date: string): DraftRow => drafts[date] ?? serverDrafts[date] ?? createEmptyDraftRow()
   const getChannelValue = (date: string, channel: ChannelCode): number => getDraftRow(date)[channel] ?? 0
   const getUnitPrice = (date: string): number => getDraftRow(date).unit_price ?? DEFAULT_UNIT_PRICE
   const getProfitUnitPrice = (date: string): number => getDraftRow(date).profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE
@@ -188,8 +204,8 @@ export default function YiyiInputPage() {
 
   const dirtyCount = monthRows.reduce((count, row) => count + (isRowDirty(row.date) ? 1 : 0), 0)
 
-  const handleSave = () => {
-    const rows: MonthlyApiRow[] = monthRows.map((row) => ({
+  const buildPayloadRows = (): MonthlyApiRow[] =>
+    monthRows.map((row) => ({
       date: row.date,
       unit_price: getUnitPrice(row.date),
       profit_unit_price: getProfitUnitPrice(row.date),
@@ -199,7 +215,8 @@ export default function YiyiInputPage() {
       'yy-02-04': getChannelValue(row.date, 'yy-02-04'),
     }))
 
-    mutation.mutate({ rows })
+  const handleSave = () => {
+    mutation.mutate({ rows: buildPayloadRows() })
   }
 
   const columns: ColumnsType<TableRow> = withTableEllipsis([
@@ -336,11 +353,20 @@ export default function YiyiInputPage() {
             format="YYYY-MM"
             allowClear={false}
             onChange={(value) => {
-              if (value) setSelectedMonth(value)
+              if (value) {
+                setDrafts({})
+                setSelectedMonth(value)
+              }
             }}
           />
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
+
+        <ConfirmAllButton
+          disabled={dirtyCount === 0}
+          loading={confirmAllMutation.isPending}
+          onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
+        />
 
       </div>
 

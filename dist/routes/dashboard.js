@@ -5,23 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
-const mlPayout_service_js_1 = require("../services/mlPayout.service.js");
+const yiyiPricing_service_js_1 = require("../services/yiyiPricing.service.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const constants_js_1 = require("../utils/constants.js");
 const router = (0, express_1.Router)();
-const AD_TYPE_ID_MAP = {
-    SM: 1,
-    "360": 2,
-    BAIDU_JS: 3,
-    OTHER: 4,
-};
-const DEFAULT_DOWNSTREAM_PRICES = {
-    "18": 95,
-    "19": 16,
-    "21": 80,
-    "22": 75,
-    "23": 70,
-};
 // ============================================================
 // Helpers
 // ============================================================
@@ -88,6 +76,50 @@ function buildMonthlyTotal(rows) {
         yiyi_payout: yiyiPayout > 0 ? yiyiPayout : undefined,
     };
 }
+function groupDailyInputsByBusinessDate(inputs) {
+    const grouped = new Map();
+    for (const input of inputs) {
+        const date = (0, date_js_1.formatBusinessDate)(input.recordDate);
+        const current = grouped.get(date) ?? [];
+        current.push(input);
+        grouped.set(date, current);
+    }
+    return grouped;
+}
+function groupNumbersByBusinessDate(rows) {
+    const grouped = new Map();
+    for (const row of rows) {
+        const date = (0, date_js_1.formatBusinessDate)(row.recordDate);
+        grouped.set(date, (grouped.get(date) ?? 0) + row.value);
+    }
+    return grouped;
+}
+function groupPricingByBusinessDate(rows) {
+    const grouped = new Map();
+    for (const row of rows) {
+        grouped.set((0, date_js_1.formatBusinessDate)(row.recordDate), Number(row.unitPrice ?? yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE));
+    }
+    return grouped;
+}
+function buildPeriodMap(periods) {
+    const map = new Map();
+    for (const period of periods) {
+        const current = map.get(period.downstreamId) ?? [];
+        current.push(period);
+        map.set(period.downstreamId, current);
+    }
+    for (const rows of map.values()) {
+        rows.sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
+    }
+    return map;
+}
+function getActivePeriodForDate(periods, date) {
+    if (!periods || periods.length === 0)
+        return undefined;
+    const currentDate = new Date(date);
+    return periods.find((period) => period.startDate <= currentDate &&
+        (period.endDate === null || period.endDate >= currentDate));
+}
 const handleValidation = (req, res, next) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
@@ -98,7 +130,7 @@ const handleValidation = (req, res, next) => {
 };
 // ============================================================
 // GET /api/dashboard/monthly
-// Query: year, month (1-12), ad_type (SM|360|BAIDU_JS)
+// Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // ============================================================
 router.get("/monthly", [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
@@ -109,42 +141,112 @@ router.get("/monthly", [
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
-        const activeUpstreamNames = adTypeCode === "360"
-            ? (await prisma_js_1.default.upstream.findMany({
-                where: {
-                    adTypeId,
-                    status: "active",
-                },
-                select: { name: true },
-                orderBy: { name: "asc" },
-            })).map((upstream) => upstream.name)
-            : [];
+        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
         const days = getDaysInMonth(year, month);
-        const results = [];
-        for (const date of days) {
-            const { gte: startOfDay, lt: endOfDay } = (0, date_js_1.getBusinessDayRange)(date);
-            // Upstream breakdown — sum revenue by upstream name (confirmed only)
-            const upstreamRows = await prisma_js_1.default.dailyInput.groupBy({
-                by: ["adSiteId"],
+        const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
+        const [activeUpstreams, monthlyInputs, mlPeriods, lePeriods, yiyiData, yiyiPricing] = await Promise.all([
+            adTypeCode === "360"
+                ? prisma_js_1.default.upstream.findMany({
+                    where: {
+                        adTypeId,
+                        status: "active",
+                    },
+                    select: { name: true },
+                    orderBy: { name: "asc" },
+                })
+                : Promise.resolve([]),
+            prisma_js_1.default.dailyInput.findMany({
                 where: {
-                    recordDate: { gte: startOfDay, lt: endOfDay },
+                    recordDate: { gte: startOfMonth, lt: endOfMonth },
                     status: "confirmed",
                     adSite: {
+                        isArchived: false,
                         upstream: {
-                            adTypeId: adTypeId,
+                            adTypeId,
                             status: "active",
                         },
                     },
                 },
-                _sum: { revenue: true, qty: true },
-            });
-            const siteIds = upstreamRows.map((r) => r.adSiteId);
-            const sites = await prisma_js_1.default.adSite.findMany({
-                where: { id: { in: siteIds } },
-                include: { upstream: { select: { name: true } } },
-            });
-            const siteMap = new Map(sites.map((s) => [s.id, s]));
+                select: {
+                    recordDate: true,
+                    revenue: true,
+                    qty: true,
+                    adSiteId: true,
+                    adSite: {
+                        select: {
+                            upstream: {
+                                select: { name: true },
+                            },
+                        },
+                    },
+                },
+            }),
+            prisma_js_1.default.downstreamPeriod.findMany({
+                where: {
+                    downstream: {
+                        adTypeId,
+                        downstreamType: "ML",
+                        status: "active",
+                    },
+                    startDate: { lte: endOfMonth },
+                    OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+                },
+                include: {
+                    downstream: {
+                        select: { payoutRate: true },
+                    },
+                },
+            }),
+            adTypeCode === "SM"
+                ? prisma_js_1.default.downstreamPeriod.findMany({
+                    where: {
+                        downstream: {
+                            adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
+                            downstreamType: "LE",
+                            status: "active",
+                        },
+                        startDate: { lte: endOfMonth },
+                        OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+                    },
+                    include: {
+                        downstream: {
+                            select: { payoutRate: true },
+                        },
+                    },
+                })
+                : Promise.resolve([]),
+            adTypeCode === "SM"
+                ? prisma_js_1.default.yiyiDailyData.findMany({
+                    where: {
+                        recordDate: { gte: startOfMonth, lt: endOfMonth },
+                    },
+                    select: {
+                        recordDate: true,
+                        qty: true,
+                    },
+                })
+                : Promise.resolve([]),
+            adTypeCode === "SM"
+                ? prisma_js_1.default.yiyiDailyPricing.findMany({
+                    where: {
+                        recordDate: { gte: startOfMonth, lt: endOfMonth },
+                    },
+                    select: {
+                        recordDate: true,
+                        unitPrice: true,
+                    },
+                })
+                : Promise.resolve([]),
+        ]);
+        const activeUpstreamNames = activeUpstreams.map((upstream) => upstream.name);
+        const inputsByDate = groupDailyInputsByBusinessDate(monthlyInputs);
+        const mlPeriodMap = buildPeriodMap(mlPeriods);
+        const lePeriodMap = buildPeriodMap(lePeriods);
+        const yiyiQtyByDate = groupNumbersByBusinessDate(yiyiData.map((row) => ({ recordDate: row.recordDate, value: row.qty })));
+        const yiyiPricingByDate = groupPricingByBusinessDate(yiyiPricing);
+        const results = [];
+        for (const date of days) {
+            const dayInputs = inputsByDate.get(date) ?? [];
             const upstreamBreakdown = {};
             const upstreamDetailBreakdown = adTypeCode === "360"
                 ? Object.fromEntries(activeUpstreamNames.map((name) => [
@@ -152,47 +254,42 @@ router.get("/monthly", [
                     { pv: 0, unit_price: 0, amount: 0 },
                 ]))
                 : {};
-            for (const row of upstreamRows) {
-                const site = siteMap.get(row.adSiteId);
-                if (!site)
-                    continue;
-                const name = site.upstream.name;
-                const amount = Number(row._sum.revenue ?? 0);
-                upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + amount;
+            let totalRevenue = 0;
+            let totalUV = 0;
+            for (const row of dayInputs) {
+                const upstreamName = row.adSite.upstream.name;
+                const amount = Number(row.revenue ?? 0);
+                const qty = Number(row.qty ?? 0);
+                totalRevenue += amount;
+                totalUV += qty;
+                upstreamBreakdown[upstreamName] = (upstreamBreakdown[upstreamName] ?? 0) + amount;
                 if (adTypeCode === "360") {
-                    const current = upstreamDetailBreakdown[name] ?? { pv: 0, unit_price: 0, amount: 0 };
-                    current.pv += Number(row._sum.qty ?? 0);
+                    const current = upstreamDetailBreakdown[upstreamName] ?? { pv: 0, unit_price: 0, amount: 0 };
+                    current.pv += qty;
                     current.amount += amount;
-                    upstreamDetailBreakdown[name] = current;
+                    upstreamDetailBreakdown[upstreamName] = current;
                 }
             }
             const finalizedUpstreamDetailBreakdown = adTypeCode === "360"
                 ? finalizeUpstreamDetailBreakdown(upstreamDetailBreakdown)
                 : undefined;
-            const totalRevenue = Object.values(upstreamBreakdown).reduce((s, v) => s + v, 0);
-            // ML payout — all 3 types
-            const mlResult = await (0, mlPayout_service_js_1.calculateMLPayout)(date, adTypeCode, prisma_js_1.default);
-            const mlPayout = mlResult.ml_payout;
+            const activeMlPeriod = getActivePeriodForDate(mlPeriodMap.values().next().value, date);
+            const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? 0.8);
+            const mlPayout = totalRevenue * mlPayoutRate;
             let cost = mlPayout;
             let lePayout;
             let yiyiPayout;
             if (adTypeCode === "SM") {
-                lePayout = await (0, mlPayout_service_js_1.calculateLEPayout)(date, totalRevenue, prisma_js_1.default);
-                const uvResult = await prisma_js_1.default.dailyInput.aggregate({
-                    where: {
-                        recordDate: { gte: startOfDay, lt: endOfDay },
-                        status: "confirmed",
-                        adSite: {
-                            upstream: {
-                                adTypeId: adTypeId,
-                                status: "active",
-                            },
-                        },
-                    },
-                    _sum: { qty: true },
-                });
-                const totalUV = Number(uvResult._sum.qty ?? 0);
-                yiyiPayout = await (0, mlPayout_service_js_1.calculateYiyiPayout)(date, totalUV, prisma_js_1.default);
+                const activeLePeriod = getActivePeriodForDate(lePeriodMap.values().next().value, date);
+                const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? 0.9);
+                const leRevenue = totalRevenue * lePayoutRate;
+                const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? 16);
+                const leMlCost = totalUV * mlUnitPrice / 1000;
+                const leTax = (leRevenue - leMlCost) * 0.06;
+                lePayout = leRevenue - leTax - leMlCost;
+                const yiyiQty = yiyiQtyByDate.get(date);
+                const yiyiUnitPrice = yiyiPricingByDate.get(date) ?? yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE;
+                yiyiPayout = (0, yiyiPricing_service_js_1.calculateYiyiAmount)(yiyiQty ?? totalUV, yiyiUnitPrice);
                 cost = lePayout + yiyiPayout;
             }
             const tax = (totalRevenue - cost) * 0.06;
@@ -233,96 +330,122 @@ router.get("/downstream-monthly", [
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
+        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
         const days = getDaysInMonth(year, month);
-        const results = [];
-        const periodCache = new Map();
-        const dailyRateCache = new Map();
-        for (const date of days) {
-            const { gte: startOfDay, lt: endOfDay } = (0, date_js_1.getBusinessDayRange)(date);
-            // Get all downstream site inputs for this date, filtered by ad_type
-            const inputs = await prisma_js_1.default.dailyInput.findMany({
-                where: {
-                    recordDate: { gte: startOfDay, lt: endOfDay },
-                    status: "confirmed",
-                    adSite: {
-                        status: "active",
+        const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
+        const inputs = (await prisma_js_1.default.dailyInput.findMany({
+            where: {
+                recordDate: { gte: startOfMonth, lt: endOfMonth },
+                status: "confirmed",
+                adSite: {
+                    isArchived: false,
+                    status: "active",
+                    downstreams: {
+                        some: {
+                            downstream: {
+                                adTypeId,
+                                status: "active",
+                            },
+                        },
+                    },
+                },
+            },
+            select: {
+                recordDate: true,
+                qty: true,
+                adSite: {
+                    select: {
                         downstreams: {
-                            some: {
+                            where: {
                                 downstream: {
-                                    adTypeId: adTypeId,
+                                    adTypeId,
                                     status: "active",
                                 },
                             },
-                        },
-                    },
-                },
-                include: {
-                    adSite: {
-                        include: {
-                            downstreams: {
-                                where: {
-                                    downstream: {
-                                        adTypeId: adTypeId,
-                                        status: "active",
+                            select: {
+                                customPrice: true,
+                                downstream: {
+                                    select: {
+                                        id: true,
+                                        downstreamType: true,
                                     },
-                                },
-                                include: {
-                                    downstream: true,
                                 },
                             },
                         },
                     },
                 },
-            });
+            },
+        }));
+        const downstreamIds = [...new Set(inputs.flatMap((input) => input.adSite.downstreams?.map((sd) => sd.downstream.id) ?? []))];
+        const [periods, dailyRates] = await Promise.all([
+            downstreamIds.length > 0
+                ? prisma_js_1.default.downstreamPeriod.findMany({
+                    where: {
+                        downstreamId: { in: downstreamIds },
+                        startDate: { lte: endOfMonth },
+                        OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+                    },
+                    include: {
+                        downstream: {
+                            select: { payoutRate: true },
+                        },
+                    },
+                })
+                : Promise.resolve([]),
+            downstreamIds.length > 0
+                ? prisma_js_1.default.dailyDownstreamRate.findMany({
+                    where: {
+                        downstreamId: { in: downstreamIds },
+                        date: { gte: startOfMonth, lt: endOfMonth },
+                    },
+                    select: {
+                        downstreamId: true,
+                        date: true,
+                        effectiveRate: true,
+                    },
+                })
+                : Promise.resolve([]),
+        ]);
+        const inputsByDate = groupDailyInputsByBusinessDate(inputs);
+        const periodMap = buildPeriodMap(periods);
+        const dailyRateMap = new Map();
+        const activePeriodCache = new Map();
+        for (const rate of dailyRates) {
+            dailyRateMap.set(`${rate.downstreamId}:${(0, date_js_1.formatBusinessDate)(rate.date)}`, Number(rate.effectiveRate));
+        }
+        const results = [];
+        for (const date of days) {
+            const dayInputs = inputsByDate.get(date) ?? [];
             let totalML = 0;
             let totalLE = 0;
-            for (const input of inputs) {
-                for (const sd of input.adSite.downstreams) {
+            for (const input of dayInputs) {
+                for (const sd of input.adSite.downstreams ?? []) {
                     const ds = sd.downstream;
                     if (ds.downstreamType !== "ML" && ds.downstreamType !== "LE")
                         continue;
                     const cacheKey = `${ds.id}:${date}`;
-                    let cachedPeriod = periodCache.get(cacheKey);
+                    let cachedPeriod = activePeriodCache.get(cacheKey);
                     if (!cachedPeriod) {
-                        const activePeriod = await prisma_js_1.default.downstreamPeriod.findFirst({
-                            where: {
-                                downstreamId: ds.id,
-                                startDate: { lte: new Date(date) },
-                                OR: [{ endDate: null }, { endDate: { gte: new Date(date) } }],
-                            },
-                            orderBy: { startDate: "desc" },
-                        });
+                        const activePeriod = getActivePeriodForDate(periodMap.get(ds.id), date);
                         cachedPeriod = {
                             pctHal: Number(activePeriod?.pctHal ?? 1),
-                            unitPrice: Number(activePeriod?.unitPrice ?? DEFAULT_DOWNSTREAM_PRICES[String(ds.id)] ?? 0),
+                            unitPrice: Number(activePeriod?.unitPrice ?? constants_js_1.DEFAULT_DOWNSTREAM_PRICES[String(ds.id)] ?? 0),
                         };
-                        periodCache.set(cacheKey, cachedPeriod);
+                        activePeriodCache.set(cacheKey, cachedPeriod);
                     }
-                    // Determine effective price: customPrice in AdSiteDownstream > active DownstreamPeriod > fallback defaults
                     const price = sd.customPrice !== null
                         ? Number(sd.customPrice)
                         : cachedPeriod.unitPrice;
                     if (price <= 0)
                         continue;
-                    let effectiveRate = dailyRateCache.get(cacheKey);
-                    if (effectiveRate === undefined) {
-                        const rateRecord = await prisma_js_1.default.dailyDownstreamRate.findFirst({
-                            where: {
-                                downstreamId: ds.id,
-                                date: { gte: startOfDay, lt: endOfDay },
-                            },
-                        });
-                        effectiveRate = rateRecord ? Number(rateRecord.effectiveRate) : cachedPeriod.pctHal * 100;
-                        dailyRateCache.set(cacheKey, effectiveRate);
-                    }
-                    // Match DownstreamSitesPage calculation: int(qty * rate/100)
+                    const effectiveRate = dailyRateMap.get(cacheKey) ??
+                        cachedPeriod.pctHal * 100;
                     const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100));
                     const mlValue = adjustedUV * price;
                     if (ds.downstreamType === "ML") {
                         totalML += mlValue;
                     }
-                    else if (ds.downstreamType === "LE") {
+                    else {
                         totalLE += mlValue;
                     }
                 }

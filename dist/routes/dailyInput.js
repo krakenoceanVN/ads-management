@@ -20,6 +20,29 @@ const handleValidation = (req, res, next) => {
     }
     next();
 };
+async function unconfirmDailyInputRecord(req, res) {
+    try {
+        const id = Number(req.params.id);
+        const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Record not found" });
+            return;
+        }
+        if (existing.status !== "confirmed") {
+            res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" });
+            return;
+        }
+        const updated = await prisma_js_1.default.dailyInput.update({
+            where: { id },
+            data: { status: "unconfirmed" },
+        });
+        res.json({ success: true, data: updated, message: "Unconfirmed" });
+    }
+    catch (err) {
+        console.error("PUT /api/daily-input/:id/unconfirm error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+}
 // ============================================================
 // GET /api/daily-input
 // Query: date (YYYY-MM-DD), ad_type (SM|360|BAIDU_JS)
@@ -33,17 +56,30 @@ router.get("/", [
     try {
         const dateStr = req.query.date;
         const adTypeCode = req.query.ad_type;
-        const search = req.query.search;
-        // 1. Lấy tất cả ad_sites theo ad_type + search
+        const search = req.query.search?.trim();
+        const searchFilter = search
+            ? {
+                OR: [
+                    { name: { contains: search, mode: "insensitive" } },
+                    {
+                        upstream: {
+                            name: { contains: search, mode: "insensitive" },
+                        },
+                    },
+                ],
+            }
+            : undefined;
+        // 1. Lấy tất cả ad_sites theo ad_type + search (Nguồn trên OR Ad Site)
         const adSites = await prisma_js_1.default.adSite.findMany({
             where: {
+                isActive: true,
+                isArchived: false,
                 status: "active",
-                name: search ? { contains: search } : undefined,
                 upstream: {
                     status: "active",
                     adType: { code: adTypeCode },
-                    name: search ? { contains: search } : undefined,
                 },
+                ...searchFilter,
             },
             include: {
                 upstream: { include: { adType: true } },
@@ -118,14 +154,23 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
         const userId = req.user.id;
         // Validate: date <= today
         const inputDate = (0, date_js_1.getBusinessDayStart)(date);
-        if (date > (0, date_js_1.formatBusinessDate)(new Date())) {
+        const todayDate = (0, date_js_1.getBusinessDayStart)((0, date_js_1.formatBusinessDate)(new Date()));
+        if (inputDate.getTime() > todayDate.getTime()) {
             res.status(400).json({ success: false, error: "Cannot input future date" });
             return;
         }
         // Fetch all involved ad_sites
         const siteIds = records.map((r) => r.ad_site_id);
         const adSites = await prisma_js_1.default.adSite.findMany({
-            where: { id: { in: siteIds } },
+            where: {
+                id: { in: siteIds },
+                isActive: true,
+                isArchived: false,
+                status: "active",
+                upstream: {
+                    status: "active",
+                },
+            },
             include: { upstream: { include: { adType: true } } },
         });
         const siteMap = new Map(adSites.map((s) => [s.id, s]));
@@ -225,6 +270,36 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
     }
 });
 // ============================================================
+// POST /api/daily-input/confirm-batch
+// Body: { ids: number[] }
+// ============================================================
+router.post("/confirm-batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [
+    (0, express_validator_1.body)("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
+    (0, express_validator_1.body)("ids.*").isInt().toInt().withMessage("all ids must be integers"),
+], handleValidation, async (req, res) => {
+    try {
+        const ids = [...new Set(req.body.ids.map(Number).filter(Number.isInteger))];
+        if (ids.length === 0) {
+            res.status(400).json({ success: false, error: "No valid ids provided" });
+            return;
+        }
+        const result = await prisma_js_1.default.dailyInput.updateMany({
+            where: {
+                id: { in: ids },
+                status: "unconfirmed",
+            },
+            data: {
+                status: "confirmed",
+            },
+        });
+        res.json({ success: true, updated: result.count });
+    }
+    catch (err) {
+        console.error("POST /api/daily-input/confirm-batch error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
 // POST /api/daily-input/:id/confirm
 // ============================================================
 router.post("/:id/confirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
@@ -251,31 +326,11 @@ router.post("/:id/confirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermissi
     }
 });
 // ============================================================
-// POST /api/daily-input/:id/unconfirm
+// PUT /api/daily-input/:id/unconfirm
 // ============================================================
-router.post("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
-    try {
-        const id = Number(req.params.id);
-        const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });
-        if (!existing) {
-            res.status(404).json({ success: false, error: "Record not found" });
-            return;
-        }
-        if (existing.status !== "confirmed") {
-            res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" });
-            return;
-        }
-        await prisma_js_1.default.dailyInput.update({
-            where: { id },
-            data: { status: "unconfirmed" },
-        });
-        res.json({ success: true, message: "Unconfirmed" });
-    }
-    catch (err) {
-        console.error("POST /api/daily-input/:id/unconfirm error:", err);
-        res.status(500).json({ success: false, error: "Internal server error" });
-    }
-});
+router.put("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
+// Backward-compatible alias, still admin-only
+router.post("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
 // ============================================================
 // DELETE /api/daily-input/:id
 // ============================================================

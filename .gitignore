@@ -1,14 +1,6 @@
-.env
-.env.*
-!.env.example
-
 node_modules/
 dist/
 coverage/
-
-*.db
-*.sqlite
-prisma/dev.db
 
 logs/
 *.log

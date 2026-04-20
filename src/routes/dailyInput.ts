@@ -19,6 +19,32 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
   next()
 }
 
+async function unconfirmDailyInputRecord(req: AuthRequest, res: Response) {
+  try {
+    const id = Number(req.params.id)
+
+    const existing = await prisma.dailyInput.findUnique({ where: { id } })
+    if (!existing) {
+      res.status(404).json({ success: false, error: "Record not found" })
+      return
+    }
+    if (existing.status !== "confirmed") {
+      res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" })
+      return
+    }
+
+    const updated = await prisma.dailyInput.update({
+      where: { id },
+      data: { status: "unconfirmed" },
+    })
+
+    res.json({ success: true, data: updated, message: "Unconfirmed" })
+  } catch (err: any) {
+    console.error("PUT /api/daily-input/:id/unconfirm error:", err)
+    res.status(500).json({ success: false, error: "Internal server error" })
+  }
+}
+
 // ============================================================
 // GET /api/daily-input
 // Query: date (YYYY-MM-DD), ad_type (SM|360|BAIDU_JS)
@@ -36,18 +62,31 @@ router.get(
     try {
       const dateStr = (req.query.date as string)
       const adTypeCode = (req.query.ad_type as AdTypeCode)
-      const search = (req.query.search as string | undefined)
+      const search = (req.query.search as string | undefined)?.trim()
+      const searchFilter = search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              {
+                upstream: {
+                  name: { contains: search, mode: "insensitive" as const },
+                },
+              },
+            ],
+          }
+        : undefined
 
-      // 1. Lấy tất cả ad_sites theo ad_type + search
+      // 1. Lấy tất cả ad_sites theo ad_type + search (Nguồn trên OR Ad Site)
       const adSites = await prisma.adSite.findMany({
         where: {
+          isActive: true,
+          isArchived: false,
           status: "active",
-          name: search ? { contains: search } : undefined,
           upstream: {
             status: "active",
             adType: { code: adTypeCode },
-            name: search ? { contains: search } : undefined,
           },
+          ...searchFilter,
         },
         include: {
           upstream: { include: { adType: true } },
@@ -140,7 +179,8 @@ router.post(
 
       // Validate: date <= today
       const inputDate = getBusinessDayStart(date)
-      if (date > formatBusinessDate(new Date())) {
+      const todayDate = getBusinessDayStart(formatBusinessDate(new Date()))
+      if (inputDate.getTime() > todayDate.getTime()) {
         res.status(400).json({ success: false, error: "Cannot input future date" })
         return
       }
@@ -148,7 +188,15 @@ router.post(
       // Fetch all involved ad_sites
       const siteIds = records.map((r) => r.ad_site_id)
       const adSites = await prisma.adSite.findMany({
-        where: { id: { in: siteIds } },
+        where: {
+          id: { in: siteIds },
+          isActive: true,
+          isArchived: false,
+          status: "active",
+          upstream: {
+            status: "active",
+          },
+        },
         include: { upstream: { include: { adType: true } } },
       })
       const siteMap = new Map(adSites.map((s) => [s.id, s]))
@@ -255,6 +303,46 @@ router.post(
 )
 
 // ============================================================
+// POST /api/daily-input/confirm-batch
+// Body: { ids: number[] }
+// ============================================================
+router.post(
+  "/confirm-batch",
+  requireAuth,
+  requirePermission("perm_data_confirm"),
+  [
+    body("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
+    body("ids.*").isInt().toInt().withMessage("all ids must be integers"),
+  ],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const ids = [...new Set((req.body.ids as number[]).map(Number).filter(Number.isInteger))]
+
+      if (ids.length === 0) {
+        res.status(400).json({ success: false, error: "No valid ids provided" })
+        return
+      }
+
+      const result = await prisma.dailyInput.updateMany({
+        where: {
+          id: { in: ids },
+          status: "unconfirmed",
+        },
+        data: {
+          status: "confirmed",
+        },
+      })
+
+      res.json({ success: true, updated: result.count })
+    } catch (err: any) {
+      console.error("POST /api/daily-input/confirm-batch error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
 // POST /api/daily-input/:id/confirm
 // ============================================================
 router.post(
@@ -291,39 +379,25 @@ router.post(
 )
 
 // ============================================================
-// POST /api/daily-input/:id/unconfirm
+// PUT /api/daily-input/:id/unconfirm
 // ============================================================
+router.put(
+  "/:id/unconfirm",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [param("id").isInt().toInt()],
+  handleValidation,
+  unconfirmDailyInputRecord
+)
+
+// Backward-compatible alias, still admin-only
 router.post(
   "/:id/unconfirm",
   requireAuth,
-  requirePermission("perm_data_confirm"),
+  requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const id = Number(req.params.id)
-
-      const existing = await prisma.dailyInput.findUnique({ where: { id } })
-      if (!existing) {
-        res.status(404).json({ success: false, error: "Record not found" })
-        return
-      }
-      if (existing.status !== "confirmed") {
-        res.status(409).json({ success: false, error: "Record not confirmed — cannot unconfirm" })
-        return
-      }
-
-      await prisma.dailyInput.update({
-        where: { id },
-        data: { status: "unconfirmed" },
-      })
-
-      res.json({ success: true, message: "Unconfirmed" })
-    } catch (err: any) {
-      console.error("POST /api/daily-input/:id/unconfirm error:", err)
-      res.status(500).json({ success: false, error: "Internal server error" })
-    }
-  }
+  unconfirmDailyInputRecord
 )
 
 // ============================================================

@@ -1,17 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ConfigProvider, theme as antdTheme } from 'antd'
-
-type ThemeMode = 'light' | 'contrast-soft'
-
-interface ThemeContextValue {
-  mode: ThemeMode
-  setMode: (next: ThemeMode) => void
-  toggleMode: () => void
-  cycleMode: () => void
-}
+import { ThemeModeContext, type ThemeContextValue, type ThemeMode } from './themeModeContext'
 
 const STORAGE_KEY = 'ads-management-theme-mode'
-const ThemeModeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 function getInitialMode(): ThemeMode {
   if (typeof window === 'undefined') return 'contrast-soft'
@@ -96,12 +87,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       <ConfigProvider theme={antdConfig}>{children}</ConfigProvider>
     </ThemeModeContext.Provider>
   )
-}
-
-export function useThemeMode() {
-  const context = useContext(ThemeModeContext)
-  if (!context) {
-    throw new Error('useThemeMode must be used within ThemeProvider')
-  }
-  return context
 }

@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { UserPublic } from '../types/index.js'
+import { getRequiredEnv } from '../utils/env.js'
 
 export interface AuthRequest extends Request {
   user?: UserPublic
 }
-
-const JWT_SECRET = process.env.JWT_SECRET ?? 'change-me-in-production'
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
@@ -17,8 +16,17 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     return
   }
 
+  let jwtSecret: string
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as UserPublic
+    jwtSecret = getRequiredEnv('JWT_SECRET')
+  } catch (error) {
+    console.error('JWT_SECRET is not configured:', error)
+    res.status(500).json({ success: false, error: 'Server configuration error' })
+    return
+  }
+
+  try {
+    const payload = jwt.verify(token, jwtSecret) as UserPublic
     req.user = payload
     next()
   } catch {

@@ -22,6 +22,8 @@ interface AdSiteRow {
   billing_method: 'CPM' | 'RATIO'
   current_unit_price?: number
   current_ratio?: number
+  is_active: boolean
+  is_archived: boolean
   status: 'active' | 'inactive'
   downstream_ids?: number[]
   downstream_prices?: Record<string, number>
@@ -125,6 +127,7 @@ function formatPriceValue(value: number): string {
 function AdSitesTab() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
@@ -134,8 +137,11 @@ function AdSitesTab() {
   const qc = useQueryClient()
 
   const { data: sites = [], isLoading } = useQuery({
-    queryKey: ['admin', 'ad-sites'],
-    queryFn: () => api.get<ApiResponse<AdSiteRow[]>>('/api/admin/ad-sites').then((r) => r.data.data ?? []),
+    queryKey: ['admin', 'ad-sites', showArchived ? 'archived' : 'active'],
+    queryFn: () =>
+      api
+        .get<ApiResponse<AdSiteRow[]>>(`/api/admin/ad-sites${showArchived ? '?archived=1' : ''}`)
+        .then((r) => r.data.data ?? []),
   })
 
   const { data: upstreams = [] } = useQuery({
@@ -182,6 +188,30 @@ function AdSitesTab() {
       api.put(`/api/admin/ad-sites/${id}/downstream-price`, payload),
     onSuccess: () => { message.success(t('admin.priceUpdated')); qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] }); setDownstreamPriceModal(null) },
     onError: () => message.error(t('admin.actionFailed')),
+  })
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-active`),
+    onSuccess: (_response, id) => {
+      const row = sites.find((site) => site.id === id)
+      message.success(row?.is_active ? t('admin.pausedSuccess') : t('admin.resumedSuccess'))
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
+    },
+  })
+
+  const toggleArchiveMutation = useMutation({
+    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-archive`),
+    onSuccess: (_response, id) => {
+      const row = sites.find((site) => site.id === id)
+      message.success(row?.is_archived ? t('admin.restoreSuccess') : t('admin.markDieSuccess'))
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
+    },
   })
 
   const openCreate = () => {
@@ -327,10 +357,21 @@ function AdSitesTab() {
     },
     {
       title: t('admin.status'), dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag>,
+      render: (v: string, row: AdSiteRow) => (
+        <Space size={[4, 4]} wrap>
+          <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag>
+          {row.is_archived ? (
+            <Tag color="red">{t('admin.dieStatus')}</Tag>
+          ) : row.is_active ? (
+            <Tag color="green">{t('admin.running')}</Tag>
+          ) : (
+            <Tag color="gold">{t('admin.paused')}</Tag>
+          )}
+        </Space>
+      ),
     },
     {
-      title: t('input.action'), key: 'action', width: 160,
+      title: t('input.action'), key: 'action', width: 320,
       render: (_: unknown, row: AdSiteRow) => (
         <Space size="small">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
@@ -341,6 +382,23 @@ function AdSitesTab() {
               new_ratio: row.current_ratio,
             })
           }}>{t('admin.price')}</Button>
+          {!row.is_archived ? (
+            <Button
+              size="small"
+              onClick={() => toggleActiveMutation.mutate(row.id)}
+              loading={toggleActiveMutation.isPending}
+            >
+              {row.is_active ? t('admin.pause') : t('admin.resume')}
+            </Button>
+          ) : null}
+          <Button
+            size="small"
+            danger={!row.is_archived}
+            onClick={() => toggleArchiveMutation.mutate(row.id)}
+            loading={toggleArchiveMutation.isPending}
+          >
+            {row.is_archived ? t('admin.restore') : t('admin.markDie')}
+          </Button>
           <Popconfirm
             title={t('admin.deleteSiteConfirm')}
             description={t('admin.deleteSiteDesc')}
@@ -362,6 +420,8 @@ function AdSitesTab() {
       row.ad_site_name,
       row.billing_method,
       row.status,
+      row.is_archived ? t('admin.dieStatus') : '',
+      row.is_active ? t('admin.running') : t('admin.paused'),
       getSiteDownstreamLabel(row),
       getSiteDownstreamPriceLabel(row),
     ])
@@ -379,6 +439,9 @@ function AdSitesTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('admin.searchPlaceholder', { label: t('admin.adSites') })}
         />
+        <Button onClick={() => setShowArchived((prev) => !prev)}>
+          {showArchived ? t('admin.backToActiveSites') : t('admin.dieBin')}
+        </Button>
         <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
       </div>
       <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />

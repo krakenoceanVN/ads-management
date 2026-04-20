@@ -296,10 +296,14 @@ export default function SmInputTable({ date, search = '' }: Props) {
             size="small"
             type="link"
             onClick={() => {
-              api.post(`/api/daily-input/${id}/confirm`).then(() => {
-                qc.invalidateQueries({ queryKey: ['daily-input', 'SM', date] })
-                message.success(t('input.confirm') + '!')
-              })
+              api.post(`/api/daily-input/${id}/confirm`)
+                .then(() => {
+                  qc.invalidateQueries({ queryKey: ['daily-input', 'SM', date] })
+                  message.success(t('input.confirm') + '!')
+                })
+                .catch((err) => {
+                  message.error(err.response?.data?.error || t('input.saveFail'))
+                })
             }}
           >
             {t('input.confirm')}

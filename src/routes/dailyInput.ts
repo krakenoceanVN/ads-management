@@ -179,7 +179,8 @@ router.post(
 
       // Validate: date <= today
       const inputDate = getBusinessDayStart(date)
-      if (date > formatBusinessDate(new Date())) {
+      const todayDate = getBusinessDayStart(formatBusinessDate(new Date()))
+      if (inputDate.getTime() > todayDate.getTime()) {
         res.status(400).json({ success: false, error: "Cannot input future date" })
         return
       }
@@ -187,7 +188,15 @@ router.post(
       // Fetch all involved ad_sites
       const siteIds = records.map((r) => r.ad_site_id)
       const adSites = await prisma.adSite.findMany({
-        where: { id: { in: siteIds } },
+        where: {
+          id: { in: siteIds },
+          isActive: true,
+          isArchived: false,
+          status: "active",
+          upstream: {
+            status: "active",
+          },
+        },
         include: { upstream: { include: { adType: true } } },
       })
       const siteMap = new Map(adSites.map((s) => [s.id, s]))

@@ -108,6 +108,21 @@ export default function YiyiInputPage() {
     },
   })
 
+  const confirmAllMutation = useMutation({
+    mutationFn: async (payload: { rows: MonthlyApiRow[] }) => {
+      const res = await api.post('/api/yiyi-data/monthly-batch', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setDrafts({})
+      qc.invalidateQueries({ queryKey: ['yiyi-data', 'monthly', year, month] })
+      message.success(t('input.confirmAllSuccess'))
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error || t('input.confirmAllFail'))
+    },
+  })
+
   const monthRows = monthlyRows.map((row) => ({
     key: row.date,
     date: row.date,
@@ -189,8 +204,8 @@ export default function YiyiInputPage() {
 
   const dirtyCount = monthRows.reduce((count, row) => count + (isRowDirty(row.date) ? 1 : 0), 0)
 
-  const handleSave = () => {
-    const rows: MonthlyApiRow[] = monthRows.map((row) => ({
+  const buildPayloadRows = (): MonthlyApiRow[] =>
+    monthRows.map((row) => ({
       date: row.date,
       unit_price: getUnitPrice(row.date),
       profit_unit_price: getProfitUnitPrice(row.date),
@@ -200,7 +215,8 @@ export default function YiyiInputPage() {
       'yy-02-04': getChannelValue(row.date, 'yy-02-04'),
     }))
 
-    mutation.mutate({ rows })
+  const handleSave = () => {
+    mutation.mutate({ rows: buildPayloadRows() })
   }
 
   const columns: ColumnsType<TableRow> = withTableEllipsis([
@@ -346,7 +362,11 @@ export default function YiyiInputPage() {
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
 
-        <ConfirmAllButton disabled loading={false} onConfirm={() => Promise.resolve()} />
+        <ConfirmAllButton
+          disabled={dirtyCount === 0}
+          loading={confirmAllMutation.isPending}
+          onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
+        />
 
       </div>
 

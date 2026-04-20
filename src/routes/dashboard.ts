@@ -4,23 +4,9 @@ import { calculateYiyiAmount, YIYI_DEFAULT_UNIT_PRICE } from "../services/yiyiPr
 import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessMonthRange } from "../utils/date.js"
+import { AD_TYPE_ID_MAP, DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 
 const router = Router()
-
-const AD_TYPE_ID_MAP: Record<AdTypeCode, number> = {
-  SM: 1,
-  "360": 2,
-  BAIDU_JS: 3,
-  OTHER: 4,
-}
-
-const DEFAULT_DOWNSTREAM_PRICES: Record<string, number> = {
-  "18": 95,
-  "19": 16,
-  "21": 80,
-  "22": 75,
-  "23": 70,
-}
 
 interface DailyInputWithUpstream {
   recordDate: Date
@@ -231,6 +217,7 @@ router.get(
             recordDate: { gte: startOfMonth, lt: endOfMonth },
             status: "confirmed",
             adSite: {
+              isArchived: false,
               upstream: {
                 adTypeId,
                 status: "active",
@@ -438,6 +425,7 @@ router.get(
           recordDate: { gte: startOfMonth, lt: endOfMonth },
           status: "confirmed",
           adSite: {
+            isArchived: false,
             status: "active",
             downstreams: {
               some: {

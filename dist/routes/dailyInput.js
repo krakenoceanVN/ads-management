@@ -154,14 +154,23 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
         const userId = req.user.id;
         // Validate: date <= today
         const inputDate = (0, date_js_1.getBusinessDayStart)(date);
-        if (date > (0, date_js_1.formatBusinessDate)(new Date())) {
+        const todayDate = (0, date_js_1.getBusinessDayStart)((0, date_js_1.formatBusinessDate)(new Date()));
+        if (inputDate.getTime() > todayDate.getTime()) {
             res.status(400).json({ success: false, error: "Cannot input future date" });
             return;
         }
         // Fetch all involved ad_sites
         const siteIds = records.map((r) => r.ad_site_id);
         const adSites = await prisma_js_1.default.adSite.findMany({
-            where: { id: { in: siteIds } },
+            where: {
+                id: { in: siteIds },
+                isActive: true,
+                isArchived: false,
+                status: "active",
+                upstream: {
+                    status: "active",
+                },
+            },
             include: { upstream: { include: { adType: true } } },
         });
         const siteMap = new Map(adSites.map((s) => [s.id, s]));

@@ -5,13 +5,8 @@ exports.calculateLEPayout = calculateLEPayout;
 exports.calculateYiyiPayout = calculateYiyiPayout;
 exports.calculateCostBreakdown = calculateCostBreakdown;
 const date_js_1 = require("../utils/date.js");
+const constants_js_1 = require("../utils/constants.js");
 const yiyiPricing_service_js_1 = require("./yiyiPricing.service.js");
-const AD_TYPE_ID_MAP = {
-    SM: 1,
-    "360": 2,
-    BAIDU_JS: 3,
-    OTHER: 4,
-};
 /** Convert "YYYY-MM-DD" → { startOfDay, endOfDay } in business TZ */
 function dateRange(dateStr) {
     return (0, date_js_1.getBusinessDayRange)(dateStr);
@@ -20,13 +15,14 @@ function dateRange(dateStr) {
 // ML Payout — ALL ad types, ALWAYS ×0.8
 // ============================================================
 async function calculateMLPayout(date, adTypeCode, prisma) {
-    const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
+    const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
     // 1. Sum confirmed revenue for this ad_type on this date
     const result = await prisma.dailyInput.aggregate({
         where: {
             recordDate: dateRange(date),
             status: "confirmed",
             adSite: {
+                isArchived: false,
                 upstream: {
                     adTypeId: adTypeId,
                     status: "active",
@@ -73,7 +69,7 @@ async function calculateLEPayout(date, smUpstreamRevenue, prisma) {
     const lePeriod = await prisma.downstreamPeriod.findFirst({
         where: {
             downstream: {
-                adTypeId: AD_TYPE_ID_MAP.SM,
+                adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
                 downstreamType: "LE",
                 status: "active",
             },
@@ -95,8 +91,9 @@ async function calculateLEPayout(date, smUpstreamRevenue, prisma) {
             recordDate: dateRange(date),
             status: "confirmed",
             adSite: {
+                isArchived: false,
                 upstream: {
-                    adTypeId: AD_TYPE_ID_MAP.SM,
+                    adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
                     status: "active",
                 },
             },
@@ -145,8 +142,9 @@ async function calculateCostBreakdown(date, adTypeCode, prisma) {
                 recordDate: dateRange(date),
                 status: "confirmed",
                 adSite: {
+                    isArchived: false,
                     upstream: {
-                        adTypeId: AD_TYPE_ID_MAP.SM,
+                        adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
                         status: "active",
                     },
                 },

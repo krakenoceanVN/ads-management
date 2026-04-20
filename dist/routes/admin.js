@@ -11,15 +11,10 @@ const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
 const env_js_1 = require("../utils/env.js");
+const constants_js_1 = require("../utils/constants.js");
+const rateLimit_js_1 = require("../utils/rateLimit.js");
 const router = (0, express_1.Router)();
 const JWT_EXPIRES_IN = "8h";
-const DEFAULT_DOWNSTREAM_PRICES = {
-    "18": 95,
-    "19": 16,
-    "21": 80,
-    "22": 75,
-    "23": 70,
-};
 const handleValidation = (req, res, next) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
@@ -28,12 +23,25 @@ const handleValidation = (req, res, next) => {
     }
     next();
 };
+const loginRateLimiter = (0, rateLimit_js_1.createMemoryRateLimiter)({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyGenerator: (req) => {
+        const username = typeof req.body?.username === "string" ? req.body.username.trim().toLowerCase() : "";
+        return `${req.ip}:${username}`;
+    },
+    errorMessage: "Too many login attempts. Please try again later.",
+});
 // ============================================================
 // GET /api/admin/ad-sites
 // ============================================================
-router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), async (_req, res) => {
+router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.query)("archived").optional().isIn(["0", "1"])], handleValidation, async (req, res) => {
     try {
+        const archivedMode = req.query.archived === "1";
         const sites = await prisma_js_1.default.adSite.findMany({
+            where: {
+                isArchived: archivedMode,
+            },
             include: {
                 upstream: {
                     include: { adType: true },
@@ -44,16 +52,6 @@ router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermis
             },
             orderBy: [{ upstream: { name: "asc" } }, { name: "asc" }],
         });
-        // Get active downstream periods for pricing
-        const now = new Date();
-        const periods = await prisma_js_1.default.downstreamPeriod.findMany({
-            where: {
-                startDate: { lte: now },
-                OR: [{ endDate: null }, { endDate: { gte: now } }],
-            },
-            include: { downstream: true },
-        });
-        const periodMap = new Map(periods.map((p) => [p.downstreamId, p]));
         const result = sites.map((site) => ({
             id: site.id,
             ad_type_code: site.upstream.adType.code,
@@ -62,6 +60,8 @@ router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermis
             billing_method: site.billingMethod,
             current_unit_price: site.currentUnitPrice ? Number(site.currentUnitPrice) : null,
             current_ratio: site.currentRatio ? Number(site.currentRatio) : null,
+            is_active: site.isActive,
+            is_archived: site.isArchived,
             status: site.status,
             downstream_ids: site.downstreams.map((d) => d.downstreamId),
             downstream_prices: site.downstreams.reduce((acc, d) => {
@@ -86,7 +86,13 @@ router.get("/admin/downstreams", auth_js_1.requireAuth, async (_req, res) => {
         const downstreams = await prisma_js_1.default.downstream.findMany({
             include: {
                 adType: true,
-                adSites: true,
+                adSites: {
+                    where: {
+                        adSite: {
+                            isArchived: false,
+                        },
+                    },
+                },
             },
             orderBy: { id: "asc" },
         });
@@ -161,7 +167,12 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
         }
         // Get ad sites linked to this downstream
         const siteDownstreams = await prisma_js_1.default.adSiteDownstream.findMany({
-            where: { downstreamId },
+            where: {
+                downstreamId,
+                adSite: {
+                    isArchived: false,
+                },
+            },
             include: {
                 adSite: {
                     include: { upstream: { include: { adType: true } } },
@@ -190,6 +201,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
         let inputsQuery = {
             where: {
                 adSiteId: { in: siteIds },
+                adSite: { isArchived: false },
                 status: isOfficialView ? "confirmed" : undefined,
             },
             orderBy: [{ adSiteId: "asc" }, { recordDate: "desc" }],
@@ -200,6 +212,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             inputsQuery = {
                 where: {
                     adSiteId: { in: siteIds },
+                    adSite: { isArchived: false },
                     status: isOfficialView ? "confirmed" : undefined,
                     recordDate: { gte: startOfDay, lt: endOfDay },
                 },
@@ -212,6 +225,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             inputsQuery = {
                 where: {
                     adSiteId: { in: siteIds },
+                    adSite: { isArchived: false },
                     status: isOfficialView ? "confirmed" : undefined,
                     recordDate: { gte: startOfMonth, lt: endOfMonth },
                 },
@@ -251,7 +265,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             custom_price: sd.customPrice ? Number(sd.customPrice) : null,
             resolved_price: sd.customPrice !== null
                 ? Number(sd.customPrice)
-                : Number(activePeriod?.unitPrice ?? DEFAULT_DOWNSTREAM_PRICES[String(downstreamId)] ?? 0),
+                : Number(activePeriod?.unitPrice ?? constants_js_1.DEFAULT_DOWNSTREAM_PRICES[String(downstreamId)] ?? 0),
             input: inputMap.get(sd.adSite.id)?.[0] ?? null,
             inputs: inputMap.get(sd.adSite.id) ?? [],
             inputs_by_date: inputByDateMap.get(sd.adSite.id) ?? {},
@@ -399,6 +413,8 @@ router.post("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermi
                 billingMethod: billing_method,
                 currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
                 currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
+                isActive: true,
+                isArchived: false,
                 status: status ?? "active",
                 downstreams: downstream_ids?.length
                     ? { create: downstream_ids.map((did) => ({ downstreamId: did })) }
@@ -463,6 +479,58 @@ router.put("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePe
     }
     catch (err) {
         console.error("PUT /api/admin/ad-sites/:id error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Ad site not found" });
+            return;
+        }
+        const updated = await prisma_js_1.default.adSite.update({
+            where: { id },
+            data: { isActive: !existing.isActive },
+        });
+        res.json({
+            success: true,
+            data: {
+                id: updated.id,
+                is_active: updated.isActive,
+                is_archived: updated.isArchived,
+            },
+        });
+    }
+    catch (err) {
+        console.error("PUT /api/admin/ad-sites/:id/toggle-active error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Ad site not found" });
+            return;
+        }
+        const updated = await prisma_js_1.default.adSite.update({
+            where: { id },
+            data: { isArchived: !existing.isArchived },
+        });
+        res.json({
+            success: true,
+            data: {
+                id: updated.id,
+                is_active: updated.isActive,
+                is_archived: updated.isArchived,
+            },
+        });
+    }
+    catch (err) {
+        console.error("PUT /api/admin/ad-sites/:id/toggle-archive error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
@@ -965,7 +1033,7 @@ router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)
 router.post("/auth/login", [
     (0, express_validator_1.body)("username").notEmpty().withMessage("username required"),
     (0, express_validator_1.body)("password").notEmpty().withMessage("password required"),
-], handleValidation, async (req, res) => {
+], handleValidation, loginRateLimiter.middleware, async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await prisma_js_1.default.user.findUnique({ where: { username } });
@@ -978,6 +1046,7 @@ router.post("/auth/login", [
             res.status(401).json({ success: false, error: "Invalid credentials" });
             return;
         }
+        loginRateLimiter.reset(req);
         // Update last_login_at
         await prisma_js_1.default.user.update({
             where: { id: user.id },

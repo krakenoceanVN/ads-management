@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
+const auth_js_1 = require("../middleware/auth.js");
 const date_js_1 = require("../utils/date.js");
 const constants_js_1 = require("../utils/constants.js");
 const calculations_js_1 = require("../utils/calculations.js");
@@ -132,7 +133,7 @@ const handleValidation = (req, res, next) => {
 // GET /api/dashboard/monthly
 // Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // ============================================================
-router.get("/monthly", [
+router.get("/monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
     (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
@@ -321,7 +322,7 @@ router.get("/monthly", [
 // Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // Returns aggregated ML and LE from downstream site inputs
 // ============================================================
-router.get("/downstream-monthly", [
+router.get("/downstream-monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
     (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),

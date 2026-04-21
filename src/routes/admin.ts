@@ -2,8 +2,8 @@ import { Router, Request, Response } from "express"
 import { body, param, query, validationResult } from "express-validator"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
-import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.js"
-import { UserPublic, UserStatus } from "../types/index.js"
+import { requirePermission, requireAuth, requireWriteAccess, AuthRequest } from "../middleware/auth.js"
+import { UserPublic, UserRole, UserStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart, getBusinessMonthRange } from "../utils/date.js"
 import { getRequiredEnv } from "../utils/env.js"
@@ -33,6 +33,44 @@ const loginRateLimiter = createMemoryRateLimiter({
 })
 
 type AdSiteEventType = "CREATED" | "PAUSED" | "RESUMED" | "DIED" | "NOTE"
+type UserWithRoleShape = {
+  role: string
+  permAdmin: boolean
+}
+
+function resolveUserRole(user: UserWithRoleShape): UserRole {
+  if (user.role === "VIEWER") return "VIEWER"
+  if (user.permAdmin || user.role === "ADMIN") return "ADMIN"
+  return "EDITOR"
+}
+
+type UserApiShape = {
+  id: number
+  username: string
+  role: string
+  permDataInput: boolean
+  permDataConfirm: boolean
+  permAdmin: boolean
+  status: string
+  lastLoginAt?: Date | null
+  createdAt: Date
+}
+
+function toUserPublic(user: UserApiShape): UserPublic {
+  const resolvedRole = resolveUserRole(user)
+
+  return {
+    id: user.id,
+    username: user.username,
+    role: resolvedRole,
+    perm_data_input: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataInput),
+    perm_data_confirm: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataConfirm),
+    perm_admin: resolvedRole === "ADMIN",
+    status: user.status as UserStatus,
+    last_login_at: user.lastLoginAt ?? undefined,
+    created_at: user.createdAt,
+  }
+}
 
 async function createAdSiteEvent(adSiteId: number, eventType: AdSiteEventType, note?: string) {
   return prisma.adSiteEvent.create({
@@ -50,7 +88,6 @@ async function createAdSiteEvent(adSiteId: number, eventType: AdSiteEventType, n
 router.get(
   "/admin/ad-sites",
   requireAuth,
-  requirePermission("perm_admin"),
   [query("archived").optional().isIn(["0", "1"])],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -361,6 +398,7 @@ router.get(
 router.post(
   "/admin/upstreams",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     body("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
@@ -390,6 +428,7 @@ router.post(
 router.put(
   "/admin/upstreams/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -427,6 +466,7 @@ router.put(
 router.delete(
   "/admin/upstreams/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -472,6 +512,7 @@ router.get(
 router.post(
   "/admin/ad-sites",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     body("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
@@ -528,6 +569,7 @@ router.post(
 router.put(
   "/admin/ad-sites/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -581,6 +623,7 @@ router.put(
 router.put(
   "/admin/ad-sites/:id/toggle-active",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -628,6 +671,7 @@ router.put(
 router.put(
   "/admin/ad-sites/:id/toggle-archive",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -675,6 +719,7 @@ router.put(
 router.delete(
   "/admin/ad-sites/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -705,7 +750,6 @@ router.delete(
 router.get(
   "/admin/ad-sites/:id/events",
   requireAuth,
-  requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -746,6 +790,7 @@ router.get(
 router.post(
   "/admin/ad-sites/:id/events",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -791,6 +836,7 @@ router.post(
 router.put(
   "/admin/ad-sites/:id/downstream-price",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt(), body("prices").isObject()],
   handleValidation,
@@ -835,6 +881,7 @@ router.put(
 router.post(
   "/admin/downstreams",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     body("ad_type_id").isInt().toInt(),
@@ -862,6 +909,7 @@ router.post(
 router.put(
   "/admin/downstreams/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -888,6 +936,7 @@ router.put(
 router.delete(
   "/admin/downstreams/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -909,6 +958,7 @@ router.delete(
 router.put(
   "/admin/downstream-periods/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -941,6 +991,7 @@ router.put(
 router.delete(
   "/admin/downstream-periods/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -963,6 +1014,7 @@ router.delete(
 router.post(
   "/admin/downstream-rates",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     body("downstream_id").isInt().toInt(),
@@ -1053,6 +1105,7 @@ router.get(
 router.delete(
   "/users/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -1079,6 +1132,7 @@ router.delete(
 router.put(
   "/ad-sites/:id/price",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -1132,7 +1186,6 @@ router.put(
 router.get(
   "/admin/ad-sites/:id/reconciliation",
   requireAuth,
-  requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
     query("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("month must be YYYY-MM"),
@@ -1279,6 +1332,7 @@ router.get(
 router.post(
   "/downstream/:id/periods",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
@@ -1360,6 +1414,7 @@ router.get(
         select: {
           id: true,
           username: true,
+          role: true,
           permDataInput: true,
           permDataConfirm: true,
           permAdmin: true,
@@ -1369,7 +1424,7 @@ router.get(
         },
         orderBy: { id: "asc" },
       })
-      res.json({ success: true, data: users })
+      res.json({ success: true, data: users.map(toUserPublic) })
     } catch (err: any) {
       console.error("GET /api/users error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -1383,18 +1438,23 @@ router.get(
 router.post(
   "/users",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     body("username").notEmpty().withMessage("username required").isLength({ max: 100 }),
     body("password").notEmpty().withMessage("password required").isLength({ min: 6 }),
+    body("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
     body("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
     body("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
     body("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
   ],
-  handleValidation,
+    handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const { username, password, perm_data_input, perm_data_confirm, perm_admin } = req.body
+      const { username, password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body
+      const normalizedRole = role as UserRole
+      const isViewerRole = normalizedRole === "VIEWER"
+      const isAdminRole = normalizedRole === "ADMIN"
 
       const existing = await prisma.user.findUnique({ where: { username } })
       if (existing) {
@@ -1407,13 +1467,16 @@ router.post(
         data: {
           username,
           passwordHash: passwordHash,
-          permDataInput: Boolean(perm_data_input),
-          permDataConfirm: Boolean(perm_data_confirm),
-          permAdmin: Boolean(perm_admin),
+          role: normalizedRole,
+          permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
+          permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
+          permAdmin: isAdminRole,
+          status: status ?? "active",
         },
         select: {
           id: true,
           username: true,
+          role: true,
           permDataInput: true,
           permDataConfirm: true,
           permAdmin: true,
@@ -1422,7 +1485,7 @@ router.post(
         },
       })
 
-      res.status(201).json({ success: true, data: user })
+      res.status(201).json({ success: true, data: toUserPublic(user) })
     } catch (err: any) {
       console.error("POST /api/users error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -1436,10 +1499,12 @@ router.post(
 router.put(
   "/users/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [
     param("id").isInt().toInt(),
     body("password").optional().isLength({ min: 6 }),
+    body("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
     body("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
     body("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
     body("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
@@ -1449,7 +1514,10 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const userId = Number(req.params.id)
-      const { password, perm_data_input, perm_data_confirm, perm_admin, status } = req.body
+      const { password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body
+      const normalizedRole = role as UserRole
+      const isViewerRole = normalizedRole === "VIEWER"
+      const isAdminRole = normalizedRole === "ADMIN"
 
       const existing = await prisma.user.findUnique({ where: { id: userId } })
       if (!existing) {
@@ -1458,9 +1526,10 @@ router.put(
       }
 
       const updateData: Parameters<typeof prisma.user.update>[0]["data"] = {
-        permDataInput: Boolean(perm_data_input),
-        permDataConfirm: Boolean(perm_data_confirm),
-        permAdmin: Boolean(perm_admin),
+        role: normalizedRole,
+        permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
+        permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
+        permAdmin: isAdminRole ? true : (isViewerRole ? false : Boolean(perm_admin)),
         status,
       }
 
@@ -1474,6 +1543,7 @@ router.put(
         select: {
           id: true,
           username: true,
+          role: true,
           permDataInput: true,
           permDataConfirm: true,
           permAdmin: true,
@@ -1483,7 +1553,7 @@ router.put(
         },
       })
 
-      res.json({ success: true, data: user })
+      res.json({ success: true, data: toUserPublic(user) })
     } catch (err: any) {
       console.error("PUT /api/users/:id error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -1529,6 +1599,7 @@ router.post(
       const payload: UserPublic = {
         id: user.id,
         username: user.username,
+        role: resolveUserRole(user),
         perm_data_input: user.permDataInput,
         perm_data_confirm: user.permDataConfirm,
         perm_admin: user.permAdmin,
@@ -1560,6 +1631,7 @@ router.get(
         select: {
           id: true,
           username: true,
+          role: true,
           permDataInput: true,
           permDataConfirm: true,
           permAdmin: true,
@@ -1572,7 +1644,7 @@ router.get(
         res.status(404).json({ success: false, error: "User not found" })
         return
       }
-      res.json({ success: true, data: user })
+      res.json({ success: true, data: toUserPublic(user) })
     } catch (err: any) {
       console.error("GET /api/auth/me error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })

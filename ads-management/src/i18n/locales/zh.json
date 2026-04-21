@@ -9,6 +9,7 @@
     "upstream": "汇总表",
     "downstream": "下游",
     "admin": "管理",
+    "siteList": "站点列表",
     "logout": "退出登录"
   },
   "adType": {
@@ -186,6 +187,10 @@
     "addUser": "+ 添加用户",
     "username": "用户名",
     "password": "密码",
+    "role": "角色",
+    "roleAdmin": "管理员",
+    "roleEditor": "录入员",
+    "roleViewer": "查看者",
     "permInput": "数据录入",
     "permConfirm": "确认",
     "permAdmin": "管理员",

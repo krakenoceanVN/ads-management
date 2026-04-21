@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, InputNumber, Button, message, Spin, Empty, Alert, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import api, { isAdmin, canConfirmInput } from '../../api/axios'
+import api, { isAdmin, canConfirmInput, canInputData } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
@@ -34,6 +34,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const [unlockingId, setUnlockingId] = useState<number | null>(null)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const admin = isAdmin()
+  const canEdit = canInputData()
   const canConfirm = canConfirmInput()
 
   const { data: rows = [], isLoading, isError } = useQuery({
@@ -160,6 +161,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const getData = (r: FlatRow): DailyInputRow => (r as FR)._data
 
   const dirtyCount = Object.keys(drafts).length
+  const showActionColumn = admin || canConfirm
 
   const getCPMColumn = () => ({
     title: t('input.qty'),
@@ -181,6 +183,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], qty: v ?? undefined } }))
           }
           style={{ width: '100%' }}
+          disabled={!canEdit}
         />
       )
     },
@@ -195,7 +198,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       const row = getData(record)
       if (row.billing_method !== 'CPM') return null
       if (isConfirmed(row)) return <span>{formatIsoFixed(row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0, 4)}</span>
-      const admin = isAdmin()
       return (
         <InputNumber
           ref={(el) => { inputRefs.current[`${row.id}-up`] = el as HTMLInputElement | null }}
@@ -233,6 +235,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], amount1: v ?? undefined } }))
           }
           style={{ width: '100%' }}
+          disabled={!canEdit}
         />
       )
     },
@@ -258,6 +261,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], amount2: v ?? undefined } }))
           }
           style={{ width: '100%' }}
+          disabled={!canEdit}
         />
       )
     },
@@ -271,7 +275,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (isConfirmed(row)) return <span>{formatIsoPercent(row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1)}</span>
-      const admin = isAdmin()
       return (
         <InputNumber
           size="small"
@@ -296,7 +299,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       dataIndex: 'upstream_name',
       key: 'upstream_name',
       width: 120,
-      fixed: 'left',
+      fixed: 'left' as const,
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return record.upstream
         return getData(record).upstream_name
@@ -307,7 +310,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       dataIndex: 'name',
       key: 'name',
       width: 200,
-      fixed: 'left',
+      fixed: 'left' as const,
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return ''
         return getData(record).name
@@ -400,7 +403,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         )
       },
     },
-  ])
+  ].filter((column) => showActionColumn || column.key !== 'action'))
 
   const rowClassName = (record: FlatRow): string => {
     if ('_isGroupHeader' in record && record._isGroupHeader) return 'group-header-row'
@@ -428,13 +431,15 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <ConfirmAllButton
-          disabled={unconfirmedIds.length === 0}
-          loading={confirmAllMutation.isPending}
-          onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
-        />
-      </div>
+      {canConfirm && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <ConfirmAllButton
+            disabled={unconfirmedIds.length === 0}
+            loading={confirmAllMutation.isPending}
+            onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
+          />
+        </div>
+      )}
 
       <div style={{ position: 'relative' }}>
         {isLoading && (
@@ -498,7 +503,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         )}
       </div>
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      {canEdit && <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />}
     </div>
   )
 }

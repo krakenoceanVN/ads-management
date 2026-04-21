@@ -145,7 +145,7 @@ router.get("/", [
 // POST /api/daily-input/batch
 // Body: { date: string, ad_type: AdTypeCode, records: BatchInputItem[] }
 // ============================================================
-router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_input"), [
+router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_input"), [
     (0, express_validator_1.body)("date").notEmpty().withMessage("date is required").isISO8601(),
     (0, express_validator_1.body)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
     (0, express_validator_1.body)("records").isArray({ min: 1 }).withMessage("records must be a non-empty array"),
@@ -274,7 +274,7 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
 // POST /api/daily-input/confirm-batch
 // Body: { ids: number[] }
 // ============================================================
-router.post("/confirm-batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [
+router.post("/confirm-batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_confirm"), [
     (0, express_validator_1.body)("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
     (0, express_validator_1.body)("ids.*").isInt().toInt().withMessage("all ids must be integers"),
 ], handleValidation, async (req, res) => {
@@ -303,7 +303,7 @@ router.post("/confirm-batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermis
 // ============================================================
 // POST /api/daily-input/:id/confirm
 // ============================================================
-router.post("/:id/confirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_confirm"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.post("/:id/confirm", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_confirm"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });
@@ -329,13 +329,13 @@ router.post("/:id/confirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermissi
 // ============================================================
 // PUT /api/daily-input/:id/unconfirm
 // ============================================================
-router.put("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
+router.put("/:id/unconfirm", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
 // Backward-compatible alias, still admin-only
-router.post("/:id/unconfirm", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
+router.post("/:id/unconfirm", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, unconfirmDailyInputRecord);
 // ============================================================
 // DELETE /api/daily-input/:id
 // ============================================================
-router.delete("/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_input"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_input"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const existing = await prisma_js_1.default.dailyInput.findUnique({ where: { id } });

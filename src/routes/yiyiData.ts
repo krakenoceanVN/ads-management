@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express"
 import { body, query, validationResult } from "express-validator"
-import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.js"
+import { requirePermission, requireAuth, requireWriteAccess, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart, getBusinessMonthRange } from "../utils/date.js"
 import {
@@ -170,6 +170,7 @@ router.get(
 router.post(
   "/yiyi-data/batch",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_input"),
   [
     body("date").notEmpty().withMessage("date is required").isISO8601(),
@@ -261,6 +262,7 @@ router.post(
 router.post(
   "/yiyi-data/monthly-batch",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_input"),
   [
     body().custom((value) => {

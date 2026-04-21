@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
-import api from '../api/axios'
+import api, { canConfirmInput, canInputData } from '../api/axios'
 import type { ApiResponse } from '../types'
 import ConfirmAllButton from '../components/daily-input/ConfirmAllButton'
 import SaveBar from '../components/daily-input/SaveBar'
@@ -67,6 +67,8 @@ export default function YiyiInputPage() {
   const qc = useQueryClient()
   const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs())
   const [drafts, setDrafts] = useState<DraftMap>({})
+  const canEdit = canInputData()
+  const canConfirm = canConfirmInput()
 
   const year = selectedMonth.year()
   const month = selectedMonth.month() + 1
@@ -261,6 +263,7 @@ export default function YiyiInputPage() {
                 style={{ width: '100%' }}
                 value={getUnitPrice(row.date)}
                 onChange={(value) => handlePriceChange(row.date, 'unit_price', value)}
+                disabled={!canEdit}
               />
             )
           },
@@ -294,6 +297,7 @@ export default function YiyiInputPage() {
             style={{ width: '100%' }}
             value={getChannelValue(row.date, channel)}
             onChange={(value) => handleChannelChange(row.date, channel, value)}
+            disabled={!canEdit}
           />
         )
       },
@@ -313,6 +317,7 @@ export default function YiyiInputPage() {
             style={{ width: '100%' }}
             value={getProfitUnitPrice(row.date)}
             onChange={(value) => handlePriceChange(row.date, 'profit_unit_price', value)}
+            disabled={!canEdit}
           />
         )
       },
@@ -367,11 +372,13 @@ export default function YiyiInputPage() {
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
 
-        <ConfirmAllButton
-          disabled={dirtyCount === 0}
-          loading={confirmAllMutation.isPending}
-          onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
-        />
+        {canConfirm && (
+          <ConfirmAllButton
+            disabled={dirtyCount === 0}
+            loading={confirmAllMutation.isPending}
+            onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
+          />
+        )}
 
       </div>
 
@@ -428,7 +435,7 @@ export default function YiyiInputPage() {
           )}
         />
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      {canEdit && <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />}
       </div>
     </div>
   )

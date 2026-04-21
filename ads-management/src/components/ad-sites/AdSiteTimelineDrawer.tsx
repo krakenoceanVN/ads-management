@@ -10,7 +10,7 @@ import {
   StopOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import api from '../../api/axios'
+import api, { isAdmin } from '../../api/axios'
 import type { ApiResponse } from '../../types'
 
 const { TextArea } = Input
@@ -74,6 +74,7 @@ export default function AdSiteTimelineDrawer({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [note, setNote] = useState('')
+  const canAddNote = isAdmin()
 
   const { data, isLoading, error } = useQuery<AdSiteEventRow[]>({
     queryKey: ['ad-site-events', siteId],
@@ -135,26 +136,28 @@ export default function AdSiteTimelineDrawer({
       destroyOnClose={false}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Typography.Text strong>{t('timeline.addNote')}</Typography.Text>
-          <TextArea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            rows={3}
-            maxLength={1000}
-            placeholder={t('timeline.notePlaceholder')}
-          />
-          <div>
-            <Button
-              type="primary"
-              onClick={() => addNoteMutation.mutate()}
-              loading={addNoteMutation.isPending}
-              disabled={!note.trim()}
-            >
-              {t('timeline.addNote')}
-            </Button>
+        {canAddNote && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Typography.Text strong>{t('timeline.addNote')}</Typography.Text>
+            <TextArea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder={t('timeline.notePlaceholder')}
+            />
+            <div>
+              <Button
+                type="primary"
+                onClick={() => addNoteMutation.mutate()}
+                loading={addNoteMutation.isPending}
+                disabled={!note.trim()}
+              >
+                {t('timeline.addNote')}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         {isLoading ? (
           <div style={{ padding: 32, textAlign: 'center' }}>

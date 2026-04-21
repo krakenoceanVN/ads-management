@@ -9,6 +9,7 @@
     "upstream": "Summary Table",
     "downstream": "Downstream",
     "admin": "Admin",
+    "siteList": "Site List",
     "logout": "Logout"
   },
   "adType": {
@@ -186,6 +187,10 @@
     "addUser": "+ Add User",
     "username": "Username",
     "password": "Password",
+    "role": "Role",
+    "roleAdmin": "Administrator",
+    "roleEditor": "Editor",
+    "roleViewer": "Viewer",
     "permInput": "Data Entry",
     "permConfirm": "Confirm",
     "permAdmin": "Admin",

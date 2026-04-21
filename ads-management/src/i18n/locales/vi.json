@@ -9,6 +9,7 @@
     "upstream": "Bảng tổng",
     "downstream": "Hạ nguồn",
     "admin": "Quản trị",
+    "siteList": "Danh sách site",
     "logout": "Đăng xuất"
   },
   "adType": {
@@ -186,6 +187,10 @@
     "addUser": "+ Thêm User",
     "username": "Tên đăng nhập",
     "password": "Mật khẩu",
+    "role": "Vai trò",
+    "roleAdmin": "Quản trị viên",
+    "roleEditor": "Nhập liệu",
+    "roleViewer": "Người xem",
     "permInput": "Nhập liệu",
     "permConfirm": "Xác nhận",
     "permAdmin": "Quản trị",

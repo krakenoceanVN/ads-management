@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { message } from 'antd'
+import type { User } from '../types'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -22,29 +24,50 @@ api.interceptors.response.use(
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
+    if (error.response?.status === 403) {
+      message.error('Bạn không có quyền thực hiện thao tác này')
+    }
     return Promise.reject(error)
   }
 )
 
-export function isAdmin(): boolean {
+export function getStoredUser(): User | null {
   const user = localStorage.getItem('user')
-  if (!user) return false
+  if (!user) return null
   try {
-    return (JSON.parse(user) as { perm_admin?: boolean }).perm_admin === true
+    return JSON.parse(user) as User
   } catch {
-    return false
+    return null
   }
 }
 
+export function isAdmin(): boolean {
+  const user = getStoredUser()
+  return user?.role === 'ADMIN' || user?.perm_admin === true
+}
+
+export function isViewer(): boolean {
+  return getStoredUser()?.role === 'VIEWER'
+}
+
+export function canInputData(): boolean {
+  const user = getStoredUser()
+  if (!user || user.role === 'VIEWER') return false
+  return user.perm_admin === true || user.perm_data_input === true
+}
+
 export function canConfirmInput(): boolean {
-  const user = localStorage.getItem('user')
-  if (!user) return false
-  try {
-    const parsed = JSON.parse(user) as { perm_admin?: boolean; perm_data_confirm?: boolean }
-    return parsed.perm_admin === true || parsed.perm_data_confirm === true
-  } catch {
-    return false
-  }
+  const user = getStoredUser()
+  if (!user || user.role === 'VIEWER') return false
+  return user.perm_admin === true || user.perm_data_confirm === true
+}
+
+export function canViewDashboard(): boolean {
+  return getStoredUser() !== null
+}
+
+export function canAccessSiteList(): boolean {
+  return getStoredUser() !== null
 }
 
 export default api

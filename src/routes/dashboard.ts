@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express"
 import { query, validationResult } from "express-validator"
 import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
+import { requireAuth } from "../middleware/auth.js"
 import { formatBusinessDate, getBusinessMonthRange } from "../utils/date.js"
 import { AD_TYPE_ID_MAP, DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import {
@@ -200,6 +201,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 // ============================================================
 router.get(
   "/monthly",
+  requireAuth,
   [
     query("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     query("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
@@ -419,6 +421,7 @@ router.get(
 // ============================================================
 router.get(
   "/downstream-monthly",
+  requireAuth,
   [
     query("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     query("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),

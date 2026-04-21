@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express"
 import { body, param, query, validationResult } from "express-validator"
-import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.js"
+import { requirePermission, requireAuth, requireWriteAccess, AuthRequest } from "../middleware/auth.js"
 import { AdSite, DailyInputRow, DailyInputRecord, BatchInputItem, AdTypeCode, InputStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart } from "../utils/date.js"
@@ -162,6 +162,7 @@ router.get(
 router.post(
   "/batch",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_input"),
   [
     body("date").notEmpty().withMessage("date is required").isISO8601(),
@@ -310,6 +311,7 @@ router.post(
 router.post(
   "/confirm-batch",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_confirm"),
   [
     body("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
@@ -349,6 +351,7 @@ router.post(
 router.post(
   "/:id/confirm",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_confirm"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -385,6 +388,7 @@ router.post(
 router.put(
   "/:id/unconfirm",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -395,6 +399,7 @@ router.put(
 router.post(
   "/:id/unconfirm",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
@@ -407,6 +412,7 @@ router.post(
 router.delete(
   "/:id",
   requireAuth,
+  requireWriteAccess,
   requirePermission("perm_data_input"),
   [param("id").isInt().toInt()],
   handleValidation,

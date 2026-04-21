@@ -3,6 +3,7 @@ export type BillingMethod = "CPM" | "RATIO"
 export type InputStatus = "unconfirmed" | "confirmed"
 export type DownstreamType = "ML" | "LE" | "YIYI"
 export type UserStatus = "active" | "inactive"
+export type UserRole = "ADMIN" | "EDITOR" | "VIEWER"
 export type UpstreamStatus = "active" | "inactive"
 
 // ============================================================
@@ -166,6 +167,7 @@ export interface User {
   id: number
   username: string
   password_hash: string
+  role: UserRole
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean
@@ -177,6 +179,7 @@ export interface User {
 export interface UserPublic {
   id: number
   username: string
+  role: UserRole
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean

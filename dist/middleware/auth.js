@@ -5,8 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireAuth = requireAuth;
 exports.requirePermission = requirePermission;
+exports.requireWriteAccess = requireWriteAccess;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_js_1 = require("../utils/env.js");
+function isViewer(user) {
+    return user?.role === 'VIEWER';
+}
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -44,4 +48,15 @@ function requirePermission(perm) {
         }
         next();
     };
+}
+function requireWriteAccess(req, res, next) {
+    if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+    }
+    if (isViewer(req.user)) {
+        res.status(403).json({ success: false, error: 'Viewer accounts are read-only' });
+        return;
+    }
+    next();
 }

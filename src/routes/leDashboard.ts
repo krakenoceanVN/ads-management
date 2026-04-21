@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express"
 import { query, validationResult } from "express-validator"
-import { requireAuth, AuthRequest } from "../middleware/auth.js"
+import { requireAuth, requireWriteAccess, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDateAtHour, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
 import {
@@ -244,6 +244,7 @@ router.get(
 router.post(
   "/le/cost",
   requireAuth,
+  requireWriteAccess,
   (req: AuthRequest, res: Response, next: NextFunction) => {
     if (req.user?.perm_admin || req.user?.perm_data_input) {
       next()

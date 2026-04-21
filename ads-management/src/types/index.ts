@@ -1,6 +1,7 @@
 export type AdTypeCode = 'SM' | '360' | 'BAIDU_JS' | 'OTHER'
 export type BillingMethod = 'CPM' | 'RATIO'
 export type InputStatus = 'unconfirmed' | 'confirmed'
+export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER'
 
 export interface AdSite {
   id: number
@@ -45,6 +46,7 @@ export interface SummaryRow {
 export interface User {
   id: number
   username: string
+  role: UserRole
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean

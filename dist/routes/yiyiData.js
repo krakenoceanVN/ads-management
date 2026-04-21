@@ -131,7 +131,7 @@ router.get("/yiyi-data/monthly", auth_js_1.requireAuth, [
 // POST /api/yiyi-data/batch
 // Body: { date: string, channels: [{ channel, qty }] }
 // ============================================================
-router.post("/yiyi-data/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_input"), [
+router.post("/yiyi-data/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_input"), [
     (0, express_validator_1.body)("date").notEmpty().withMessage("date is required").isISO8601(),
     (0, express_validator_1.body)("channels").isArray({ min: 1 }).withMessage("channels must be a non-empty array"),
 ], handleValidation, async (req, res) => {
@@ -200,7 +200,7 @@ router.post("/yiyi-data/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePerm
 // or legacy:
 //   { records: [{ date, channel, qty }] }
 // ============================================================
-router.post("/yiyi-data/monthly-batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_data_input"), [
+router.post("/yiyi-data/monthly-batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_input"), [
     (0, express_validator_1.body)().custom((value) => {
         const hasRows = Array.isArray(value?.rows) && value.rows.length > 0;
         const hasRecords = Array.isArray(value?.records) && value.records.length > 0;

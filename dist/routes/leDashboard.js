@@ -201,7 +201,7 @@ router.get("/le", auth_js_1.requireAuth, [
 // POST /api/dashboard/le/cost
 // Body: { date: string, vendorCost?: number, mlCost?: number, costAmount?: number }
 // ============================================================
-router.post("/le/cost", auth_js_1.requireAuth, (req, res, next) => {
+router.post("/le/cost", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (req, res, next) => {
     if (req.user?.perm_admin || req.user?.perm_data_input) {
         next();
         return;

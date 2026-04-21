@@ -10,7 +10,7 @@ import AdminPage from './pages/AdminPage'
 import YiyiInputPage from './pages/YiyiInputPage'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import { ThemeProvider } from './theme/ThemeProvider'
-import type { User } from './types'
+import { canAccessSiteList, canViewDashboard } from './api/axios'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token')
@@ -20,24 +20,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return children
 }
 
-function getUser(): User | null {
-  const raw = localStorage.getItem('user')
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as User
-  } catch {
-    return null
-  }
-}
-
 function AppHomeRedirect() {
-  const user = getUser()
-  return <Navigate to={user?.perm_admin ? '/dashboard/sm' : '/input/sm'} replace />
+  return <Navigate to={canViewDashboard() ? '/dashboard/sm' : '/input/sm'} replace />
 }
 
 function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
-  const user = getUser()
-  if (!user?.perm_admin) {
+  if (!canViewDashboard()) {
+    return <Navigate to="/input/sm" replace />
+  }
+  return children
+}
+
+function SiteListRoute({ children }: { children: React.ReactNode }) {
+  if (!canAccessSiteList()) {
     return <Navigate to="/input/sm" replace />
   }
   return children
@@ -70,7 +65,7 @@ function App() {
             <Route path="input/baidu" element={<DailyInputPage adType="BAIDU_JS" />} />
             <Route path="input/other" element={<DailyInputPage adType="OTHER" />} />
             <Route path="input/yiyi" element={<YiyiInputPage />} />
-            <Route path="admin" element={<AdminOnlyRoute><AdminPage /></AdminOnlyRoute>} />
+            <Route path="admin" element={<SiteListRoute><AdminPage /></SiteListRoute>} />
             <Route path="downstream" element={<DownstreamPage />} />
             <Route path="downstream/:id" element={<DownstreamSitesPage />} />
             <Route path="upstream" element={<UpstreamDashboardPage />} />

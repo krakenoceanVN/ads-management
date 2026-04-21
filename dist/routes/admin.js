@@ -32,6 +32,27 @@ const loginRateLimiter = (0, rateLimit_js_1.createMemoryRateLimiter)({
     },
     errorMessage: "Too many login attempts. Please try again later.",
 });
+function resolveUserRole(user) {
+    if (user.role === "VIEWER")
+        return "VIEWER";
+    if (user.permAdmin || user.role === "ADMIN")
+        return "ADMIN";
+    return "EDITOR";
+}
+function toUserPublic(user) {
+    const resolvedRole = resolveUserRole(user);
+    return {
+        id: user.id,
+        username: user.username,
+        role: resolvedRole,
+        perm_data_input: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataInput),
+        perm_data_confirm: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataConfirm),
+        perm_admin: resolvedRole === "ADMIN",
+        status: user.status,
+        last_login_at: user.lastLoginAt ?? undefined,
+        created_at: user.createdAt,
+    };
+}
 async function createAdSiteEvent(adSiteId, eventType, note) {
     return prisma_js_1.default.adSiteEvent.create({
         data: {
@@ -44,7 +65,7 @@ async function createAdSiteEvent(adSiteId, eventType, note) {
 // ============================================================
 // GET /api/admin/ad-sites
 // ============================================================
-router.get("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.query)("archived").optional().isIn(["0", "1"])], handleValidation, async (req, res) => {
+router.get("/admin/ad-sites", auth_js_1.requireAuth, [(0, express_validator_1.query)("archived").optional().isIn(["0", "1"])], handleValidation, async (req, res) => {
     try {
         const archivedMode = req.query.archived === "1";
         const sites = await prisma_js_1.default.adSite.findMany({
@@ -310,7 +331,7 @@ router.get("/admin/upstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePermi
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.post("/admin/upstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/admin/upstreams", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.body)("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
     (0, express_validator_1.body)("ad_type_id").isInt().toInt(),
     (0, express_validator_1.body)("status").optional().isIn(["active", "inactive"]),
@@ -332,7 +353,7 @@ router.post("/admin/upstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePerm
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/upstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/admin/upstreams/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("name").optional().isLength({ max: 200 }),
     (0, express_validator_1.body)("ad_type_id").optional().isInt().toInt(),
@@ -367,7 +388,7 @@ router.put("/admin/upstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requireP
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.delete("/admin/upstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/admin/upstreams/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const sites = await prisma_js_1.default.adSite.findMany({ where: { upstreamId: id }, take: 1 });
@@ -399,7 +420,7 @@ router.get("/admin/ad-types", auth_js_1.requireAuth, (0, auth_js_1.requirePermis
 // ============================================================
 // CRUD: AdSites
 // ============================================================
-router.post("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/admin/ad-sites", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.body)("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
     (0, express_validator_1.body)("upstream_id").isInt().toInt(),
     (0, express_validator_1.body)("billing_method").isIn(["CPM", "RATIO"]),
@@ -446,7 +467,7 @@ router.post("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermi
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/admin/ad-sites/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("name").optional().isLength({ max: 200 }),
     (0, express_validator_1.body)("upstream_id").optional().isInt().toInt(),
@@ -500,7 +521,7 @@ router.put("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePe
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
@@ -536,7 +557,7 @@ router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, (0, auth_
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
@@ -572,7 +593,7 @@ router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, (0, auth
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.delete("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/admin/ad-sites/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const force = req.query.force === '1';
@@ -595,7 +616,7 @@ router.delete("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requir
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const site = await prisma_js_1.default.adSite.findUnique({
@@ -626,7 +647,7 @@ router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.re
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("note").notEmpty().withMessage("note required").isLength({ max: 1000 }),
 ], handleValidation, async (req, res) => {
@@ -661,7 +682,7 @@ router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.r
 // ============================================================
 // PUT /api/admin/ad-sites/:id/downstream-price
 // ============================================================
-router.put("/admin/ad-sites/:id/downstream-price", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt(), (0, express_validator_1.body)("prices").isObject()], handleValidation, async (req, res) => {
+router.put("/admin/ad-sites/:id/downstream-price", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt(), (0, express_validator_1.body)("prices").isObject()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const { prices } = req.body;
@@ -696,7 +717,7 @@ router.put("/admin/ad-sites/:id/downstream-price", auth_js_1.requireAuth, (0, au
 // ============================================================
 // CRUD: Downstreams
 // ============================================================
-router.post("/admin/downstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/admin/downstreams", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.body)("ad_type_id").isInt().toInt(),
     (0, express_validator_1.body)("downstream_type").isIn(["ML", "LE", "YIYI"]),
     (0, express_validator_1.body)("payout_rate").isDecimal().toFloat(),
@@ -719,7 +740,7 @@ router.post("/admin/downstreams", auth_js_1.requireAuth, (0, auth_js_1.requirePe
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/downstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/admin/downstreams/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("payout_rate").optional().isDecimal().toFloat(),
     (0, express_validator_1.body)("status").optional().isIn(["active", "inactive"]),
@@ -740,7 +761,7 @@ router.put("/admin/downstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requir
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.delete("/admin/downstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/admin/downstreams/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         await prisma_js_1.default.downstream.delete({ where: { id } });
@@ -754,7 +775,7 @@ router.delete("/admin/downstreams/:id", auth_js_1.requireAuth, (0, auth_js_1.req
 // ============================================================
 // Edit/Delete: DownstreamPeriods
 // ============================================================
-router.put("/admin/downstream-periods/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/admin/downstream-periods/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("pct_hal").optional().isDecimal().toFloat(),
     (0, express_validator_1.body)("unit_price").optional().isDecimal().toFloat(),
@@ -786,7 +807,7 @@ router.put("/admin/downstream-periods/:id", auth_js_1.requireAuth, (0, auth_js_1
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.delete("/admin/downstream-periods/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/admin/downstream-periods/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         await prisma_js_1.default.downstreamPeriod.delete({ where: { id } });
@@ -801,7 +822,7 @@ router.delete("/admin/downstream-periods/:id", auth_js_1.requireAuth, (0, auth_j
 // POST /api/admin/downstream-rates
 // Body: { downstream_id, date (YYYY-MM-DD), effective_rate }
 // ============================================================
-router.post("/admin/downstream-rates", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/admin/downstream-rates", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.body)("downstream_id").isInt().toInt(),
     (0, express_validator_1.body)("date").notEmpty().withMessage("date required").isISO8601(),
     (0, express_validator_1.body)("effective_rate").isDecimal().toFloat(),
@@ -874,7 +895,7 @@ router.get("/admin/downstream-rates", auth_js_1.requireAuth, [
 // ============================================================
 // DELETE /api/users/:id
 // ============================================================
-router.delete("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/users/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const userId = Number(req.params.id);
         const existing = await prisma_js_1.default.user.findUnique({ where: { id: userId } });
@@ -893,7 +914,7 @@ router.delete("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermissi
 // ============================================================
 // PUT /api/ad-sites/:id/price
 // ============================================================
-router.put("/ad-sites/:id/price", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/ad-sites/:id/price", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("new_unit_price").optional().isDecimal().toFloat(),
     (0, express_validator_1.body)("new_ratio").optional().isDecimal().toFloat(),
@@ -937,7 +958,7 @@ router.put("/ad-sites/:id/price", auth_js_1.requireAuth, (0, auth_js_1.requirePe
 // GET /api/admin/ad-sites/:id/reconciliation?month=YYYY-MM
 // GET /api/admin/ad-sites/:id/reconciliation?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
 // ============================================================
-router.get("/admin/ad-sites/:id/reconciliation", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.get("/admin/ad-sites/:id/reconciliation", auth_js_1.requireAuth, [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.query)("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("month must be YYYY-MM"),
     (0, express_validator_1.query)("start_date").optional().isISO8601().withMessage("start_date must be YYYY-MM-DD"),
@@ -1056,7 +1077,7 @@ router.get("/downstream/:id/periods", auth_js_1.requireAuth, (0, auth_js_1.requi
 // ============================================================
 // POST /api/downstream/:id/periods
 // ============================================================
-router.post("/downstream/:id/periods", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/downstream/:id/periods", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("pct_ha").notEmpty().withMessage("pct_ha is required").isDecimal().toFloat(),
     (0, express_validator_1.body)("unit_price").notEmpty().withMessage("unit_price is required").isDecimal().toFloat(),
@@ -1123,6 +1144,7 @@ router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("pe
             select: {
                 id: true,
                 username: true,
+                role: true,
                 permDataInput: true,
                 permDataConfirm: true,
                 permAdmin: true,
@@ -1132,7 +1154,7 @@ router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("pe
             },
             orderBy: { id: "asc" },
         });
-        res.json({ success: true, data: users });
+        res.json({ success: true, data: users.map(toUserPublic) });
     }
     catch (err) {
         console.error("GET /api/users error:", err);
@@ -1142,15 +1164,19 @@ router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("pe
 // ============================================================
 // POST /api/users
 // ============================================================
-router.post("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/users", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.body)("username").notEmpty().withMessage("username required").isLength({ max: 100 }),
     (0, express_validator_1.body)("password").notEmpty().withMessage("password required").isLength({ min: 6 }),
+    (0, express_validator_1.body)("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
     (0, express_validator_1.body)("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
     (0, express_validator_1.body)("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
     (0, express_validator_1.body)("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
 ], handleValidation, async (req, res) => {
     try {
-        const { username, password, perm_data_input, perm_data_confirm, perm_admin } = req.body;
+        const { username, password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body;
+        const normalizedRole = role;
+        const isViewerRole = normalizedRole === "VIEWER";
+        const isAdminRole = normalizedRole === "ADMIN";
         const existing = await prisma_js_1.default.user.findUnique({ where: { username } });
         if (existing) {
             res.status(409).json({ success: false, error: "Username already exists" });
@@ -1161,13 +1187,16 @@ router.post("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
             data: {
                 username,
                 passwordHash: passwordHash,
-                permDataInput: Boolean(perm_data_input),
-                permDataConfirm: Boolean(perm_data_confirm),
-                permAdmin: Boolean(perm_admin),
+                role: normalizedRole,
+                permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
+                permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
+                permAdmin: isAdminRole,
+                status: status ?? "active",
             },
             select: {
                 id: true,
                 username: true,
+                role: true,
                 permDataInput: true,
                 permDataConfirm: true,
                 permAdmin: true,
@@ -1175,7 +1204,7 @@ router.post("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
                 createdAt: true,
             },
         });
-        res.status(201).json({ success: true, data: user });
+        res.status(201).json({ success: true, data: toUserPublic(user) });
     }
     catch (err) {
         console.error("POST /api/users error:", err);
@@ -1185,9 +1214,10 @@ router.post("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
 // ============================================================
 // PUT /api/users/:id
 // ============================================================
-router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/users/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("password").optional().isLength({ min: 6 }),
+    (0, express_validator_1.body)("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
     (0, express_validator_1.body)("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
     (0, express_validator_1.body)("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
     (0, express_validator_1.body)("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
@@ -1195,16 +1225,20 @@ router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)
 ], handleValidation, async (req, res) => {
     try {
         const userId = Number(req.params.id);
-        const { password, perm_data_input, perm_data_confirm, perm_admin, status } = req.body;
+        const { password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body;
+        const normalizedRole = role;
+        const isViewerRole = normalizedRole === "VIEWER";
+        const isAdminRole = normalizedRole === "ADMIN";
         const existing = await prisma_js_1.default.user.findUnique({ where: { id: userId } });
         if (!existing) {
             res.status(404).json({ success: false, error: "User not found" });
             return;
         }
         const updateData = {
-            permDataInput: Boolean(perm_data_input),
-            permDataConfirm: Boolean(perm_data_confirm),
-            permAdmin: Boolean(perm_admin),
+            role: normalizedRole,
+            permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
+            permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
+            permAdmin: isAdminRole ? true : (isViewerRole ? false : Boolean(perm_admin)),
             status,
         };
         if (password) {
@@ -1216,6 +1250,7 @@ router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)
             select: {
                 id: true,
                 username: true,
+                role: true,
                 permDataInput: true,
                 permDataConfirm: true,
                 permAdmin: true,
@@ -1224,7 +1259,7 @@ router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)
                 createdAt: true,
             },
         });
-        res.json({ success: true, data: user });
+        res.json({ success: true, data: toUserPublic(user) });
     }
     catch (err) {
         console.error("PUT /api/users/:id error:", err);
@@ -1259,6 +1294,7 @@ router.post("/auth/login", [
         const payload = {
             id: user.id,
             username: user.username,
+            role: resolveUserRole(user),
             perm_data_input: user.permDataInput,
             perm_data_confirm: user.permDataConfirm,
             perm_admin: user.permAdmin,
@@ -1284,6 +1320,7 @@ router.get("/auth/me", auth_js_1.requireAuth, async (req, res) => {
             select: {
                 id: true,
                 username: true,
+                role: true,
                 permDataInput: true,
                 permDataConfirm: true,
                 permAdmin: true,
@@ -1296,7 +1333,7 @@ router.get("/auth/me", auth_js_1.requireAuth, async (req, res) => {
             res.status(404).json({ success: false, error: "User not found" });
             return;
         }
-        res.json({ success: true, data: user });
+        res.json({ success: true, data: toUserPublic(user) });
     }
     catch (err) {
         console.error("GET /api/auth/me error:", err);

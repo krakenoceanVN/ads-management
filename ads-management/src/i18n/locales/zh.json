@@ -251,6 +251,21 @@
     "systemRevenue": "系统收入",
     "loadError": "加载对账数据失败"
   },
+  "timeline": {
+    "open": "活动日志",
+    "title": "活动日志 - {{name}}",
+    "addNote": "添加备注",
+    "notePlaceholder": "请输入该 ad site 的手动备注",
+    "empty": "暂无事件记录",
+    "loadError": "加载活动日志失败",
+    "noteAdded": "备注已添加",
+    "addFailed": "添加备注失败",
+    "created": "已创建",
+    "paused": "已暂停",
+    "resumed": "已恢复",
+    "died": "已标记 Die",
+    "note": "备注"
+  },
   "errorBoundary": {
     "title": "发生错误",
     "unknown": "未知错误",

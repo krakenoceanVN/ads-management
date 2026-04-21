@@ -251,6 +251,21 @@
     "systemRevenue": "Doanh thu (Hệ thống)",
     "loadError": "Không thể tải dữ liệu đối soát"
   },
+  "timeline": {
+    "open": "Nhật ký hoạt động",
+    "title": "Nhật ký hoạt động - {{name}}",
+    "addNote": "Thêm ghi chú",
+    "notePlaceholder": "Nhập ghi chú thủ công cho ad site này",
+    "empty": "Chưa có sự kiện nào",
+    "loadError": "Không thể tải nhật ký hoạt động",
+    "noteAdded": "Đã thêm ghi chú",
+    "addFailed": "Không thể thêm ghi chú",
+    "created": "Tạo mới",
+    "paused": "Tạm dừng",
+    "resumed": "Chạy lại",
+    "died": "Đánh dấu Die",
+    "note": "Ghi chú"
+  },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",
     "unknown": "Lỗi không xác định",

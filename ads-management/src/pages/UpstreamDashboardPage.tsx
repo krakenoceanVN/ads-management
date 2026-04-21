@@ -7,6 +7,7 @@ import dayjs from 'dayjs'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
+import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
@@ -281,6 +282,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
 
   return (
     <div className="page-shell dashboard-page-shell">
+      <DashboardBrandWatermark />
       {/* Summary Cards */}
       <div className="kpi-grid">
         {summaryCards.map((card) => {

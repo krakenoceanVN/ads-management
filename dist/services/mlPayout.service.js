@@ -6,6 +6,7 @@ exports.calculateYiyiPayout = calculateYiyiPayout;
 exports.calculateCostBreakdown = calculateCostBreakdown;
 const date_js_1 = require("../utils/date.js");
 const constants_js_1 = require("../utils/constants.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const yiyiPricing_service_js_1 = require("./yiyiPricing.service.js");
 /** Convert "YYYY-MM-DD" → { startOfDay, endOfDay } in business TZ */
 function dateRange(dateStr) {
@@ -50,8 +51,8 @@ async function calculateMLPayout(date, adTypeCode, prisma) {
         orderBy: { startDate: "desc" },
     });
     // 3. ML payout = total × payout_rate (always 0.8)
-    const payoutRate = downstream?.downstream.payoutRate ?? 0.8;
-    const mlPayout = Number(totalRevenue) * Number(payoutRate);
+    const payoutRate = Number(downstream?.downstream.payoutRate ?? calculations_js_1.DEFAULT_ML_PAYOUT_RATE);
+    const mlPayout = (0, calculations_js_1.calculateMlPayoutAmount)(Number(totalRevenue), payoutRate);
     return {
         total_revenue: Number(totalRevenue),
         ml_payout: mlPayout,
@@ -83,8 +84,8 @@ async function calculateLEPayout(date, smUpstreamRevenue, prisma) {
         orderBy: { startDate: "desc" },
     });
     // LE revenue from upstream
-    const lePayoutRate = Number(lePeriod?.downstream.payoutRate ?? 0.9);
-    const leRevenue = smUpstreamRevenue * lePayoutRate;
+    const lePayoutRate = Number(lePeriod?.downstream.payoutRate ?? calculations_js_1.DEFAULT_LE_PAYOUT_RATE);
+    const leRevenue = (0, calculations_js_1.calculateLeRevenueFromSmRevenue)(smUpstreamRevenue, lePayoutRate);
     // 2. Get total SM qty for ML cost calculation
     const qtyResult = await prisma.dailyInput.aggregate({
         where: {
@@ -101,11 +102,11 @@ async function calculateLEPayout(date, smUpstreamRevenue, prisma) {
         _sum: { qty: true },
     });
     const totalQty = qtyResult._sum.qty ?? 0;
-    const mlUnitPrice = Number(lePeriod?.unitPrice ?? 16);
-    const leMlCost = Number(totalQty) * mlUnitPrice / 1000;
+    const mlUnitPrice = Number(lePeriod?.unitPrice ?? calculations_js_1.DEFAULT_LE_UNIT_PRICE);
+    const leMlCost = (0, calculations_js_1.calculateUnitPricePayout)(Number(totalQty), mlUnitPrice);
     // 3. Tax = (revenue - ML_cost) × 0.06, then LE = revenue - tax - ML_cost
-    const leTax = (leRevenue - leMlCost) * 0.06;
-    return leRevenue - leTax - leMlCost;
+    const leTax = (0, calculations_js_1.calculateTaxOnMargin)(leRevenue, leMlCost);
+    return (0, calculations_js_1.calculateNetProfit)(leRevenue, leMlCost, leTax);
 }
 // ============================================================
 // yiyi Payout — SM ONLY
@@ -122,10 +123,10 @@ async function calculateYiyiPayout(dateStr, totalUV, prisma) {
     });
     if (yiyiRecords.length > 0) {
         const totalQty = yiyiRecords.reduce((s, r) => s + r.qty, 0);
-        return (0, yiyiPricing_service_js_1.calculateYiyiAmount)(totalQty, pricing.unitPrice);
+        return (0, calculations_js_1.calculateYiyiAmount)(totalQty, pricing.unitPrice);
     }
     // Fallback: use UV from DailyInput
-    return (0, yiyiPricing_service_js_1.calculateYiyiAmount)(totalUV, pricing.unitPrice);
+    return (0, calculations_js_1.calculateYiyiAmount)(totalUV, pricing.unitPrice);
 }
 async function calculateCostBreakdown(date, adTypeCode, prisma) {
     const mlResult = await calculateMLPayout(date, adTypeCode, prisma);
@@ -154,11 +155,11 @@ async function calculateCostBreakdown(date, adTypeCode, prisma) {
         yiyiPayout = await calculateYiyiPayout(date, Number(uvResult._sum.qty ?? 0), prisma);
     }
     const cost = adTypeCode === "SM"
-        ? ml_payout + (lePayout ?? 0) + (yiyiPayout ?? 0)
+        ? (0, calculations_js_1.calculateSmServiceCost)(ml_payout, lePayout ?? 0, yiyiPayout ?? 0)
         : ml_payout;
-    const tax = (total_revenue - cost) * 0.06;
-    const profit = total_revenue - cost - tax;
-    const profit_rate = total_revenue > 0 ? profit / total_revenue : 0;
+    const tax = (0, calculations_js_1.calculateTaxOnMargin)(total_revenue, cost);
+    const profit = (0, calculations_js_1.calculateNetProfit)(total_revenue, cost, tax);
+    const profit_rate = (0, calculations_js_1.calculateProfitRate)(profit, total_revenue);
     return {
         revenue: total_revenue,
         ml_payout,

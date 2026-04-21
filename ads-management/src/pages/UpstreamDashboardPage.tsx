@@ -12,6 +12,14 @@ import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScr
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
+import {
+  calculateDisplayCostByAdType,
+  calculateDisplayMl80,
+  calculateGrossProfit,
+  calculateNetProfit,
+  calculateProfitRate,
+  calculateTaxOnMargin,
+} from '../utils/calculations'
 
 interface Props {
   adType?: AdTypeCode
@@ -33,14 +41,6 @@ interface LeDashboardRow {
 interface LeDashboardResponse {
   upstreamNames: string[]
   rows: LeDashboardRow[]
-}
-
-interface DisplayFinancials {
-  cost: number
-  grossProfit: number
-  tax: number
-  netProfit: number
-  profitRate: number
 }
 
 const AD_TYPE_TABS: { key: string; adType: AdTypeCode; labelKey: string }[] = [
@@ -78,45 +78,6 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 
 type FR = SummaryRow & { _isTotal?: boolean; ml_80?: number; le?: number }
 
-function calculateCost(ml80 = 0, le = 0): number {
-  return ml80 + le
-}
-
-function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
-  if (adType === '360') {
-    return revenue * 0.8
-  }
-
-  return downstreamMl80
-}
-
-function calculateCostByAdType(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): number {
-  if (adType === '360') {
-    return revenue * 0.8
-  }
-
-  return calculateCost(ml80, le)
-}
-
-function calculateTax(revenue: number, cost: number): number {
-  return (revenue - cost) * 0.06
-}
-
-function calculateDisplayFinancials(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): DisplayFinancials {
-  const cost = calculateCostByAdType(adType, revenue, ml80, le)
-  const grossProfit = revenue - cost
-  const tax = calculateTax(revenue, cost)
-  const netProfit = grossProfit - tax
-
-  return {
-    cost,
-    grossProfit,
-    tax,
-    netProfit,
-    profitRate: revenue > 0 ? netProfit / revenue : 0,
-  }
-}
-
 function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
   const { t } = useTranslation()
   const tableHostRef = useRef<HTMLDivElement | null>(null)
@@ -153,18 +114,20 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     .filter((r) => r.date !== 'TOTAL')
     .map((r) => {
       const downstream = downstreamRows.find((d) => d.date === r.date)
-      const ml80 = calculateMl80(adType, r.revenue, downstream?.ml_80 ?? 0)
+      const ml80 = calculateDisplayMl80(adType, r.revenue, downstream?.ml_80 ?? 0)
       const le = adType === 'SM'
         ? (leRevenueByDate.get(r.date) ?? 0)
         : (downstream?.le ?? 0)
-      const financials = calculateDisplayFinancials(adType, r.revenue, ml80, le)
+      const cost = calculateDisplayCostByAdType(adType, r.revenue, ml80, le)
+      const tax = calculateTaxOnMargin(r.revenue, cost)
+      const netProfit = calculateNetProfit(r.revenue, cost, tax)
 
       return {
         ...r,
-        cost: financials.cost,
-        tax: financials.tax,
-        profit: financials.netProfit,
-        profit_rate: financials.profitRate,
+        cost,
+        tax,
+        profit: netProfit,
+        profit_rate: calculateProfitRate(netProfit, r.revenue),
         ml_80: ml80,
         le,
       }
@@ -173,14 +136,14 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const totalRevenue = displayRows.reduce((sum, row) => sum + row.revenue, 0)
   const totalML80 = displayRows.reduce((sum, row) => sum + (row.ml_80 ?? 0), 0)
   const totalLE = displayRows.reduce((sum, row) => sum + (row.le ?? 0), 0)
-  const totalCost = calculateCostByAdType(adType, totalRevenue, totalML80, totalLE)
-  const totalTax = calculateTax(totalRevenue, totalCost)
+  const totalCost = calculateDisplayCostByAdType(adType, totalRevenue, totalML80, totalLE)
+  const totalTax = calculateTaxOnMargin(totalRevenue, totalCost)
   const totalNetProfit = displayRows.reduce((sum, row) => sum + row.profit, 0)
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
 
-  const totalGrossProfit = totalRevenue - totalCost
-  const totalProfitRate = totalRevenue > 0 ? totalNetProfit / totalRevenue : 0
+  const totalGrossProfit = calculateGrossProfit(totalRevenue, totalCost)
+  const totalProfitRate = calculateProfitRate(totalNetProfit, totalRevenue)
   const totalUpstreamBreakdown = displayRows.reduce<Record<string, number>>((acc, row) => {
     for (const [name, value] of Object.entries(row.upstream_breakdown ?? {})) {
       acc[name] = (acc[name] ?? 0) + value

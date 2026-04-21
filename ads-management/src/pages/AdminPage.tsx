@@ -3,14 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Table, Button, Modal, Form, Input, InputNumber,
-  Select, Drawer, DatePicker, Space, Tag, Tooltip, message, Popconfirm,
+  Select, Drawer, DatePicker, Space, Tag, Tooltip, message, Popconfirm, Checkbox,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { CalculatorOutlined, HistoryOutlined } from '@ant-design/icons'
-import api from '../api/axios'
-import type { ApiResponse } from '../types'
+import api, { isAdmin } from '../api/axios'
+import type { ApiResponse, UserRole } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
+import { DEFAULT_ML_PAYOUT_RATE } from '../utils/calculations'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
 
@@ -87,6 +88,7 @@ interface DownstreamPeriodRow {
 interface UserRow {
   id: number
   username: string
+  role: UserRole
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean
@@ -97,6 +99,7 @@ interface UserRow {
 interface UserFormValues {
   username?: string
   password?: string
+  role: UserRole
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean
@@ -106,6 +109,7 @@ interface UserFormValues {
 interface CreateUserPayload {
   username: string
   password: string
+  role: UserRole
   perm_data_input: number
   perm_data_confirm: number
   perm_admin: number
@@ -129,6 +133,7 @@ function formatPriceValue(value: number): string {
 // ============================================================
 function AdSitesTab() {
   const { t } = useTranslation()
+  const admin = isAdmin()
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
@@ -151,6 +156,7 @@ function AdSitesTab() {
 
   const { data: upstreams = [] } = useQuery({
     queryKey: ['admin', 'upstreams'],
+    enabled: admin,
     queryFn: () =>
       api.get<ApiResponse<UpstreamRow[]> >('/api/admin/upstreams').then((r) => r.data.data ?? []),
   })
@@ -315,6 +321,7 @@ function AdSitesTab() {
         return price !== undefined ? `${d.downstream_type}: ${price}` : d.downstream_type
       })
       .join(', ')
+  const showWriteActions = admin
 
   const columns: ColumnsType<AdSiteRow> = withTableEllipsis([
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
@@ -347,16 +354,16 @@ function AdSitesTab() {
         const ds = downstreams.filter((d) => row.downstream_ids?.includes(d.id))
         if (ds.length === 0) return '-'
         const hasPrice = ds.some((d) => row.downstream_prices?.[d.id] !== undefined)
+        const label = ds.map((d) => {
+          const price = row.downstream_prices?.[d.id]
+          return price !== undefined ? `${d.downstream_type}: ${formatPriceValue(price)}` : d.downstream_type
+        }).join(', ')
+        if (!admin) return label
         if (!hasPrice) {
           return <a onClick={() => openDownstreamPriceModal(row)}>{ds.map((d) => d.downstream_type).join(', ')}</a>
         }
         return (
-          <a onClick={() => openDownstreamPriceModal(row)}>
-            {ds.map((d) => {
-              const price = row.downstream_prices?.[d.id]
-              return price !== undefined ? `${d.downstream_type}: ${formatPriceValue(price)}` : d.downstream_type
-            }).join(', ')}
-          </a>
+          <a onClick={() => openDownstreamPriceModal(row)}>{label}</a>
         )
       },
     },
@@ -379,14 +386,16 @@ function AdSitesTab() {
       title: t('input.action'), key: 'action', width: 390,
       render: (_: unknown, row: AdSiteRow) => (
         <Space size="small">
-          <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
-          <Button size="small" onClick={() => {
-            setPriceModal(row)
-            priceForm.setFieldsValue({
-              new_unit_price: row.current_unit_price,
-              new_ratio: row.current_ratio,
-            })
-          }}>{t('admin.price')}</Button>
+          {showWriteActions && <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>}
+          {showWriteActions && (
+            <Button size="small" onClick={() => {
+              setPriceModal(row)
+              priceForm.setFieldsValue({
+                new_unit_price: row.current_unit_price,
+                new_ratio: row.current_ratio,
+              })
+            }}>{t('admin.price')}</Button>
+          )}
           <Tooltip title={t('reconciliation.open')}>
             <Button
               size="small"
@@ -401,7 +410,7 @@ function AdSitesTab() {
               onClick={() => setTimelineSite(row)}
             />
           </Tooltip>
-          {!row.is_archived ? (
+          {showWriteActions && !row.is_archived ? (
             <Button
               size="small"
               onClick={() => toggleActiveMutation.mutate(row.id)}
@@ -410,23 +419,27 @@ function AdSitesTab() {
               {row.is_active ? t('admin.pause') : t('admin.resume')}
             </Button>
           ) : null}
-          <Button
-            size="small"
-            danger={!row.is_archived}
-            onClick={() => toggleArchiveMutation.mutate(row.id)}
-            loading={toggleArchiveMutation.isPending}
-          >
-            {row.is_archived ? t('admin.restore') : t('admin.markDie')}
-          </Button>
-          <Popconfirm
-            title={t('admin.deleteSiteConfirm')}
-            description={t('admin.deleteSiteDesc')}
-            onConfirm={() => deleteMutation.mutate(row.id)}
-            okText={t('admin.delete')}
-            cancelText={t('admin.cancel')}
-          >
-            <Button size="small" danger>{t('admin.delete')}</Button>
-          </Popconfirm>
+          {showWriteActions && (
+            <Button
+              size="small"
+              danger={!row.is_archived}
+              onClick={() => toggleArchiveMutation.mutate(row.id)}
+              loading={toggleArchiveMutation.isPending}
+            >
+              {row.is_archived ? t('admin.restore') : t('admin.markDie')}
+            </Button>
+          )}
+          {showWriteActions && (
+            <Popconfirm
+              title={t('admin.deleteSiteConfirm')}
+              description={t('admin.deleteSiteDesc')}
+              onConfirm={() => deleteMutation.mutate(row.id)}
+              okText={t('admin.delete')}
+              cancelText={t('admin.cancel')}
+            >
+              <Button size="small" danger>{t('admin.delete')}</Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -458,10 +471,12 @@ function AdSitesTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('admin.searchPlaceholder', { label: t('admin.adSites') })}
         />
-        <Button onClick={() => setShowArchived((prev) => !prev)}>
-          {showArchived ? t('admin.backToActiveSites') : t('admin.dieBin')}
-        </Button>
-        <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>
+        {admin && (
+          <Button onClick={() => setShowArchived((prev) => !prev)}>
+            {showArchived ? t('admin.backToActiveSites') : t('admin.dieBin')}
+          </Button>
+        )}
+        {admin && <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>}
       </div>
       <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
 
@@ -734,7 +749,7 @@ function DownstreamsTab() {
     },
   })
 
-  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: 0.8 }) }
+  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: DEFAULT_ML_PAYOUT_RATE }) }
   const openEdit = (row: DownstreamRow) => {
     setModal({ id: row.id })
     form.resetFields()
@@ -1019,6 +1034,7 @@ function UsersTab() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<Partial<UserFormValues> & { id?: number } | null>(null)
   const [userForm] = Form.useForm()
+  const selectedUserRole = Form.useWatch('role', userForm) ?? 'EDITOR'
   const qc = useQueryClient()
 
   const { data: users = [], isLoading } = useQuery({
@@ -1036,7 +1052,7 @@ function UsersTab() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<UserFormValues> }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: { password?: string; role: UserRole; perm_data_input: number; perm_data_confirm: number; perm_admin: number; status: 'active' | 'inactive' } }) =>
       api.put(`/api/users/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'users'] }); setModal(null); userForm.resetFields() },
     onError: () => message.error(t('admin.actionFailed')),
@@ -1048,13 +1064,24 @@ function UsersTab() {
     onError: () => message.error(t('admin.actionFailed')),
   })
 
-  const openCreate = () => { setModal({}); userForm.resetFields(); userForm.setFieldsValue({ status: 'active', perm_data_input: false, perm_data_confirm: false, perm_admin: false }) }
+  const openCreate = () => {
+    setModal({})
+    userForm.resetFields()
+    userForm.setFieldsValue({
+      role: 'EDITOR',
+      status: 'active',
+      perm_data_input: false,
+      perm_data_confirm: false,
+      perm_admin: false,
+    })
+  }
   const openEdit = (user: UserRow) => {
     setModal({ ...user, id: user.id })
     userForm.resetFields()
     userForm.setFieldsValue({
       username: user.username,
       password: undefined,
+      role: user.role,
       perm_data_input: user.perm_data_input,
       perm_data_confirm: user.perm_data_confirm,
       perm_admin: user.perm_admin,
@@ -1065,13 +1092,20 @@ function UsersTab() {
   const handleSubmit = () => {
     userForm.validateFields().then((values) => {
       if (modal && 'id' in modal && modal.id) {
-        const payload: Partial<UserFormValues> = { ...values }
-        delete payload.username
+        const payload = {
+          password: values.password,
+          role: values.role,
+          perm_data_input: values.perm_data_input ? 1 : 0,
+          perm_data_confirm: values.perm_data_confirm ? 1 : 0,
+          perm_admin: values.perm_admin ? 1 : 0,
+          status: values.status,
+        }
         updateMutation.mutate({ id: modal.id, payload })
       } else {
         createMutation.mutate({
           username: values.username!,
           password: values.password!,
+          role: values.role,
           perm_data_input: values.perm_data_input ? 1 : 0,
           perm_data_confirm: values.perm_data_confirm ? 1 : 0,
           perm_admin: values.perm_admin ? 1 : 0,
@@ -1083,6 +1117,14 @@ function UsersTab() {
 
   const columns: ColumnsType<UserRow> = withTableEllipsis([
     { title: t('admin.username'), dataIndex: 'username', key: 'username', width: 150 },
+    {
+      title: t('admin.role'), dataIndex: 'role', key: 'role', width: 110,
+      render: (v: UserRole) => {
+        const color = v === 'ADMIN' ? 'purple' : v === 'VIEWER' ? 'blue' : 'default'
+        const label = v === 'ADMIN' ? t('admin.roleAdmin') : v === 'VIEWER' ? t('admin.roleViewer') : t('admin.roleEditor')
+        return <Tag color={color}>{label}</Tag>
+      },
+    },
     {
       title: t('admin.permInput'), dataIndex: 'perm_data_input', key: 'perm_data_input', width: 90,
       render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? t('admin.yes') : t('admin.no')}</Tag>,
@@ -1115,6 +1157,8 @@ function UsersTab() {
   const filteredUsers = users.filter((row) =>
     matchesAdminSearch(search, [
       row.username,
+      row.role,
+      row.role === 'ADMIN' ? t('admin.roleAdmin') : row.role === 'VIEWER' ? t('admin.roleViewer') : t('admin.roleEditor'),
       row.status,
       row.created_at,
       row.perm_data_input ? 'input' : '',
@@ -1157,14 +1201,40 @@ function UsersTab() {
           >
             <Input.Password placeholder={isEdit ? t('admin.leaveBlank') : ''} />
           </Form.Item>
+          <Form.Item name="role" label={t('admin.role')} rules={[{ required: true, message: t('admin.role') }]}>
+            <Select
+              options={[
+                { value: 'ADMIN', label: t('admin.roleAdmin') },
+                { value: 'EDITOR', label: t('admin.roleEditor') },
+                { value: 'VIEWER', label: t('admin.roleViewer') },
+              ]}
+              onChange={(value: UserRole) => {
+                if (value === 'ADMIN') {
+                  userForm.setFieldsValue({ perm_data_input: true, perm_data_confirm: true, perm_admin: true })
+                  return
+                }
+                if (value === 'VIEWER') {
+                  userForm.setFieldsValue({ perm_data_input: false, perm_data_confirm: false, perm_admin: false })
+                  return
+                }
+                userForm.setFieldsValue({ perm_admin: false })
+              }}
+            />
+          </Form.Item>
           <Form.Item name="perm_data_input" valuePropName="checked">
-            <label><input type="checkbox" style={{ marginRight: 8 }} />{t('admin.permInput')}</label>
+            <Checkbox disabled={selectedUserRole === 'VIEWER' || selectedUserRole === 'ADMIN'}>
+              {t('admin.permInput')}
+            </Checkbox>
           </Form.Item>
           <Form.Item name="perm_data_confirm" valuePropName="checked">
-            <label><input type="checkbox" style={{ marginRight: 8 }} />{t('admin.permConfirm')}</label>
+            <Checkbox disabled={selectedUserRole === 'VIEWER' || selectedUserRole === 'ADMIN'}>
+              {t('admin.permConfirm')}
+            </Checkbox>
           </Form.Item>
           <Form.Item name="perm_admin" valuePropName="checked">
-            <label><input type="checkbox" style={{ marginRight: 8 }} />{t('admin.permAdmin')}</label>
+            <Checkbox disabled>
+              {t('admin.permAdmin')}
+            </Checkbox>
           </Form.Item>
           <Form.Item name="status" label={t('admin.status')} rules={[{ required: true }]}>
             <Select options={[{ value: 'active', label: t('admin.active') }, { value: 'inactive', label: t('admin.inactive') }]} />
@@ -1180,19 +1250,22 @@ function UsersTab() {
 // ============================================================
 export default function AdminPage() {
   const { t } = useTranslation()
+  const admin = isAdmin()
+  const items = admin
+    ? [
+        { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+        { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
+        { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
+        { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
+        { key: 'users', label: t('admin.users'), children: <UsersTab /> },
+      ]
+    : [
+        { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+      ]
   return (
     <div className="admin-page">
       <h2 style={{ marginBottom: 16 }}>{t('admin.title')}</h2>
-      <Tabs
-        defaultActiveKey="adsites"
-        items={[
-          { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
-          { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
-          { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
-          { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
-          { key: 'users', label: t('admin.users'), children: <UsersTab /> },
-        ]}
-      />
+      <Tabs defaultActiveKey="adsites" items={items} />
     </div>
   )
 }

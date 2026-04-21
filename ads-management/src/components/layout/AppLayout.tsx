@@ -16,6 +16,7 @@ import brandLogoDarkImage from '../../assets/den-khong-logo.png'
 import type { User } from '../../types'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useThemeMode } from '../../theme/themeModeContext'
+import { canAccessSiteList, canViewDashboard } from '../../api/axios'
 
 const { Sider, Header, Content } = Layout
 const DEFAULT_SIDER_WIDTH = 220
@@ -134,7 +135,7 @@ export default function AppLayout() {
   ]
 
   const menuItems: MenuProps['items'] = [
-    ...(user?.perm_admin
+    ...(canViewDashboard()
       ? [
           {
             key: 'dashboard',
@@ -162,12 +163,12 @@ export default function AppLayout() {
       label: menuText(t('nav.downstream')),
       onClick: () => navigate('/downstream'),
     },
-    ...(user?.perm_admin
+    ...(canAccessSiteList()
       ? [
           {
             key: 'admin',
             icon: rootIcon('⚙️'),
-            label: menuText(t('nav.admin')),
+            label: menuText(t('nav.siteList')),
             onClick: () => navigate('/admin'),
           },
         ]
@@ -205,7 +206,7 @@ export default function AppLayout() {
             ? `${t('nav.upstream')} - ${adTypeTitle}`
             : t('nav.upstream')
           : location.pathname.startsWith('/admin')
-            ? t('nav.admin')
+            ? t('nav.siteList')
             : location.pathname.startsWith('/downstream')
               ? t('nav.downstream')
               : t('app.brand')

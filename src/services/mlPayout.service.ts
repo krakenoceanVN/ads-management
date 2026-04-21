@@ -2,7 +2,20 @@ import { PrismaClient } from "@prisma/client"
 import { MLPayoutResult, AdTypeCode } from "../types/index.js"
 import { getBusinessDayRange } from "../utils/date.js"
 import { AD_TYPE_ID_MAP } from "../utils/constants.js"
-import { calculateYiyiAmount, getYiyiDailyPricing } from "./yiyiPricing.service.js"
+import {
+  DEFAULT_LE_PAYOUT_RATE,
+  DEFAULT_LE_UNIT_PRICE,
+  DEFAULT_ML_PAYOUT_RATE,
+  calculateLeRevenueFromSmRevenue,
+  calculateMlPayoutAmount,
+  calculateNetProfit,
+  calculateProfitRate,
+  calculateSmServiceCost,
+  calculateTaxOnMargin,
+  calculateUnitPricePayout,
+  calculateYiyiAmount,
+} from "../utils/calculations.js"
+import { getYiyiDailyPricing } from "./yiyiPricing.service.js"
 
 /** Convert "YYYY-MM-DD" → { startOfDay, endOfDay } in business TZ */
 function dateRange(dateStr: string): { gte: Date; lt: Date } {
@@ -56,8 +69,8 @@ export async function calculateMLPayout(
   })
 
   // 3. ML payout = total × payout_rate (always 0.8)
-  const payoutRate = downstream?.downstream.payoutRate ?? 0.8
-  const mlPayout = Number(totalRevenue) * Number(payoutRate)
+  const payoutRate = Number(downstream?.downstream.payoutRate ?? DEFAULT_ML_PAYOUT_RATE)
+  const mlPayout = calculateMlPayoutAmount(Number(totalRevenue), payoutRate)
 
   return {
     total_revenue: Number(totalRevenue),
@@ -96,8 +109,8 @@ export async function calculateLEPayout(
   })
 
   // LE revenue from upstream
-  const lePayoutRate = Number(lePeriod?.downstream.payoutRate ?? 0.9)
-  const leRevenue = smUpstreamRevenue * lePayoutRate
+  const lePayoutRate = Number(lePeriod?.downstream.payoutRate ?? DEFAULT_LE_PAYOUT_RATE)
+  const leRevenue = calculateLeRevenueFromSmRevenue(smUpstreamRevenue, lePayoutRate)
 
   // 2. Get total SM qty for ML cost calculation
   const qtyResult = await prisma.dailyInput.aggregate({
@@ -116,12 +129,12 @@ export async function calculateLEPayout(
   })
 
   const totalQty = qtyResult._sum.qty ?? 0
-  const mlUnitPrice = Number(lePeriod?.unitPrice ?? 16)
-  const leMlCost = Number(totalQty) * mlUnitPrice / 1000
+  const mlUnitPrice = Number(lePeriod?.unitPrice ?? DEFAULT_LE_UNIT_PRICE)
+  const leMlCost = calculateUnitPricePayout(Number(totalQty), mlUnitPrice)
 
   // 3. Tax = (revenue - ML_cost) × 0.06, then LE = revenue - tax - ML_cost
-  const leTax = (leRevenue - leMlCost) * 0.06
-  return leRevenue - leTax - leMlCost
+  const leTax = calculateTaxOnMargin(leRevenue, leMlCost)
+  return calculateNetProfit(leRevenue, leMlCost, leTax)
 }
 
 // ============================================================
@@ -201,12 +214,12 @@ export async function calculateCostBreakdown(
   }
 
   const cost = adTypeCode === "SM"
-    ? ml_payout + (lePayout ?? 0) + (yiyiPayout ?? 0)
+    ? calculateSmServiceCost(ml_payout, lePayout ?? 0, yiyiPayout ?? 0)
     : ml_payout
 
-  const tax = (total_revenue - cost) * 0.06
-  const profit = total_revenue - cost - tax
-  const profit_rate = total_revenue > 0 ? profit / total_revenue : 0
+  const tax = calculateTaxOnMargin(total_revenue, cost)
+  const profit = calculateNetProfit(total_revenue, cost, tax)
+  const profit_rate = calculateProfitRate(profit, total_revenue)
 
   return {
     revenue: total_revenue,

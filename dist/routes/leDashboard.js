@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const router = (0, express_1.Router)();
 function getDaysInMonth(year, month) {
     const days = [];
@@ -134,12 +135,12 @@ router.get("/le", auth_js_1.requireAuth, [
                 smRevenue += rev;
                 upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev;
             }
-            const leRevenue = smRevenue * 0.9;
+            const leRevenue = (0, calculations_js_1.calculateLeRevenueFromSmRevenue)(smRevenue, calculations_js_1.DEFAULT_LE_PAYOUT_RATE);
             const downstreamCosts = leCostMap.get(date) ?? { vendorCost: 0, mlCost: 0, totalCost: 0 };
-            const taxRate = 0.06;
-            const tax = leRevenue * taxRate;
-            const profit = leRevenue - tax - downstreamCosts.totalCost;
-            const profitRate = leRevenue > 0 ? profit / leRevenue : 0;
+            const taxRate = calculations_js_1.TAX_RATE;
+            const tax = (0, calculations_js_1.calculateFlatTax)(leRevenue, taxRate);
+            const profit = (0, calculations_js_1.calculateNetProfit)(leRevenue, downstreamCosts.totalCost, tax);
+            const profitRate = (0, calculations_js_1.calculateProfitRate)(profit, leRevenue);
             results.push({
                 date,
                 smRevenue,
@@ -173,7 +174,7 @@ router.get("/le", auth_js_1.requireAuth, [
             date: "TOTAL",
             smRevenue: totalSmRevenue,
             leRevenue: totalLeRevenue,
-            taxRate: 0.06,
+            taxRate: calculations_js_1.TAX_RATE,
             tax: totalTax,
             vendorCost: totalVendorCost,
             mlCost: totalMlCost,
@@ -200,7 +201,7 @@ router.get("/le", auth_js_1.requireAuth, [
 // POST /api/dashboard/le/cost
 // Body: { date: string, vendorCost?: number, mlCost?: number, costAmount?: number }
 // ============================================================
-router.post("/le/cost", auth_js_1.requireAuth, (req, res, next) => {
+router.post("/le/cost", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (req, res, next) => {
     if (req.user?.perm_admin || req.user?.perm_data_input) {
         next();
         return;

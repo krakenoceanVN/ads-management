@@ -7,6 +7,10 @@ export interface AuthRequest extends Request {
   user?: UserPublic
 }
 
+function isViewer(user?: UserPublic): boolean {
+  return user?.role === 'VIEWER'
+}
+
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
@@ -46,4 +50,18 @@ export function requirePermission(perm: 'perm_data_input' | 'perm_data_confirm' 
     }
     next()
   }
+}
+
+export function requireWriteAccess(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Unauthorized' })
+    return
+  }
+
+  if (isViewer(req.user)) {
+    res.status(403).json({ success: false, error: 'Viewer accounts are read-only' })
+    return
+  }
+
+  next()
 }

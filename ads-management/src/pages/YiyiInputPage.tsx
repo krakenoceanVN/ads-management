@@ -4,16 +4,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DatePicker, InputNumber, Result, Spin, Table, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
-import api from '../api/axios'
+import api, { canConfirmInput, canInputData } from '../api/axios'
 import type { ApiResponse } from '../types'
 import ConfirmAllButton from '../components/daily-input/ConfirmAllButton'
 import SaveBar from '../components/daily-input/SaveBar'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoInteger, formatIsoMoney } from '../utils/numberFormat'
+import {
+  YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+  YIYI_DEFAULT_UNIT_PRICE,
+  calculateYiyiAmount,
+  calculateYiyiProfit,
+  calculateYiyiTotal,
+} from '../utils/calculations'
 
 const CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const
-const DEFAULT_UNIT_PRICE = 2
-const DEFAULT_PROFIT_UNIT_PRICE = 1
 
 type ChannelCode = (typeof CHANNELS)[number]
 
@@ -40,8 +45,8 @@ const EMPTY_MONTHLY_ROWS: MonthlyApiRow[] = []
 
 function createEmptyDraftRow(): DraftRow {
   return {
-    unit_price: DEFAULT_UNIT_PRICE,
-    profit_unit_price: DEFAULT_PROFIT_UNIT_PRICE,
+    unit_price: YIYI_DEFAULT_UNIT_PRICE,
+    profit_unit_price: YIYI_DEFAULT_PROFIT_UNIT_PRICE,
     'yy-02-01': 0,
     'yy-02-02': 0,
     'yy-02-03': 0,
@@ -62,6 +67,8 @@ export default function YiyiInputPage() {
   const qc = useQueryClient()
   const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs())
   const [drafts, setDrafts] = useState<DraftMap>({})
+  const canEdit = canInputData()
+  const canConfirm = canConfirmInput()
 
   const year = selectedMonth.year()
   const month = selectedMonth.month() + 1
@@ -81,8 +88,8 @@ export default function YiyiInputPage() {
 
     for (const row of monthlyRows) {
       nextDrafts[row.date] = {
-        unit_price: row.unit_price ?? DEFAULT_UNIT_PRICE,
-        profit_unit_price: row.profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE,
+        unit_price: row.unit_price ?? YIYI_DEFAULT_UNIT_PRICE,
+        profit_unit_price: row.profit_unit_price ?? YIYI_DEFAULT_PROFIT_UNIT_PRICE,
         'yy-02-01': row['yy-02-01'] ?? 0,
         'yy-02-02': row['yy-02-02'] ?? 0,
         'yy-02-03': row['yy-02-03'] ?? 0,
@@ -132,12 +139,12 @@ export default function YiyiInputPage() {
 
   const getDraftRow = (date: string): DraftRow => drafts[date] ?? serverDrafts[date] ?? createEmptyDraftRow()
   const getChannelValue = (date: string, channel: ChannelCode): number => getDraftRow(date)[channel] ?? 0
-  const getUnitPrice = (date: string): number => getDraftRow(date).unit_price ?? DEFAULT_UNIT_PRICE
-  const getProfitUnitPrice = (date: string): number => getDraftRow(date).profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE
+  const getUnitPrice = (date: string): number => getDraftRow(date).unit_price ?? YIYI_DEFAULT_UNIT_PRICE
+  const getProfitUnitPrice = (date: string): number => getDraftRow(date).profit_unit_price ?? YIYI_DEFAULT_PROFIT_UNIT_PRICE
   const getRowQty = (date: string): number => CHANNELS.reduce((sum, channel) => sum + getChannelValue(date, channel), 0)
-  const getRowAmount = (date: string): number => (getRowQty(date) * getUnitPrice(date)) / 1000
-  const getRowProfit = (date: string): number => (getRowQty(date) * getProfitUnitPrice(date)) / 1000
-  const getRowTotal = (date: string): number => getRowAmount(date) + getRowProfit(date)
+  const getRowAmount = (date: string): number => calculateYiyiAmount(getRowQty(date), getUnitPrice(date))
+  const getRowProfit = (date: string): number => calculateYiyiProfit(getRowQty(date), getProfitUnitPrice(date))
+  const getRowTotal = (date: string): number => calculateYiyiTotal(getRowQty(date), getUnitPrice(date), getProfitUnitPrice(date))
 
   const summaryChannels = CHANNELS.reduce<Record<ChannelCode, number>>((acc, channel) => {
     acc[channel] = monthRows.reduce((sum, row) => sum + getChannelValue(row.date, channel), 0)
@@ -168,7 +175,7 @@ export default function YiyiInputPage() {
   }
 
   const handlePriceChange = (date: string, field: 'unit_price' | 'profit_unit_price', value: number | null) => {
-    const nextValue = value ?? (field === 'unit_price' ? DEFAULT_UNIT_PRICE : DEFAULT_PROFIT_UNIT_PRICE)
+    const nextValue = value ?? (field === 'unit_price' ? YIYI_DEFAULT_UNIT_PRICE : YIYI_DEFAULT_PROFIT_UNIT_PRICE)
 
     setDrafts((prev) => {
       const nextDrafts = { ...prev }
@@ -196,8 +203,8 @@ export default function YiyiInputPage() {
     const row = monthlyRowMap.get(date)
     if (!row) return false
 
-    if (getUnitPrice(date) !== (row.unit_price ?? DEFAULT_UNIT_PRICE)) return true
-    if (getProfitUnitPrice(date) !== (row.profit_unit_price ?? DEFAULT_PROFIT_UNIT_PRICE)) return true
+    if (getUnitPrice(date) !== (row.unit_price ?? YIYI_DEFAULT_UNIT_PRICE)) return true
+    if (getProfitUnitPrice(date) !== (row.profit_unit_price ?? YIYI_DEFAULT_PROFIT_UNIT_PRICE)) return true
 
     return CHANNELS.some((channel) => getChannelValue(date, channel) !== (row[channel] ?? 0))
   }
@@ -256,6 +263,7 @@ export default function YiyiInputPage() {
                 style={{ width: '100%' }}
                 value={getUnitPrice(row.date)}
                 onChange={(value) => handlePriceChange(row.date, 'unit_price', value)}
+                disabled={!canEdit}
               />
             )
           },
@@ -289,6 +297,7 @@ export default function YiyiInputPage() {
             style={{ width: '100%' }}
             value={getChannelValue(row.date, channel)}
             onChange={(value) => handleChannelChange(row.date, channel, value)}
+            disabled={!canEdit}
           />
         )
       },
@@ -308,6 +317,7 @@ export default function YiyiInputPage() {
             style={{ width: '100%' }}
             value={getProfitUnitPrice(row.date)}
             onChange={(value) => handlePriceChange(row.date, 'profit_unit_price', value)}
+            disabled={!canEdit}
           />
         )
       },
@@ -362,11 +372,13 @@ export default function YiyiInputPage() {
           <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
         </div>
 
-        <ConfirmAllButton
-          disabled={dirtyCount === 0}
-          loading={confirmAllMutation.isPending}
-          onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
-        />
+        {canConfirm && (
+          <ConfirmAllButton
+            disabled={dirtyCount === 0}
+            loading={confirmAllMutation.isPending}
+            onConfirm={() => confirmAllMutation.mutateAsync({ rows: buildPayloadRows() })}
+          />
+        )}
 
       </div>
 
@@ -423,7 +435,7 @@ export default function YiyiInputPage() {
           )}
         />
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      {canEdit && <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />}
       </div>
     </div>
   )

@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
-const yiyiPricing_service_js_1 = require("../services/yiyiPricing.service.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
+const auth_js_1 = require("../middleware/auth.js");
 const date_js_1 = require("../utils/date.js");
 const constants_js_1 = require("../utils/constants.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const router = (0, express_1.Router)();
 // ============================================================
 // Helpers
@@ -42,7 +43,7 @@ function buildMonthlyTotal(rows) {
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
     const cost = rows.reduce((s, r) => s + r.cost, 0);
     const tax = rows.reduce((s, r) => s + r.tax, 0);
-    const profit = revenue - cost - tax;
+    const profit = (0, calculations_js_1.calculateNetProfit)(revenue, cost, tax);
     const mlPayout = rows.reduce((s, r) => s + r.ml_payout, 0);
     const lePayout = rows.reduce((s, r) => s + (r.le_payout ?? 0), 0);
     const yiyiPayout = rows.reduce((s, r) => s + (r.yiyi_payout ?? 0), 0);
@@ -68,7 +69,7 @@ function buildMonthlyTotal(rows) {
         cost,
         tax,
         profit,
-        profit_rate: revenue > 0 ? profit / revenue : 0,
+        profit_rate: (0, calculations_js_1.calculateProfitRate)(profit, revenue),
         upstream_breakdown: upstreamBreakdown,
         upstream_detail_breakdown: finalizedUpstreamDetailBreakdown,
         ml_payout: mlPayout,
@@ -97,7 +98,7 @@ function groupNumbersByBusinessDate(rows) {
 function groupPricingByBusinessDate(rows) {
     const grouped = new Map();
     for (const row of rows) {
-        grouped.set((0, date_js_1.formatBusinessDate)(row.recordDate), Number(row.unitPrice ?? yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE));
+        grouped.set((0, date_js_1.formatBusinessDate)(row.recordDate), Number(row.unitPrice ?? calculations_js_1.YIYI_DEFAULT_UNIT_PRICE));
     }
     return grouped;
 }
@@ -132,7 +133,7 @@ const handleValidation = (req, res, next) => {
 // GET /api/dashboard/monthly
 // Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // ============================================================
-router.get("/monthly", [
+router.get("/monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
     (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
@@ -274,33 +275,33 @@ router.get("/monthly", [
                 ? finalizeUpstreamDetailBreakdown(upstreamDetailBreakdown)
                 : undefined;
             const activeMlPeriod = getActivePeriodForDate(mlPeriodMap.values().next().value, date);
-            const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? 0.8);
-            const mlPayout = totalRevenue * mlPayoutRate;
+            const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? calculations_js_1.DEFAULT_ML_PAYOUT_RATE);
+            const mlPayout = (0, calculations_js_1.calculateMlPayoutAmount)(totalRevenue, mlPayoutRate);
             let cost = mlPayout;
             let lePayout;
             let yiyiPayout;
             if (adTypeCode === "SM") {
                 const activeLePeriod = getActivePeriodForDate(lePeriodMap.values().next().value, date);
-                const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? 0.9);
-                const leRevenue = totalRevenue * lePayoutRate;
-                const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? 16);
-                const leMlCost = totalUV * mlUnitPrice / 1000;
-                const leTax = (leRevenue - leMlCost) * 0.06;
-                lePayout = leRevenue - leTax - leMlCost;
+                const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? calculations_js_1.DEFAULT_LE_PAYOUT_RATE);
+                const leRevenue = (0, calculations_js_1.calculateLeRevenueFromSmRevenue)(totalRevenue, lePayoutRate);
+                const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? calculations_js_1.DEFAULT_LE_UNIT_PRICE);
+                const leMlCost = (0, calculations_js_1.calculateUnitPricePayout)(totalUV, mlUnitPrice);
+                const leTax = (0, calculations_js_1.calculateTaxOnMargin)(leRevenue, leMlCost);
+                lePayout = (0, calculations_js_1.calculateNetProfit)(leRevenue, leMlCost, leTax);
                 const yiyiQty = yiyiQtyByDate.get(date);
-                const yiyiUnitPrice = yiyiPricingByDate.get(date) ?? yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE;
-                yiyiPayout = (0, yiyiPricing_service_js_1.calculateYiyiAmount)(yiyiQty ?? totalUV, yiyiUnitPrice);
-                cost = lePayout + yiyiPayout;
+                const yiyiUnitPrice = yiyiPricingByDate.get(date) ?? calculations_js_1.YIYI_DEFAULT_UNIT_PRICE;
+                yiyiPayout = (0, calculations_js_1.calculateYiyiAmount)(yiyiQty ?? totalUV, yiyiUnitPrice);
+                cost = (0, calculations_js_1.calculateSmDashboardCost)(lePayout, yiyiPayout);
             }
-            const tax = (totalRevenue - cost) * 0.06;
-            const profit = totalRevenue - cost - tax;
+            const tax = (0, calculations_js_1.calculateTaxOnMargin)(totalRevenue, cost);
+            const profit = (0, calculations_js_1.calculateNetProfit)(totalRevenue, cost, tax);
             results.push({
                 date,
                 revenue: totalRevenue,
                 cost,
                 tax,
                 profit,
-                profit_rate: totalRevenue > 0 ? profit / totalRevenue : 0,
+                profit_rate: (0, calculations_js_1.calculateProfitRate)(profit, totalRevenue),
                 upstream_breakdown: upstreamBreakdown,
                 upstream_detail_breakdown: finalizedUpstreamDetailBreakdown,
                 ml_payout: mlPayout,
@@ -321,7 +322,7 @@ router.get("/monthly", [
 // Query: year, month (1-12), ad_type (SM|360|BAIDU_JS|OTHER)
 // Returns aggregated ML and LE from downstream site inputs
 // ============================================================
-router.get("/downstream-monthly", [
+router.get("/downstream-monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
     (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
@@ -453,7 +454,7 @@ router.get("/downstream-monthly", [
             results.push({
                 date,
                 ml: totalML,
-                ml_80: totalML * 0.8,
+                ml_80: (0, calculations_js_1.applyMl80Rate)(totalML),
                 le: totalLE,
             });
         }

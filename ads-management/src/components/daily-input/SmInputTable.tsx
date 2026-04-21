@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, InputNumber, Button, message, Spin, Empty, Alert } from 'antd'
+import { Table, Button, message, Spin, Empty, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import api, { isAdmin, canConfirmInput } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
+import TableNumberInput from '../common/TableNumberInput'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
 import ConfirmAllButton from './ConfirmAllButton'
@@ -183,7 +184,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
           return <span>{formatIsoInteger(row.existing_record?.qty ?? 0)}</span>
         }
         return (
-          <InputNumber
+          <TableNumberInput
             ref={(el) => { inputRefs.current[`${row.id}-qty`] = el as HTMLInputElement | null }}
             size="small"
             precision={0}
@@ -217,7 +218,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         }
         const admin = isAdmin()
         return (
-          <InputNumber
+          <TableNumberInput
             ref={(el) => { inputRefs.current[`${row.id}-price`] = el as HTMLInputElement | null }}
             size="small"
             precision={4}
@@ -293,6 +294,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         if (!canConfirm) return null
         return (
           <Button
+            className="app-table-action-button"
             size="small"
             type="link"
             onClick={() => {
@@ -335,7 +337,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div className="daily-input-table-actions">
         <ConfirmAllButton
           disabled={unconfirmedIds.length === 0}
           loading={confirmAllMutation.isPending}

@@ -378,7 +378,7 @@ function AdSitesTab() {
     {
       title: t('input.action'), key: 'action', width: 390,
       render: (_: unknown, row: AdSiteRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Button size="small" onClick={() => {
             setPriceModal(row)
@@ -640,7 +640,7 @@ function UpstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UpstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUpstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -767,7 +767,7 @@ function DownstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: DownstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteDownstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -1102,7 +1102,7 @@ function UsersTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UserRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUserConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -1181,8 +1181,8 @@ function UsersTab() {
 export default function AdminPage() {
   const { t } = useTranslation()
   return (
-    <div className="admin-page">
-      <h2 style={{ marginBottom: 16 }}>{t('admin.title')}</h2>
+    <div className="page-shell admin-page">
+      <h2 className="page-heading" style={{ marginBottom: 16 }} title={t('admin.title')}>{t('admin.title')}</h2>
       <Tabs
         defaultActiveKey="adsites"
         items={[

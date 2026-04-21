@@ -48,8 +48,10 @@ export default function DownstreamPage() {
   ])
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 16 }}>{t('downstream.pageTitle')}</h2>
+    <div className="page-shell dashboard-page-shell admin-page">
+      <h2 className="page-heading" style={{ marginBottom: 16 }} title={t('downstream.pageTitle')}>
+        {t('downstream.pageTitle')}
+      </h2>
       {dsError && (
         <Alert
           type="error"
@@ -58,18 +60,20 @@ export default function DownstreamPage() {
           message={t('downstream.loadError')}
         />
       )}
-      <Table
-        className="app-data-table"
-        columns={downstreamColumns}
-        dataSource={downstreams}
-        rowKey="id"
-        size="small"
-        bordered
-        loading={dsLoading}
-        pagination={false}
-        tableLayout="fixed"
-        locale={{ emptyText: dsError ? t('downstream.loadError') : undefined }}
-      />
+      <div className="dashboard-table-shell">
+        <Table
+          className="app-data-table dashboard-total-table"
+          columns={downstreamColumns}
+          dataSource={downstreams}
+          rowKey="id"
+          size="small"
+          bordered
+          loading={dsLoading}
+          pagination={false}
+          tableLayout="fixed"
+          locale={{ emptyText: dsError ? t('downstream.loadError') : undefined }}
+        />
+      </div>
     </div>
   )
 }

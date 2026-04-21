@@ -12,6 +12,7 @@ export default function ConfirmAllButton({ disabled, loading = false, onConfirm 
 
   return (
     <Button
+      className="daily-input-confirm-all-btn"
       type="primary"
       disabled={disabled}
       loading={loading}

@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
-import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
@@ -156,7 +155,6 @@ export default function DashboardPage({ adType }: Props) {
 
   return (
     <div className="page-shell dashboard-page-shell">
-      <DashboardBrandWatermark />
       {/* Controls */}
       <div className="page-toolbar">
         <DatePicker.MonthPicker

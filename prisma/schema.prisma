@@ -73,11 +73,12 @@ model AdSiteEvent {
   adSiteId  Int
   eventType String
   note      String?
+  eventDate DateTime @default(now())
   createdAt DateTime @default(now())
 
   adSite AdSite @relation(fields: [adSiteId], references: [id], onDelete: Cascade)
 
-  @@index([adSiteId, createdAt])
+  @@index([adSiteId, eventDate, createdAt])
 }
 
 // ============================================================

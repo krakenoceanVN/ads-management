@@ -56,6 +56,11 @@ type UserApiShape = {
   createdAt: Date
 }
 
+type AdSiteEventCreateInput = {
+  eventDate?: Date
+  note?: string
+}
+
 function toUserPublic(user: UserApiShape): UserPublic {
   const resolvedRole = resolveUserRole(user)
 
@@ -72,12 +77,17 @@ function toUserPublic(user: UserApiShape): UserPublic {
   }
 }
 
-async function createAdSiteEvent(adSiteId: number, eventType: AdSiteEventType, note?: string) {
+async function createAdSiteEvent(
+  adSiteId: number,
+  eventType: AdSiteEventType,
+  input: AdSiteEventCreateInput = {}
+) {
   return prisma.adSiteEvent.create({
     data: {
       adSiteId,
       eventType,
-      note,
+      note: input.note,
+      eventDate: input.eventDate ?? new Date(),
     },
   })
 }
@@ -625,11 +635,17 @@ router.put(
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
-  [param("id").isInt().toInt()],
+  [
+    param("id").isInt().toInt(),
+    body("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
+    body("note").optional().isLength({ max: 1000 }),
+  ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id)
+      const eventDate = typeof req.body.eventDate === "string" ? getBusinessDayStart(req.body.eventDate) : undefined
+      const note = typeof req.body.note === "string" ? req.body.note.trim() || undefined : undefined
       const existing = await prisma.adSite.findUnique({ where: { id } })
       if (!existing) {
         res.status(404).json({ success: false, error: "Ad site not found" })
@@ -647,6 +663,8 @@ router.put(
           data: {
             adSiteId: id,
             eventType: nextIsActive ? "RESUMED" : "PAUSED",
+            eventDate: eventDate ?? new Date(),
+            note,
           },
         })
 
@@ -673,11 +691,17 @@ router.put(
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
-  [param("id").isInt().toInt()],
+  [
+    param("id").isInt().toInt(),
+    body("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
+    body("note").optional().isLength({ max: 1000 }),
+  ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id)
+      const eventDate = typeof req.body.eventDate === "string" ? getBusinessDayStart(req.body.eventDate) : undefined
+      const note = typeof req.body.note === "string" ? req.body.note.trim() || undefined : undefined
       const existing = await prisma.adSite.findUnique({ where: { id } })
       if (!existing) {
         res.status(404).json({ success: false, error: "Ad site not found" })
@@ -695,6 +719,8 @@ router.put(
           data: {
             adSiteId: id,
             eventType: nextIsArchived ? "DIED" : "RESUMED",
+            eventDate: eventDate ?? new Date(),
+            note,
           },
         })
 
@@ -767,7 +793,7 @@ router.get(
 
       const events = await prisma.adSiteEvent.findMany({
         where: { adSiteId: id },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        orderBy: [{ eventDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       })
 
       res.json({
@@ -777,6 +803,7 @@ router.get(
           ad_site_id: event.adSiteId,
           event_type: event.eventType,
           note: event.note,
+          event_date: event.eventDate,
           created_at: event.createdAt,
         })),
       })
@@ -795,12 +822,14 @@ router.post(
   [
     param("id").isInt().toInt(),
     body("note").notEmpty().withMessage("note required").isLength({ max: 1000 }),
+    body("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id)
       const note = String(req.body.note ?? "").trim()
+      const eventDate = typeof req.body.eventDate === "string" ? getBusinessDayStart(req.body.eventDate) : undefined
       const site = await prisma.adSite.findUnique({
         where: { id },
         select: { id: true },
@@ -811,7 +840,7 @@ router.post(
         return
       }
 
-      const event = await createAdSiteEvent(id, "NOTE", note)
+      const event = await createAdSiteEvent(id, "NOTE", { note, eventDate })
 
       res.status(201).json({
         success: true,
@@ -820,6 +849,7 @@ router.post(
           ad_site_id: event.adSiteId,
           event_type: event.eventType,
           note: event.note,
+          event_date: event.eventDate,
           created_at: event.createdAt,
         },
       })

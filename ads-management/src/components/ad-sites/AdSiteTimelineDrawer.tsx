@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Drawer, Empty, Input, Result, Space, Spin, Timeline, Typography, message } from 'antd'
+import { Button, DatePicker, Drawer, Empty, Input, Result, Space, Spin, Timeline, Typography, message } from 'antd'
 import {
   ClockCircleOutlined,
   FileTextOutlined,
@@ -27,6 +27,7 @@ interface AdSiteEventRow {
   ad_site_id: number
   event_type: 'CREATED' | 'PAUSED' | 'RESUMED' | 'DIED' | 'NOTE'
   note?: string | null
+  event_date?: string
   created_at: string
 }
 
@@ -74,6 +75,7 @@ export default function AdSiteTimelineDrawer({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [note, setNote] = useState('')
+  const [eventDate, setEventDate] = useState(() => dayjs())
   const canAddNote = isAdmin()
 
   const { data, isLoading, error } = useQuery<AdSiteEventRow[]>({
@@ -89,10 +91,14 @@ export default function AdSiteTimelineDrawer({
     mutationFn: async () => {
       const trimmed = note.trim()
       if (!siteId || !trimmed) return
-      await api.post(`/api/admin/ad-sites/${siteId}/events`, { note: trimmed })
+      await api.post(`/api/admin/ad-sites/${siteId}/events`, {
+        note: trimmed,
+        eventDate: eventDate.format('YYYY-MM-DD'),
+      })
     },
     onSuccess: () => {
       setNote('')
+      setEventDate(dayjs())
       message.success(t('timeline.noteAdded'))
       qc.invalidateQueries({ queryKey: ['ad-site-events', siteId] })
     },
@@ -115,9 +121,14 @@ export default function AdSiteTimelineDrawer({
               <Space size={8} wrap>
                 <Typography.Text strong>{meta.label}</Typography.Text>
                 <Typography.Text type="secondary">
-                  {dayjs(event.created_at).format('YYYY-MM-DD HH:mm')}
+                  {dayjs(event.event_date ?? event.created_at).format('YYYY-MM-DD')}
                 </Typography.Text>
               </Space>
+              {event.event_date && dayjs(event.event_date).format('YYYY-MM-DD HH:mm') !== dayjs(event.created_at).format('YYYY-MM-DD HH:mm') ? (
+                <Typography.Text type="secondary">
+                  {t('timeline.loggedAt')}: {dayjs(event.created_at).format('YYYY-MM-DD HH:mm')}
+                </Typography.Text>
+              ) : null}
               {event.note ? <Typography.Text>{event.note}</Typography.Text> : null}
             </div>
           ),
@@ -139,12 +150,18 @@ export default function AdSiteTimelineDrawer({
         {canAddNote && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Typography.Text strong>{t('timeline.addNote')}</Typography.Text>
+            <DatePicker
+              value={eventDate}
+              onChange={(value) => setEventDate(value ?? dayjs())}
+              style={{ width: '100%' }}
+              placeholder={t('timeline.eventDate')}
+            />
             <TextArea
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={3}
               maxLength={1000}
-              placeholder={t('timeline.notePlaceholder')}
+              placeholder={t('timeline.eventNotePlaceholder')}
             />
             <div>
               <Button

@@ -7,6 +7,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { CalculatorOutlined, HistoryOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import api, { isAdmin } from '../api/axios'
 import type { ApiResponse, UserRole } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
@@ -41,6 +42,13 @@ interface AdSiteFormValues {
   current_ratio?: number
   status: 'active' | 'inactive'
   downstream_ids?: number[]
+}
+
+type AdSiteStatusAction = 'toggleActive' | 'toggleArchive'
+
+interface AdSiteStatusModalState {
+  action: AdSiteStatusAction
+  row: AdSiteRow
 }
 
 interface UpstreamRow {
@@ -139,11 +147,13 @@ function AdSitesTab() {
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
+  const [statusModal, setStatusModal] = useState<AdSiteStatusModalState | null>(null)
   const [reconciliationSite, setReconciliationSite] = useState<AdSiteRow | null>(null)
   const [timelineSite, setTimelineSite] = useState<AdSiteRow | null>(null)
   const [siteForm] = Form.useForm()
   const [priceForm] = Form.useForm()
   const [downstreamPriceForm] = Form.useForm()
+  const [statusForm] = Form.useForm()
   const qc = useQueryClient()
 
   const { data: sites = [], isLoading } = useQuery({
@@ -202,11 +212,15 @@ function AdSitesTab() {
   })
 
   const toggleActiveMutation = useMutation({
-    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-active`),
-    onSuccess: (_response, id) => {
+    mutationFn: ({ id, payload }: { id: number; payload: { eventDate: string; note?: string } }) =>
+      api.put(`/api/admin/ad-sites/${id}/toggle-active`, payload),
+    onSuccess: (_response, variables) => {
+      const id = variables.id
       const row = sites.find((site) => site.id === id)
       message.success(row?.is_active ? t('admin.pausedSuccess') : t('admin.resumedSuccess'))
       qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+      setStatusModal(null)
+      statusForm.resetFields()
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       message.error(err.response?.data?.error ?? t('admin.actionFailed'))
@@ -214,11 +228,15 @@ function AdSitesTab() {
   })
 
   const toggleArchiveMutation = useMutation({
-    mutationFn: (id: number) => api.put(`/api/admin/ad-sites/${id}/toggle-archive`),
-    onSuccess: (_response, id) => {
+    mutationFn: ({ id, payload }: { id: number; payload: { eventDate: string; note?: string } }) =>
+      api.put(`/api/admin/ad-sites/${id}/toggle-archive`, payload),
+    onSuccess: (_response, variables) => {
+      const id = variables.id
       const row = sites.find((site) => site.id === id)
       message.success(row?.is_archived ? t('admin.restoreSuccess') : t('admin.markDieSuccess'))
       qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
+      setStatusModal(null)
+      statusForm.resetFields()
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       message.error(err.response?.data?.error ?? t('admin.actionFailed'))
@@ -274,6 +292,20 @@ function AdSitesTab() {
 
   const closeModal = () => { setModal(null); siteForm.resetFields() }
 
+  const openStatusModal = (action: AdSiteStatusAction, row: AdSiteRow) => {
+    setStatusModal({ action, row })
+    statusForm.resetFields()
+    statusForm.setFieldsValue({
+      event_date: dayjs(),
+      note: '',
+    })
+  }
+
+  const closeStatusModal = () => {
+    setStatusModal(null)
+    statusForm.resetFields()
+  }
+
   const handleSubmit = () => {
     siteForm.validateFields().then((values) => {
       const { name, upstream_id, billing_method, current_unit_price, current_ratio, status, downstream_ids } = values
@@ -295,6 +327,34 @@ function AdSitesTab() {
       priceMutation.mutate({ id: priceModal.id, payload })
     })
   }
+
+  const handleStatusSubmit = () => {
+    if (!statusModal) return
+
+    statusForm.validateFields().then((values) => {
+      const payload = {
+        eventDate: values.event_date.format('YYYY-MM-DD'),
+        note: values.note?.trim() || undefined,
+      }
+
+      if (statusModal.action === 'toggleActive') {
+        toggleActiveMutation.mutate({ id: statusModal.row.id, payload })
+        return
+      }
+
+      toggleArchiveMutation.mutate({ id: statusModal.row.id, payload })
+    })
+  }
+
+  const statusModalTitle = statusModal
+    ? statusModal.action === 'toggleActive'
+      ? statusModal.row.is_active
+        ? t('admin.pause')
+        : t('admin.resume')
+      : statusModal.row.is_archived
+        ? t('admin.restore')
+        : t('admin.markDie')
+    : ''
 
   const upstreamOptions = upstreams.map((u) => ({ value: u.id, label: `${u.name} (${u.ad_type_code})` }))
 
@@ -413,7 +473,7 @@ function AdSitesTab() {
           {showWriteActions && !row.is_archived ? (
             <Button
               size="small"
-              onClick={() => toggleActiveMutation.mutate(row.id)}
+              onClick={() => openStatusModal('toggleActive', row)}
               loading={toggleActiveMutation.isPending}
             >
               {row.is_active ? t('admin.pause') : t('admin.resume')}
@@ -423,7 +483,7 @@ function AdSitesTab() {
             <Button
               size="small"
               danger={!row.is_archived}
-              onClick={() => toggleArchiveMutation.mutate(row.id)}
+              onClick={() => openStatusModal('toggleArchive', row)}
               loading={toggleArchiveMutation.isPending}
             >
               {row.is_archived ? t('admin.restore') : t('admin.markDie')}
@@ -479,6 +539,30 @@ function AdSitesTab() {
         {admin && <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>}
       </div>
       <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
+
+      <Modal
+        title={statusModalTitle}
+        open={!!statusModal}
+        onCancel={closeStatusModal}
+        onOk={handleStatusSubmit}
+        confirmLoading={toggleActiveMutation.isPending || toggleArchiveMutation.isPending}
+      >
+        <Form form={statusForm} layout="vertical">
+          <Form.Item
+            name="event_date"
+            label={t('timeline.eventDate')}
+            rules={[{ required: true, message: t('timeline.eventDateRequired') }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="note"
+            label={t('timeline.eventNote')}
+          >
+            <Input.TextArea rows={3} placeholder={t('timeline.eventNotePlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={isEdit ? t('admin.editSite') : t('admin.createSite')}

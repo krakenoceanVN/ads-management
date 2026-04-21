@@ -53,12 +53,13 @@ function toUserPublic(user) {
         created_at: user.createdAt,
     };
 }
-async function createAdSiteEvent(adSiteId, eventType, note) {
+async function createAdSiteEvent(adSiteId, eventType, input = {}) {
     return prisma_js_1.default.adSiteEvent.create({
         data: {
             adSiteId,
             eventType,
-            note,
+            note: input.note,
+            eventDate: input.eventDate ?? new Date(),
         },
     });
 }
@@ -521,9 +522,15 @@ router.put("/admin/ad-sites/:id", auth_js_1.requireAuth, auth_js_1.requireWriteA
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
+    (0, express_validator_1.body)("note").optional().isLength({ max: 1000 }),
+], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        const eventDate = typeof req.body.eventDate === "string" ? (0, date_js_1.getBusinessDayStart)(req.body.eventDate) : undefined;
+        const note = typeof req.body.note === "string" ? req.body.note.trim() || undefined : undefined;
         const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ success: false, error: "Ad site not found" });
@@ -539,6 +546,8 @@ router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, auth_js_1
                 data: {
                     adSiteId: id,
                     eventType: nextIsActive ? "RESUMED" : "PAUSED",
+                    eventDate: eventDate ?? new Date(),
+                    note,
                 },
             });
             return site;
@@ -557,9 +566,15 @@ router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, auth_js_1
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });
-router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
+    (0, express_validator_1.body)("note").optional().isLength({ max: 1000 }),
+], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        const eventDate = typeof req.body.eventDate === "string" ? (0, date_js_1.getBusinessDayStart)(req.body.eventDate) : undefined;
+        const note = typeof req.body.note === "string" ? req.body.note.trim() || undefined : undefined;
         const existing = await prisma_js_1.default.adSite.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ success: false, error: "Ad site not found" });
@@ -575,6 +590,8 @@ router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, auth_js_
                 data: {
                     adSiteId: id,
                     eventType: nextIsArchived ? "DIED" : "RESUMED",
+                    eventDate: eventDate ?? new Date(),
+                    note,
                 },
             });
             return site;
@@ -629,7 +646,7 @@ router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, [(0, express_val
         }
         const events = await prisma_js_1.default.adSiteEvent.findMany({
             where: { adSiteId: id },
-            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            orderBy: [{ eventDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         });
         res.json({
             success: true,
@@ -638,6 +655,7 @@ router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, [(0, express_val
                 ad_site_id: event.adSiteId,
                 event_type: event.eventType,
                 note: event.note,
+                event_date: event.eventDate,
                 created_at: event.createdAt,
             })),
         });
@@ -650,10 +668,12 @@ router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, [(0, express_val
 router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
     (0, express_validator_1.body)("note").notEmpty().withMessage("note required").isLength({ max: 1000 }),
+    (0, express_validator_1.body)("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
 ], handleValidation, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const note = String(req.body.note ?? "").trim();
+        const eventDate = typeof req.body.eventDate === "string" ? (0, date_js_1.getBusinessDayStart)(req.body.eventDate) : undefined;
         const site = await prisma_js_1.default.adSite.findUnique({
             where: { id },
             select: { id: true },
@@ -662,7 +682,7 @@ router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, auth_js_1.requi
             res.status(404).json({ success: false, error: "Ad site not found" });
             return;
         }
-        const event = await createAdSiteEvent(id, "NOTE", note);
+        const event = await createAdSiteEvent(id, "NOTE", { note, eventDate });
         res.status(201).json({
             success: true,
             data: {
@@ -670,6 +690,7 @@ router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, auth_js_1.requi
                 ad_site_id: event.adSiteId,
                 event_type: event.eventType,
                 note: event.note,
+                event_date: event.eventDate,
                 created_at: event.createdAt,
             },
         });

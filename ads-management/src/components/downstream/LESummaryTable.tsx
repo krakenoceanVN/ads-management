@@ -72,6 +72,10 @@ function getUpstreamTotal(row: Pick<DailyRow, 'upstreamBreakdown'>): number {
   return Object.values(row.upstreamBreakdown ?? {}).reduce((sum, value) => sum + Number(value ?? 0), 0)
 }
 
+function getDownstreamTotal(row: Pick<DailyRow, 'vendorCost' | 'mlCost'>): number {
+  return toNumber(row.vendorCost) + toNumber(row.mlCost)
+}
+
 function buildDisplayRow(row: DailyRow): DailyRow {
   return {
     ...row,
@@ -152,11 +156,13 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
     const standardColWidth = 112
     const taxRateColWidth = 84
     const upstreamColWidth = 108
+    const downstreamColWidth = 112
     const pageMargin = 6
     const tableWidthPx = dateColWidth
       + (standardColWidth * 5)
       + taxRateColWidth
       + ((adSiteNames.length + 1) * upstreamColWidth)
+      + (downstreamColWidth * 3)
     const pageWidthPx = tableWidthPx + (pageMargin * 2) + 24
     const pageHeightPx = Math.max(1200, 220 + ((displayRows.length + 3) * 28))
     const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
@@ -182,6 +188,9 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           ${renderMoneyCell(record.profit, record.profit >= 0 ? '#15803d' : '#dc2626')}
           ${adSiteNames.map((name) => renderMoneyCell(toNumber(record.upstreamBreakdown?.[name]))).join('')}
           ${renderMoneyCell(getUpstreamTotal(record))}
+          ${renderMoneyCell(record.vendorCost)}
+          ${renderMoneyCell(record.mlCost)}
+          ${renderMoneyCell(getDownstreamTotal(record), '#b45309')}
         </tr>
       `
     }
@@ -222,6 +231,10 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           .le-report-table td.col-upstream {
             width: ${upstreamColWidth}px;
           }
+          .le-report-table th.col-downstream,
+          .le-report-table td.col-downstream {
+            width: ${downstreamColWidth}px;
+          }
         </style>
         <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 16px; color: #222;">
           ${t('downstream.lePdfTitle', { month: monthKey })}
@@ -242,10 +255,24 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.taxAmount')}</th>
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.expense')}</th>
               <th class="col-standard" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.profit')}</th>
+              <th colspan="${adSiteNames.length + 1}" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.upstream')}</th>
+              <th colspan="3" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.downstreamGroup')}</th>
+            </tr>
+            <tr style="background: #ececec;">
+              <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-tax-rate" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
+              <th class="col-standard" style="border: 1px solid #999; padding: 4px; text-align: center; color: transparent;">.</th>
               ${adSiteNames.map((name) => `
-                <th class="col-upstream" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${name}</th>
+                <th class="col-upstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${name}</th>
               `).join('')}
-              <th class="col-upstream" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
+              <th class="col-upstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
+              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.vendor')}</th>
+              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">ML</th>
+              <th class="col-downstream" style="border: 1px solid #999; padding: 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.total')}</th>
             </tr>
           </thead>
           <tbody>
@@ -341,17 +368,51 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
         </span>
       ),
     },
-    ...adSiteNames.map((name) => ({
-      title: name,
-      key: `site-${name}`,
-      width: 108,
-      render: (_value: unknown, record: DailyRow) => formatMoney(record.upstreamBreakdown?.[name] ?? 0),
-    })),
     {
-      title: t('downstream.total'),
-      key: 'site-total',
-      width: 108,
-      render: (_value: unknown, record: DailyRow) => formatMoney(getUpstreamTotal(record)),
+      title: t('downstream.upstream'),
+      key: 'upstream-group',
+      children: [
+        ...adSiteNames.map((name) => ({
+          title: name,
+          key: `site-${name}`,
+          width: 108,
+          render: (_value: unknown, record: DailyRow) => formatMoney(record.upstreamBreakdown?.[name] ?? 0),
+        })),
+        {
+          title: t('downstream.total'),
+          key: 'site-total',
+          width: 108,
+          render: (_value: unknown, record: DailyRow) => formatMoney(getUpstreamTotal(record)),
+        },
+      ],
+    },
+    {
+      title: t('downstream.downstreamGroup'),
+      key: 'downstream-group',
+      children: [
+        {
+          title: t('downstream.vendor'),
+          key: 'vendorCost',
+          width: 112,
+          render: (_value: unknown, record: DailyRow) => formatMoney(record.vendorCost),
+        },
+        {
+          title: 'ML',
+          key: 'mlCost',
+          width: 112,
+          render: (_value: unknown, record: DailyRow) => formatMoney(record.mlCost),
+        },
+        {
+          title: t('downstream.total'),
+          key: 'downstream-total',
+          width: 112,
+          render: (_value: unknown, record: DailyRow) => (
+            <span style={{ color: '#b45309', fontWeight: 600 }}>
+              {formatMoney(getDownstreamTotal(record))}
+            </span>
+          ),
+        },
+      ],
     },
   ])
   const tableWatchKey = [
@@ -414,7 +475,7 @@ export default function LESummaryTable({ month, onMonthChange }: Props) {
           bordered
           pagination={false}
           sticky={{ offsetHeader: 64, offsetScroll: 17 }}
-          scroll={{ x: 900 + ((adSiteNames.length + 1) * 108) }}
+          scroll={{ x: 1100 + ((adSiteNames.length + 4) * 108) }}
           rowClassName={(record) => (record.isTotal ? 'le-summary-row' : '')}
           tableLayout="fixed"
         />

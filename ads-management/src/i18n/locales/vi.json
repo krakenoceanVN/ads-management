@@ -8,8 +8,8 @@
     "input": "Nhập liệu",
     "upstream": "Bảng tổng",
     "downstream": "Hạ nguồn",
-    "admin": "Quản trị",
     "siteList": "Danh sách site",
+    "admin": "Quản trị",
     "logout": "Đăng xuất"
   },
   "adType": {
@@ -186,11 +186,11 @@
     "periodCreateFail": "Tạo kỳ thất bại",
     "addUser": "+ Thêm User",
     "username": "Tên đăng nhập",
-    "password": "Mật khẩu",
     "role": "Vai trò",
     "roleAdmin": "Quản trị viên",
     "roleEditor": "Nhập liệu",
     "roleViewer": "Người xem",
+    "password": "Mật khẩu",
     "permInput": "Nhập liệu",
     "permConfirm": "Xác nhận",
     "permAdmin": "Quản trị",
@@ -260,12 +260,11 @@
     "open": "Nhật ký hoạt động",
     "title": "Nhật ký hoạt động - {{name}}",
     "addNote": "Thêm ghi chú",
-    "notePlaceholder": "Nhập ghi chú thủ công cho ad site này",
     "eventDate": "Ngày xảy ra",
     "eventDateRequired": "Vui lòng chọn ngày thực tế",
     "eventNote": "Ghi chú sự kiện",
-    "eventNotePlaceholder": "Nhập lý do hoặc ghi chú sự kiện",
-    "loggedAt": "Ngày ghi nhận",
+    "eventNotePlaceholder": "Nhập ghi chú cho sự kiện này",
+    "notePlaceholder": "Nhập ghi chú thủ công cho ad site này",
     "empty": "Chưa có sự kiện nào",
     "loadError": "Không thể tải nhật ký hoạt động",
     "noteAdded": "Đã thêm ghi chú",
@@ -274,7 +273,8 @@
     "paused": "Tạm dừng",
     "resumed": "Chạy lại",
     "died": "Đánh dấu Die",
-    "note": "Ghi chú"
+    "note": "Ghi chú",
+    "loggedAt": "Hệ thống ghi nhận lúc"
   },
   "errorBoundary": {
     "title": "Đã xảy ra lỗi",

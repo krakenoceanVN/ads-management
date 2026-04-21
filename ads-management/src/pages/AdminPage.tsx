@@ -7,12 +7,11 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { CalculatorOutlined, HistoryOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import api, { isAdmin } from '../api/axios'
 import type { ApiResponse, UserRole } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
-import { DEFAULT_ML_PAYOUT_RATE } from '../utils/calculations'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
 
@@ -42,13 +41,6 @@ interface AdSiteFormValues {
   current_ratio?: number
   status: 'active' | 'inactive'
   downstream_ids?: number[]
-}
-
-type AdSiteStatusAction = 'toggleActive' | 'toggleArchive'
-
-interface AdSiteStatusModalState {
-  action: AdSiteStatusAction
-  row: AdSiteRow
 }
 
 interface UpstreamRow {
@@ -101,6 +93,7 @@ interface UserRow {
   perm_data_confirm: boolean
   perm_admin: boolean
   status: 'active' | 'inactive'
+  last_login_at?: string
   created_at: string
 }
 
@@ -124,6 +117,11 @@ interface CreateUserPayload {
   status: 'active' | 'inactive'
 }
 
+interface AdSiteEventModalValues {
+  event_date: Dayjs
+  note?: string
+}
+
 function matchesAdminSearch(search: string, values: unknown[]): boolean {
   const keyword = search.trim().toLowerCase()
 
@@ -141,19 +139,19 @@ function formatPriceValue(value: number): string {
 // ============================================================
 function AdSitesTab() {
   const { t } = useTranslation()
-  const admin = isAdmin()
+  const isAdminUser = isAdmin()
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [modal, setModal] = useState<Partial<AdSiteFormValues> & { id?: number } | null>(null)
+  const [eventModal, setEventModal] = useState<{ action: 'toggle-active' | 'toggle-archive'; row: AdSiteRow } | null>(null)
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
-  const [statusModal, setStatusModal] = useState<AdSiteStatusModalState | null>(null)
   const [reconciliationSite, setReconciliationSite] = useState<AdSiteRow | null>(null)
   const [timelineSite, setTimelineSite] = useState<AdSiteRow | null>(null)
   const [siteForm] = Form.useForm()
   const [priceForm] = Form.useForm()
   const [downstreamPriceForm] = Form.useForm()
-  const [statusForm] = Form.useForm()
+  const [eventForm] = Form.useForm<AdSiteEventModalValues>()
   const qc = useQueryClient()
 
   const { data: sites = [], isLoading } = useQuery({
@@ -166,7 +164,7 @@ function AdSitesTab() {
 
   const { data: upstreams = [] } = useQuery({
     queryKey: ['admin', 'upstreams'],
-    enabled: admin,
+    enabled: isAdminUser,
     queryFn: () =>
       api.get<ApiResponse<UpstreamRow[]> >('/api/admin/upstreams').then((r) => r.data.data ?? []),
   })
@@ -214,13 +212,12 @@ function AdSitesTab() {
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { eventDate: string; note?: string } }) =>
       api.put(`/api/admin/ad-sites/${id}/toggle-active`, payload),
-    onSuccess: (_response, variables) => {
-      const id = variables.id
+    onSuccess: (_response, { id }) => {
       const row = sites.find((site) => site.id === id)
       message.success(row?.is_active ? t('admin.pausedSuccess') : t('admin.resumedSuccess'))
       qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
-      setStatusModal(null)
-      statusForm.resetFields()
+      setEventModal(null)
+      eventForm.resetFields()
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       message.error(err.response?.data?.error ?? t('admin.actionFailed'))
@@ -230,13 +227,12 @@ function AdSitesTab() {
   const toggleArchiveMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { eventDate: string; note?: string } }) =>
       api.put(`/api/admin/ad-sites/${id}/toggle-archive`, payload),
-    onSuccess: (_response, variables) => {
-      const id = variables.id
+    onSuccess: (_response, { id }) => {
       const row = sites.find((site) => site.id === id)
       message.success(row?.is_archived ? t('admin.restoreSuccess') : t('admin.markDieSuccess'))
       qc.invalidateQueries({ queryKey: ['admin', 'ad-sites'] })
-      setStatusModal(null)
-      statusForm.resetFields()
+      setEventModal(null)
+      eventForm.resetFields()
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       message.error(err.response?.data?.error ?? t('admin.actionFailed'))
@@ -292,18 +288,10 @@ function AdSitesTab() {
 
   const closeModal = () => { setModal(null); siteForm.resetFields() }
 
-  const openStatusModal = (action: AdSiteStatusAction, row: AdSiteRow) => {
-    setStatusModal({ action, row })
-    statusForm.resetFields()
-    statusForm.setFieldsValue({
-      event_date: dayjs(),
-      note: '',
-    })
-  }
-
-  const closeStatusModal = () => {
-    setStatusModal(null)
-    statusForm.resetFields()
+  const openEventModal = (action: 'toggle-active' | 'toggle-archive', row: AdSiteRow) => {
+    setEventModal({ action, row })
+    eventForm.resetFields()
+    eventForm.setFieldsValue({ event_date: dayjs(), note: '' })
   }
 
   const handleSubmit = () => {
@@ -328,33 +316,23 @@ function AdSitesTab() {
     })
   }
 
-  const handleStatusSubmit = () => {
-    if (!statusModal) return
+  const handleEventSubmit = () => {
+    eventForm.validateFields().then((values) => {
+      if (!eventModal) return
 
-    statusForm.validateFields().then((values) => {
       const payload = {
         eventDate: values.event_date.format('YYYY-MM-DD'),
         note: values.note?.trim() || undefined,
       }
 
-      if (statusModal.action === 'toggleActive') {
-        toggleActiveMutation.mutate({ id: statusModal.row.id, payload })
+      if (eventModal.action === 'toggle-active') {
+        toggleActiveMutation.mutate({ id: eventModal.row.id, payload })
         return
       }
 
-      toggleArchiveMutation.mutate({ id: statusModal.row.id, payload })
+      toggleArchiveMutation.mutate({ id: eventModal.row.id, payload })
     })
   }
-
-  const statusModalTitle = statusModal
-    ? statusModal.action === 'toggleActive'
-      ? statusModal.row.is_active
-        ? t('admin.pause')
-        : t('admin.resume')
-      : statusModal.row.is_archived
-        ? t('admin.restore')
-        : t('admin.markDie')
-    : ''
 
   const upstreamOptions = upstreams.map((u) => ({ value: u.id, label: `${u.name} (${u.ad_type_code})` }))
 
@@ -381,7 +359,6 @@ function AdSitesTab() {
         return price !== undefined ? `${d.downstream_type}: ${price}` : d.downstream_type
       })
       .join(', ')
-  const showWriteActions = admin
 
   const columns: ColumnsType<AdSiteRow> = withTableEllipsis([
     { title: t('admin.adType'), dataIndex: 'ad_type_code', key: 'ad_type_code', width: 90 },
@@ -414,17 +391,16 @@ function AdSitesTab() {
         const ds = downstreams.filter((d) => row.downstream_ids?.includes(d.id))
         if (ds.length === 0) return '-'
         const hasPrice = ds.some((d) => row.downstream_prices?.[d.id] !== undefined)
+        if (!hasPrice) {
+          return isAdminUser
+            ? <a onClick={() => openDownstreamPriceModal(row)}>{ds.map((d) => d.downstream_type).join(', ')}</a>
+            : ds.map((d) => d.downstream_type).join(', ')
+        }
         const label = ds.map((d) => {
           const price = row.downstream_prices?.[d.id]
           return price !== undefined ? `${d.downstream_type}: ${formatPriceValue(price)}` : d.downstream_type
         }).join(', ')
-        if (!admin) return label
-        if (!hasPrice) {
-          return <a onClick={() => openDownstreamPriceModal(row)}>{ds.map((d) => d.downstream_type).join(', ')}</a>
-        }
-        return (
-          <a onClick={() => openDownstreamPriceModal(row)}>{label}</a>
-        )
+        return isAdminUser ? <a onClick={() => openDownstreamPriceModal(row)}>{label}</a> : label
       },
     },
     {
@@ -445,17 +421,7 @@ function AdSitesTab() {
     {
       title: t('input.action'), key: 'action', width: 390,
       render: (_: unknown, row: AdSiteRow) => (
-        <Space size="small">
-          {showWriteActions && <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>}
-          {showWriteActions && (
-            <Button size="small" onClick={() => {
-              setPriceModal(row)
-              priceForm.setFieldsValue({
-                new_unit_price: row.current_unit_price,
-                new_ratio: row.current_ratio,
-              })
-            }}>{t('admin.price')}</Button>
-          )}
+        <Space size="small" className="app-table-action-group">
           <Tooltip title={t('reconciliation.open')}>
             <Button
               size="small"
@@ -470,36 +436,44 @@ function AdSitesTab() {
               onClick={() => setTimelineSite(row)}
             />
           </Tooltip>
-          {showWriteActions && !row.is_archived ? (
-            <Button
-              size="small"
-              onClick={() => openStatusModal('toggleActive', row)}
-              loading={toggleActiveMutation.isPending}
-            >
-              {row.is_active ? t('admin.pause') : t('admin.resume')}
-            </Button>
+          {isAdminUser ? (
+            <>
+              <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
+              <Button size="small" onClick={() => {
+                setPriceModal(row)
+                priceForm.setFieldsValue({
+                  new_unit_price: row.current_unit_price,
+                  new_ratio: row.current_ratio,
+                })
+              }}>{t('admin.price')}</Button>
+              {!row.is_archived ? (
+                <Button
+                  size="small"
+                  onClick={() => openEventModal('toggle-active', row)}
+                  loading={toggleActiveMutation.isPending}
+                >
+                  {row.is_active ? t('admin.pause') : t('admin.resume')}
+                </Button>
+              ) : null}
+              <Button
+                size="small"
+                danger={!row.is_archived}
+                onClick={() => openEventModal('toggle-archive', row)}
+                loading={toggleArchiveMutation.isPending}
+              >
+                {row.is_archived ? t('admin.restore') : t('admin.markDie')}
+              </Button>
+              <Popconfirm
+                title={t('admin.deleteSiteConfirm')}
+                description={t('admin.deleteSiteDesc')}
+                onConfirm={() => deleteMutation.mutate(row.id)}
+                okText={t('admin.delete')}
+                cancelText={t('admin.cancel')}
+              >
+                <Button size="small" danger>{t('admin.delete')}</Button>
+              </Popconfirm>
+            </>
           ) : null}
-          {showWriteActions && (
-            <Button
-              size="small"
-              danger={!row.is_archived}
-              onClick={() => openStatusModal('toggleArchive', row)}
-              loading={toggleArchiveMutation.isPending}
-            >
-              {row.is_archived ? t('admin.restore') : t('admin.markDie')}
-            </Button>
-          )}
-          {showWriteActions && (
-            <Popconfirm
-              title={t('admin.deleteSiteConfirm')}
-              description={t('admin.deleteSiteDesc')}
-              onConfirm={() => deleteMutation.mutate(row.id)}
-              okText={t('admin.delete')}
-              cancelText={t('admin.cancel')}
-            >
-              <Button size="small" danger>{t('admin.delete')}</Button>
-            </Popconfirm>
-          )}
         </Space>
       ),
     },
@@ -531,38 +505,12 @@ function AdSitesTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('admin.searchPlaceholder', { label: t('admin.adSites') })}
         />
-        {admin && (
-          <Button onClick={() => setShowArchived((prev) => !prev)}>
-            {showArchived ? t('admin.backToActiveSites') : t('admin.dieBin')}
-          </Button>
-        )}
-        {admin && <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button>}
+        <Button onClick={() => setShowArchived((prev) => !prev)}>
+          {showArchived ? t('admin.backToActiveSites') : t('admin.dieBin')}
+        </Button>
+        {isAdminUser ? <Button type="primary" onClick={openCreate}>{t('admin.addSite')}</Button> : null}
       </div>
       <Table className="app-data-table" columns={columns} dataSource={filteredSites} rowKey="id" size="small" bordered loading={isLoading} scroll={{ x: 900 }} tableLayout="fixed" />
-
-      <Modal
-        title={statusModalTitle}
-        open={!!statusModal}
-        onCancel={closeStatusModal}
-        onOk={handleStatusSubmit}
-        confirmLoading={toggleActiveMutation.isPending || toggleArchiveMutation.isPending}
-      >
-        <Form form={statusForm} layout="vertical">
-          <Form.Item
-            name="event_date"
-            label={t('timeline.eventDate')}
-            rules={[{ required: true, message: t('timeline.eventDateRequired') }]}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="note"
-            label={t('timeline.eventNote')}
-          >
-            <Input.TextArea rows={3} placeholder={t('timeline.eventNotePlaceholder')} />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       <Modal
         title={isEdit ? t('admin.editSite') : t('admin.createSite')}
@@ -649,6 +597,36 @@ function AdSitesTab() {
               </Form.Item>
             )
           })}
+        </Form>
+      </Modal>
+
+      <Modal
+        title={
+          eventModal
+            ? eventModal.action === 'toggle-active'
+              ? (eventModal.row.is_active ? t('admin.pause') : t('admin.resume'))
+              : (eventModal.row.is_archived ? t('admin.restore') : t('admin.markDie'))
+            : ''
+        }
+        open={!!eventModal}
+        onCancel={() => {
+          setEventModal(null)
+          eventForm.resetFields()
+        }}
+        onOk={handleEventSubmit}
+        confirmLoading={toggleActiveMutation.isPending || toggleArchiveMutation.isPending}
+      >
+        <Form form={eventForm} layout="vertical">
+          <Form.Item
+            name="event_date"
+            label={t('timeline.eventDate')}
+            rules={[{ required: true, message: t('timeline.eventDateRequired') }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="note" label={t('timeline.eventNote')}>
+            <Input.TextArea rows={3} placeholder={t('timeline.eventNotePlaceholder')} />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -739,7 +717,7 @@ function UpstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UpstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUpstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -833,7 +811,7 @@ function DownstreamsTab() {
     },
   })
 
-  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: DEFAULT_ML_PAYOUT_RATE }) }
+  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: 0.8 }) }
   const openEdit = (row: DownstreamRow) => {
     setModal({ id: row.id })
     form.resetFields()
@@ -866,7 +844,7 @@ function DownstreamsTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: DownstreamRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteDownstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -1118,7 +1096,6 @@ function UsersTab() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<Partial<UserFormValues> & { id?: number } | null>(null)
   const [userForm] = Form.useForm()
-  const selectedUserRole = Form.useWatch('role', userForm) ?? 'EDITOR'
   const qc = useQueryClient()
 
   const { data: users = [], isLoading } = useQuery({
@@ -1136,7 +1113,7 @@ function UsersTab() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: { password?: string; role: UserRole; perm_data_input: number; perm_data_confirm: number; perm_admin: number; status: 'active' | 'inactive' } }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<CreateUserPayload> }) =>
       api.put(`/api/users/${id}`, payload),
     onSuccess: () => { message.success(t('admin.updated')); qc.invalidateQueries({ queryKey: ['admin', 'users'] }); setModal(null); userForm.resetFields() },
     onError: () => message.error(t('admin.actionFailed')),
@@ -1175,26 +1152,30 @@ function UsersTab() {
 
   const handleSubmit = () => {
     userForm.validateFields().then((values) => {
+      const payload: CreateUserPayload = {
+        username: values.username!,
+        password: values.password!,
+        role: values.role,
+        perm_data_input: values.perm_data_input ? 1 : 0,
+        perm_data_confirm: values.perm_data_confirm ? 1 : 0,
+        perm_admin: values.perm_admin ? 1 : 0,
+        status: values.status,
+      }
+
       if (modal && 'id' in modal && modal.id) {
-        const payload = {
-          password: values.password,
-          role: values.role,
-          perm_data_input: values.perm_data_input ? 1 : 0,
-          perm_data_confirm: values.perm_data_confirm ? 1 : 0,
-          perm_admin: values.perm_admin ? 1 : 0,
-          status: values.status,
-        }
-        updateMutation.mutate({ id: modal.id, payload })
-      } else {
-        createMutation.mutate({
-          username: values.username!,
-          password: values.password!,
-          role: values.role,
-          perm_data_input: values.perm_data_input ? 1 : 0,
-          perm_data_confirm: values.perm_data_confirm ? 1 : 0,
-          perm_admin: values.perm_admin ? 1 : 0,
-          status: values.status,
+        updateMutation.mutate({
+          id: modal.id,
+          payload: {
+            role: payload.role,
+            password: values.password || undefined,
+            perm_data_input: payload.perm_data_input,
+            perm_data_confirm: payload.perm_data_confirm,
+            perm_admin: payload.perm_admin,
+            status: payload.status,
+          },
         })
+      } else {
+        createMutation.mutate(payload)
       }
     })
   }
@@ -1202,12 +1183,15 @@ function UsersTab() {
   const columns: ColumnsType<UserRow> = withTableEllipsis([
     { title: t('admin.username'), dataIndex: 'username', key: 'username', width: 150 },
     {
-      title: t('admin.role'), dataIndex: 'role', key: 'role', width: 110,
-      render: (v: UserRole) => {
-        const color = v === 'ADMIN' ? 'purple' : v === 'VIEWER' ? 'blue' : 'default'
-        const label = v === 'ADMIN' ? t('admin.roleAdmin') : v === 'VIEWER' ? t('admin.roleViewer') : t('admin.roleEditor')
-        return <Tag color={color}>{label}</Tag>
-      },
+      title: t('admin.role'),
+      dataIndex: 'role',
+      key: 'role',
+      width: 110,
+      render: (value: UserRole) => (
+        <Tag color={value === 'ADMIN' ? 'purple' : value === 'VIEWER' ? 'blue' : 'default'}>
+          {value === 'ADMIN' ? t('admin.roleAdmin') : value === 'VIEWER' ? t('admin.roleViewer') : t('admin.roleEditor')}
+        </Tag>
+      ),
     },
     {
       title: t('admin.permInput'), dataIndex: 'perm_data_input', key: 'perm_data_input', width: 90,
@@ -1228,7 +1212,7 @@ function UsersTab() {
     {
       title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UserRow) => (
-        <Space size="small">
+        <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUserConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -1242,7 +1226,6 @@ function UsersTab() {
     matchesAdminSearch(search, [
       row.username,
       row.role,
-      row.role === 'ADMIN' ? t('admin.roleAdmin') : row.role === 'VIEWER' ? t('admin.roleViewer') : t('admin.roleEditor'),
       row.status,
       row.created_at,
       row.perm_data_input ? 'input' : '',
@@ -1278,13 +1261,6 @@ function UsersTab() {
           <Form.Item name="username" label={t('admin.username')} rules={[{ required: !isEdit, message: t('admin.username') }]}>
             <Input disabled={!!isEdit} />
           </Form.Item>
-          <Form.Item
-            name="password"
-            label={t('admin.password')}
-            rules={[{ required: !isEdit, message: t('admin.password') }, { min: 6, message: t('admin.minPassword') }]}
-          >
-            <Input.Password placeholder={isEdit ? t('admin.leaveBlank') : ''} />
-          </Form.Item>
           <Form.Item name="role" label={t('admin.role')} rules={[{ required: true, message: t('admin.role') }]}>
             <Select
               options={[
@@ -1292,33 +1268,23 @@ function UsersTab() {
                 { value: 'EDITOR', label: t('admin.roleEditor') },
                 { value: 'VIEWER', label: t('admin.roleViewer') },
               ]}
-              onChange={(value: UserRole) => {
-                if (value === 'ADMIN') {
-                  userForm.setFieldsValue({ perm_data_input: true, perm_data_confirm: true, perm_admin: true })
-                  return
-                }
-                if (value === 'VIEWER') {
-                  userForm.setFieldsValue({ perm_data_input: false, perm_data_confirm: false, perm_admin: false })
-                  return
-                }
-                userForm.setFieldsValue({ perm_admin: false })
-              }}
             />
           </Form.Item>
+          <Form.Item
+            name="password"
+            label={t('admin.password')}
+            rules={[{ required: !isEdit, message: t('admin.password') }, { min: 6, message: t('admin.minPassword') }]}
+          >
+            <Input.Password placeholder={isEdit ? t('admin.leaveBlank') : ''} />
+          </Form.Item>
           <Form.Item name="perm_data_input" valuePropName="checked">
-            <Checkbox disabled={selectedUserRole === 'VIEWER' || selectedUserRole === 'ADMIN'}>
-              {t('admin.permInput')}
-            </Checkbox>
+            <Checkbox>{t('admin.permInput')}</Checkbox>
           </Form.Item>
           <Form.Item name="perm_data_confirm" valuePropName="checked">
-            <Checkbox disabled={selectedUserRole === 'VIEWER' || selectedUserRole === 'ADMIN'}>
-              {t('admin.permConfirm')}
-            </Checkbox>
+            <Checkbox>{t('admin.permConfirm')}</Checkbox>
           </Form.Item>
           <Form.Item name="perm_admin" valuePropName="checked">
-            <Checkbox disabled>
-              {t('admin.permAdmin')}
-            </Checkbox>
+            <Checkbox>{t('admin.permAdmin')}</Checkbox>
           </Form.Item>
           <Form.Item name="status" label={t('admin.status')} rules={[{ required: true }]}>
             <Select options={[{ value: 'active', label: t('admin.active') }, { value: 'inactive', label: t('admin.inactive') }]} />
@@ -1334,22 +1300,26 @@ function UsersTab() {
 // ============================================================
 export default function AdminPage() {
   const { t } = useTranslation()
-  const admin = isAdmin()
-  const items = admin
-    ? [
-        { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
-        { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
-        { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
-        { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
-        { key: 'users', label: t('admin.users'), children: <UsersTab /> },
-      ]
-    : [
-        { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
-      ]
+  const isAdminUser = isAdmin()
   return (
-    <div className="admin-page">
-      <h2 style={{ marginBottom: 16 }}>{t('admin.title')}</h2>
-      <Tabs defaultActiveKey="adsites" items={items} />
+    <div className="page-shell admin-page">
+      <h2 className="page-heading" style={{ marginBottom: 16 }} title={isAdminUser ? t('admin.title') : t('nav.siteList')}>
+        {isAdminUser ? t('admin.title') : t('nav.siteList')}
+      </h2>
+      <Tabs
+        defaultActiveKey="adsites"
+        items={isAdminUser
+          ? [
+              { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+              { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
+              { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
+              { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
+              { key: 'users', label: t('admin.users'), children: <UsersTab /> },
+            ]
+          : [
+              { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+            ]}
+      />
     </div>
   )
 }

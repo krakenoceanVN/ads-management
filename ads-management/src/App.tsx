@@ -24,7 +24,7 @@ function AppHomeRedirect() {
   return <Navigate to={canViewDashboard() ? '/dashboard/sm' : '/input/sm'} replace />
 }
 
-function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+function DashboardRoute({ children }: { children: React.ReactNode }) {
   if (!canViewDashboard()) {
     return <Navigate to="/input/sm" replace />
   }
@@ -56,10 +56,10 @@ function App() {
             }
           >
             <Route index element={<AppHomeRedirect />} />
-            <Route path="dashboard/sm" element={<AdminOnlyRoute><DashboardPage adType="SM" /></AdminOnlyRoute>} />
-            <Route path="dashboard/360" element={<AdminOnlyRoute><DashboardPage adType="360" /></AdminOnlyRoute>} />
-            <Route path="dashboard/baidu" element={<AdminOnlyRoute><DashboardPage adType="BAIDU_JS" /></AdminOnlyRoute>} />
-            <Route path="dashboard/other" element={<AdminOnlyRoute><DashboardPage adType="OTHER" /></AdminOnlyRoute>} />
+            <Route path="dashboard/sm" element={<DashboardRoute><DashboardPage adType="SM" /></DashboardRoute>} />
+            <Route path="dashboard/360" element={<DashboardRoute><DashboardPage adType="360" /></DashboardRoute>} />
+            <Route path="dashboard/baidu" element={<DashboardRoute><DashboardPage adType="BAIDU_JS" /></DashboardRoute>} />
+            <Route path="dashboard/other" element={<DashboardRoute><DashboardPage adType="OTHER" /></DashboardRoute>} />
             <Route path="input/sm" element={<DailyInputPage adType="SM" />} />
             <Route path="input/360" element={<DailyInputPage adType="360" />} />
             <Route path="input/baidu" element={<DailyInputPage adType="BAIDU_JS" />} />

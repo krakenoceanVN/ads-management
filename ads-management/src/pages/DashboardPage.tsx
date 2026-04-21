@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { DatePicker, Table } from 'antd'
@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
-import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
@@ -30,12 +29,6 @@ const AD_TYPE_URL_MAP: Record<AdTypeCode, string> = {
   '360': '360',
   BAIDU_JS: 'baidu',
   OTHER: 'other',
-}
-
-interface UpstreamRow {
-  id: number
-  name: string
-  ad_type_code: string
 }
 
 const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> = {
@@ -63,15 +56,16 @@ export default function DashboardPage({ adType }: Props) {
       }).then((r) => r.data.data ?? []),
   })
 
-  const { data: upstreams = [] } = useQuery({
-    queryKey: ['admin', 'upstreams'],
-    queryFn: () => api.get<ApiResponse<UpstreamRow[]>>('/api/admin/upstreams').then((r) => r.data.data ?? []),
-  })
-
   const displayRows = rows.filter((r) => r.date !== 'TOTAL')
   const totalRow = rows.find((r) => r.date === 'TOTAL') ?? rows[rows.length - 1]
 
-  const upstreamCols = upstreams.filter((u) => u.ad_type_code === adType).map((u) => u.name)
+  const upstreamCols = useMemo(() => {
+    const names = new Set<string>()
+    rows.forEach((row) => {
+      Object.keys(row.upstream_breakdown ?? {}).forEach((name) => names.add(name))
+    })
+    return Array.from(names)
+  }, [rows])
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
 
   const monthLabel = `${year}-${String(month).padStart(2, '0')}`
@@ -156,7 +150,6 @@ export default function DashboardPage({ adType }: Props) {
 
   return (
     <div className="page-shell dashboard-page-shell">
-      <DashboardBrandWatermark />
       {/* Controls */}
       <div className="page-toolbar">
         <DatePicker.MonthPicker

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Table, DatePicker, InputNumber, Button } from 'antd'
+import { Table, DatePicker, Button } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useParams, Link } from 'react-router-dom'
 import type { ColumnsType } from 'antd/es/table'
@@ -9,11 +9,11 @@ import dayjs from 'dayjs'
 import html2pdf from 'html2pdf.js'
 import api, { isAdmin } from '../api/axios'
 import type { ApiResponse } from '../types'
+import TableNumberInput from '../components/common/TableNumberInput'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import LESummaryTable from '../components/downstream/LESummaryTable'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoNumber } from '../utils/numberFormat'
-import { DEFAULT_ML_PAYOUT_RATE } from '../utils/calculations'
 
 interface DownstreamRow {
   id: number
@@ -153,7 +153,7 @@ export default function DownstreamSitesPage() {
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
   const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
-  const basePayoutRate = (isMl360 ? DEFAULT_ML_PAYOUT_RATE : Number(downstream?.payout_rate ?? DEFAULT_ML_PAYOUT_RATE)) * 100
+  const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
   const basePayoutLabel = Number.isInteger(basePayoutRate)
     ? formatIsoNumber(basePayoutRate, { maximumFractionDigits: 0 })
     : formatIsoFixed(basePayoutRate, 2)
@@ -517,6 +517,7 @@ export default function DownstreamSitesPage() {
       key: 'date',
       width: 120,
       fixed: 'left',
+      className: 'dashboard-date-col',
       render: (v: string) => <span style={{ whiteSpace: 'nowrap' }}><strong>{v}</strong></span>,
     },
     {
@@ -543,26 +544,28 @@ export default function DownstreamSitesPage() {
       },
     },
     {
-      title: (
-        <span>{t('downstream.adjustedRate')}</span>
-      ),
+      title: t('downstream.adjustedRate'),
       key: 'total_ml_pct',
       width: 150,
       render: (_: unknown, row: PivotRow, _index: number) => {
         const effectiveRate = getEffectiveRate(_index, allDays, explicitRates, getDefaultRateForDate)
         const v = row.total_ml * (effectiveRate / 100)
         const isExplicit = savedRatesMap[row.date] !== undefined || activeRateOverrides[row.date] !== undefined
+        const rateLabel = `${formatIsoNumber(effectiveRate, { maximumFractionDigits: 0 })}%`
+        const valueLabel = v > 0 ? formatIsoMoney(v) : '-'
         if (!canEditRates) {
           return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span>{formatIsoNumber(effectiveRate, { maximumFractionDigits: 0 })}%</span>
-              <span style={{ color: '#1677ff' }}>{v > 0 ? formatIsoMoney(v) : '-'}</span>
-            </span>
+            <div className="app-table-inline-group" title={`${rateLabel} | ${valueLabel}`}>
+              <span className="app-table-inline-value">{rateLabel}</span>
+              <span className="app-table-inline-value" style={{ color: '#1677ff' }} title={valueLabel}>
+                {valueLabel}
+              </span>
+            </div>
           )
         }
         return (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <InputNumber
+          <div className="app-table-inline-group">
+            <TableNumberInput
               min={0}
               max={100}
               value={effectiveRate}
@@ -582,8 +585,10 @@ export default function DownstreamSitesPage() {
               style={{ width: 70, backgroundColor: isExplicit ? '#fffbe6' : undefined }}
               size="small"
             />
-            <span style={{ color: '#1677ff' }}>{v > 0 ? formatIsoMoney(v) : '-'}</span>
-          </span>
+            <span className="app-table-inline-value" style={{ color: '#1677ff' }} title={valueLabel}>
+              {valueLabel}
+            </span>
+          </div>
         )
       },
     },
@@ -634,13 +639,14 @@ export default function DownstreamSitesPage() {
     adSiteIds.join('|'),
     pivotRows.length,
   ].join(':')
+  const pageShellClassName = isLE ? 'page-shell' : 'page-shell dashboard-page-shell admin-page'
 
   return (
-    <div>
+    <div className={pageShellClassName}>
       <div style={{ marginBottom: 16 }}>
         <Link to="/downstream">← {t('downstream.backToList')}</Link>
       </div>
-      <h2 style={{ marginBottom: 8 }}>
+      <h2 className="page-heading" style={{ marginBottom: 8 }}>
         {downstream
           ? t('downstream.adSitesOf', {
               type: downstream.downstream_type,
@@ -654,14 +660,14 @@ export default function DownstreamSitesPage() {
         <LESummaryTable month={leMonth} onMonthChange={setLeMonth} />
       ) : (
         <>
-          <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+          <div className="page-toolbar" style={{ marginBottom: 16 }}>
             <DatePicker.MonthPicker
               value={dayjs(selectedMonth, 'YYYY-MM')}
               onChange={(date) => setSelectedMonth(date ? date.format('YYYY-MM') : dayjs().format('YYYY-MM'))}
               placeholder={t('downstream.monthPlaceholder')}
             />
             <Button type="primary" icon={<DownloadOutlined />} onClick={exportPDF}>{t('downstream.exportPdfMl')}</Button>
-            <span style={{ color: isOfficialView ? '#0f766e' : '#b45309', fontSize: 12, alignSelf: 'center' }}>
+            <span className="page-subtitle" style={{ color: isOfficialView ? '#0f766e' : '#b45309', fontSize: 12 }}>
               {isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')}
             </span>
           </div>

@@ -7,19 +7,10 @@ import dayjs from 'dayjs'
 import api from '../api/axios'
 import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
-import DashboardBrandWatermark from '../components/dashboard/DashboardBrandWatermark'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
-import { formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
-import {
-  calculateDisplayCostByAdType,
-  calculateDisplayMl80,
-  calculateGrossProfit,
-  calculateNetProfit,
-  calculateProfitRate,
-  calculateTaxOnMargin,
-} from '../utils/calculations'
+import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
 
 interface Props {
   adType?: AdTypeCode
@@ -41,6 +32,20 @@ interface LeDashboardRow {
 interface LeDashboardResponse {
   upstreamNames: string[]
   rows: LeDashboardRow[]
+}
+
+interface DisplayFinancials {
+  cost: number
+  grossProfit: number
+  tax: number
+  netProfit: number
+  profitRate: number
+}
+
+interface UpstreamDetailMetrics {
+  pv: number
+  unit_price: number
+  amount: number
 }
 
 const AD_TYPE_TABS: { key: string; adType: AdTypeCode; labelKey: string }[] = [
@@ -78,6 +83,72 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 
 type FR = SummaryRow & { _isTotal?: boolean; ml_80?: number; le?: number }
 
+function emptyUpstreamDetailMetrics(): UpstreamDetailMetrics {
+  return { pv: 0, unit_price: 0, amount: 0 }
+}
+
+function buildTotalUpstreamDetailBreakdown(rows: FR[]): Record<string, UpstreamDetailMetrics> {
+  const aggregated: Record<string, UpstreamDetailMetrics> = {}
+
+  for (const row of rows) {
+    for (const [name, metrics] of Object.entries(row.upstream_detail_breakdown ?? {})) {
+      const current = aggregated[name] ?? emptyUpstreamDetailMetrics()
+      current.pv += metrics.pv ?? 0
+      current.amount += metrics.amount ?? 0
+      aggregated[name] = current
+    }
+  }
+
+  for (const metrics of Object.values(aggregated)) {
+    metrics.unit_price = metrics.pv > 0 ? (metrics.amount / metrics.pv) * 1000 : 0
+  }
+
+  return aggregated
+}
+
+function formatPv(value: number): string {
+  return formatIsoInteger(value)
+}
+
+function calculateCost(ml80 = 0, le = 0): number {
+  return ml80 + le
+}
+
+function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
+  if (adType === '360') {
+    return revenue * 0.8
+  }
+
+  return downstreamMl80
+}
+
+function calculateCostByAdType(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): number {
+  if (adType === '360') {
+    return revenue * 0.8
+  }
+
+  return calculateCost(ml80, le)
+}
+
+function calculateTax(revenue: number, cost: number): number {
+  return (revenue - cost) * 0.06
+}
+
+function calculateDisplayFinancials(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): DisplayFinancials {
+  const cost = calculateCostByAdType(adType, revenue, ml80, le)
+  const grossProfit = revenue - cost
+  const tax = calculateTax(revenue, cost)
+  const netProfit = grossProfit - tax
+
+  return {
+    cost,
+    grossProfit,
+    tax,
+    netProfit,
+    profitRate: revenue > 0 ? netProfit / revenue : 0,
+  }
+}
+
 function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
   const { t } = useTranslation()
   const tableHostRef = useRef<HTMLDivElement | null>(null)
@@ -114,20 +185,18 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     .filter((r) => r.date !== 'TOTAL')
     .map((r) => {
       const downstream = downstreamRows.find((d) => d.date === r.date)
-      const ml80 = calculateDisplayMl80(adType, r.revenue, downstream?.ml_80 ?? 0)
+      const ml80 = calculateMl80(adType, r.revenue, downstream?.ml_80 ?? 0)
       const le = adType === 'SM'
         ? (leRevenueByDate.get(r.date) ?? 0)
         : (downstream?.le ?? 0)
-      const cost = calculateDisplayCostByAdType(adType, r.revenue, ml80, le)
-      const tax = calculateTaxOnMargin(r.revenue, cost)
-      const netProfit = calculateNetProfit(r.revenue, cost, tax)
+      const financials = calculateDisplayFinancials(adType, r.revenue, ml80, le)
 
       return {
         ...r,
-        cost,
-        tax,
-        profit: netProfit,
-        profit_rate: calculateProfitRate(netProfit, r.revenue),
+        cost: financials.cost,
+        tax: financials.tax,
+        profit: financials.netProfit,
+        profit_rate: financials.profitRate,
         ml_80: ml80,
         le,
       }
@@ -136,21 +205,25 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const totalRevenue = displayRows.reduce((sum, row) => sum + row.revenue, 0)
   const totalML80 = displayRows.reduce((sum, row) => sum + (row.ml_80 ?? 0), 0)
   const totalLE = displayRows.reduce((sum, row) => sum + (row.le ?? 0), 0)
-  const totalCost = calculateDisplayCostByAdType(adType, totalRevenue, totalML80, totalLE)
-  const totalTax = calculateTaxOnMargin(totalRevenue, totalCost)
+  const totalCost = calculateCostByAdType(adType, totalRevenue, totalML80, totalLE)
+  const totalTax = calculateTax(totalRevenue, totalCost)
   const totalNetProfit = displayRows.reduce((sum, row) => sum + row.profit, 0)
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
 
-  const totalGrossProfit = calculateGrossProfit(totalRevenue, totalCost)
-  const totalProfitRate = calculateProfitRate(totalNetProfit, totalRevenue)
+  const totalGrossProfit = totalRevenue - totalCost
+  const totalProfitRate = totalRevenue > 0 ? totalNetProfit / totalRevenue : 0
   const totalUpstreamBreakdown = displayRows.reduce<Record<string, number>>((acc, row) => {
     for (const [name, value] of Object.entries(row.upstream_breakdown ?? {})) {
       acc[name] = (acc[name] ?? 0) + value
     }
     return acc
   }, {})
-  const upstreamLeafCount = upstreamCols.length
+  const totalUpstreamDetailBreakdown = buildTotalUpstreamDetailBreakdown(displayRows)
+  const upstreamDetailNames = adType === '360'
+    ? Array.from(new Set(displayRows.flatMap((row) => Object.keys(row.upstream_detail_breakdown ?? {}))))
+    : []
+  const upstreamLeafCount = adType === '360' ? upstreamDetailNames.length * 3 : upstreamCols.length
 
   const monthLabel = monthKey
 
@@ -218,12 +291,37 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       dataIndex: 'profit_rate',
       render: (v: number) => formatIsoPercent(v, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
     },
-    ...upstreamCols.map((name) => ({
-      title: name,
-      key: `up_${name}`,
-      width: 100,
-      render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_breakdown?.[name] ?? 0} />,
-    })),
+    ...(adType === '360'
+      ? upstreamDetailNames.map((name) => ({
+          title: name,
+          key: `up_${name}`,
+          children: [
+            {
+              title: t('downstream.pv'),
+              key: `up_${name}_pv`,
+              width: 100,
+              render: (_: unknown, row: FR) => formatPv(row.upstream_detail_breakdown?.[name]?.pv ?? 0),
+            },
+            {
+              title: t('downstream.unitPrice'),
+              key: `up_${name}_unit_price`,
+              width: 110,
+              render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.unit_price ?? 0} />,
+            },
+            {
+              title: t('downstream.amount'),
+              key: `up_${name}_amount`,
+              width: 120,
+              render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.amount ?? 0} />,
+            },
+          ],
+        }))
+      : upstreamCols.map((name) => ({
+          title: name,
+          key: `up_${name}`,
+          width: 100,
+          render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_breakdown?.[name] ?? 0} />,
+        }))),
     ...downstreamCols.map(({ key, label }) => ({
       title: label,
       key: `ds_${key}`,
@@ -245,7 +343,6 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
 
   return (
     <div className="page-shell dashboard-page-shell">
-      <DashboardBrandWatermark />
       {/* Summary Cards */}
       <div className="kpi-grid">
         {summaryCards.map((card) => {
@@ -313,11 +410,28 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
                     )}
                   </Table.Summary.Cell>
 
-                  {upstreamCols.map((name, idx) => (
-                    <Table.Summary.Cell key={`sum-up-${name}`} index={7 + idx} className="dashboard-total-cell">
-                      <MoneyCell value={totalUpstreamBreakdown[name] ?? 0} />
-                    </Table.Summary.Cell>
-                  ))}
+                  {adType === '360'
+                    ? upstreamDetailNames.flatMap((name, idx) => {
+                        const metrics = totalUpstreamDetailBreakdown[name] ?? emptyUpstreamDetailMetrics()
+                        const startIndex = 7 + idx * 3
+
+                        return [
+                          <Table.Summary.Cell key={`sum-up-${name}-pv`} index={startIndex} className="dashboard-total-cell">
+                            {renderTableText(formatPv(metrics.pv), { fontWeight: 'var(--font-weight-semibold)' })}
+                          </Table.Summary.Cell>,
+                          <Table.Summary.Cell key={`sum-up-${name}-unit`} index={startIndex + 1} className="dashboard-total-cell">
+                            <MoneyCell value={metrics.unit_price} />
+                          </Table.Summary.Cell>,
+                          <Table.Summary.Cell key={`sum-up-${name}-amount`} index={startIndex + 2} className="dashboard-total-cell">
+                            <MoneyCell value={metrics.amount} />
+                          </Table.Summary.Cell>,
+                        ]
+                      })
+                    : upstreamCols.map((name, idx) => (
+                        <Table.Summary.Cell key={`sum-up-${name}`} index={7 + idx} className="dashboard-total-cell">
+                          <MoneyCell value={totalUpstreamBreakdown[name] ?? 0} />
+                        </Table.Summary.Cell>
+                      ))}
 
                   {downstreamCols.map(({ key }, idx) => {
                     const total = key === 'ml_80' ? totalML80 : key === 'le' ? totalLE : 0

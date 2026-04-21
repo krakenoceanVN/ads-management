@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Table, InputNumber, Button, message, Spin, Empty, Alert, Tag } from 'antd'
+import { Table, Button, message, Spin, Empty, Alert, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import api, { isAdmin, canConfirmInput, canInputData } from '../../api/axios'
+import api, { isAdmin, canConfirmInput } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
+import TableNumberInput from '../common/TableNumberInput'
 import StatusBadge from '../common/StatusBadge'
 import SaveBar from './SaveBar'
 import ConfirmAllButton from './ConfirmAllButton'
 import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
-import { calculateCpmRevenue, calculateRatioRevenue } from '../../utils/calculations'
 
 interface Props {
   date: string
@@ -34,7 +34,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const [unlockingId, setUnlockingId] = useState<number | null>(null)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const admin = isAdmin()
-  const canEdit = canInputData()
   const canConfirm = canConfirmInput()
 
   const { data: rows = [], isLoading, isError } = useQuery({
@@ -52,12 +51,12 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         row.existing_record?.unit_price_snapshot ??
         row.current_unit_price ??
         0
-      return calculateCpmRevenue(qty, price)
+      return qty * price
     } else {
       const a1 = drafts[row.id]?.amount1 ?? row.existing_record?.amount1 ?? 0
       const a2 = drafts[row.id]?.amount2 ?? row.existing_record?.amount2 ?? 0
       const ratio = drafts[row.id]?.ratio_override ?? row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1
-      return calculateRatioRevenue(a1, a2, ratio)
+      return (a1 + a2) * ratio
     }
   }
 
@@ -161,7 +160,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
   const getData = (r: FlatRow): DailyInputRow => (r as FR)._data
 
   const dirtyCount = Object.keys(drafts).length
-  const showActionColumn = admin || canConfirm
 
   const getCPMColumn = () => ({
     title: t('input.qty'),
@@ -173,7 +171,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if (row.billing_method !== 'CPM') return null
       if (isConfirmed(row)) return <span>{formatIsoInteger(row.existing_record?.qty ?? 0)}</span>
       return (
-        <InputNumber
+        <TableNumberInput
           ref={(el) => { inputRefs.current[`${row.id}-qty`] = el as HTMLInputElement | null }}
           size="small"
           precision={0}
@@ -183,7 +181,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], qty: v ?? undefined } }))
           }
           style={{ width: '100%' }}
-          disabled={!canEdit}
         />
       )
     },
@@ -198,8 +195,9 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       const row = getData(record)
       if (row.billing_method !== 'CPM') return null
       if (isConfirmed(row)) return <span>{formatIsoFixed(row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0, 4)}</span>
+      const admin = isAdmin()
       return (
-        <InputNumber
+        <TableNumberInput
           ref={(el) => { inputRefs.current[`${row.id}-up`] = el as HTMLInputElement | null }}
           size="small"
           precision={4}
@@ -225,7 +223,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if (row.billing_method !== 'RATIO') return null
       if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount1 ?? 0)}</span>
       return (
-        <InputNumber
+        <TableNumberInput
           ref={(el) => { inputRefs.current[`${row.id}-a1`] = el as HTMLInputElement | null }}
           size="small"
           precision={2}
@@ -235,7 +233,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], amount1: v ?? undefined } }))
           }
           style={{ width: '100%' }}
-          disabled={!canEdit}
         />
       )
     },
@@ -251,7 +248,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if (row.billing_method !== 'RATIO') return null
       if (isConfirmed(row)) return <span>{formatIsoMoney(row.existing_record?.amount2 ?? 0)}</span>
       return (
-        <InputNumber
+        <TableNumberInput
           ref={(el) => { inputRefs.current[`${row.id}-a2`] = el as HTMLInputElement | null }}
           size="small"
           precision={2}
@@ -261,7 +258,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], amount2: v ?? undefined } }))
           }
           style={{ width: '100%' }}
-          disabled={!canEdit}
         />
       )
     },
@@ -275,8 +271,9 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (isConfirmed(row)) return <span>{formatIsoPercent(row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1)}</span>
+      const admin = isAdmin()
       return (
-        <InputNumber
+        <TableNumberInput
           size="small"
           precision={4}
           min={0}
@@ -299,7 +296,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       dataIndex: 'upstream_name',
       key: 'upstream_name',
       width: 120,
-      fixed: 'left' as const,
+      fixed: 'left',
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return record.upstream
         return getData(record).upstream_name
@@ -310,7 +307,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       dataIndex: 'name',
       key: 'name',
       width: 200,
-      fixed: 'left' as const,
+      fixed: 'left',
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return ''
         return getData(record).name
@@ -385,6 +382,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         if (!canConfirm) return null
         return (
           <Button
+            className="app-table-action-button"
             size="small"
             type="link"
             onClick={() => {
@@ -403,7 +401,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         )
       },
     },
-  ].filter((column) => showActionColumn || column.key !== 'action'))
+  ])
 
   const rowClassName = (record: FlatRow): string => {
     if ('_isGroupHeader' in record && record._isGroupHeader) return 'group-header-row'
@@ -431,15 +429,13 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      {canConfirm && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <ConfirmAllButton
-            disabled={unconfirmedIds.length === 0}
-            loading={confirmAllMutation.isPending}
-            onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
-          />
-        </div>
-      )}
+      <div className="daily-input-table-actions">
+        <ConfirmAllButton
+          disabled={unconfirmedIds.length === 0}
+          loading={confirmAllMutation.isPending}
+          onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
+        />
+      </div>
 
       <div style={{ position: 'relative' }}>
         {isLoading && (
@@ -503,7 +499,7 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         )}
       </div>
 
-      {canEdit && <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />}
+      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
     </div>
   )
 }

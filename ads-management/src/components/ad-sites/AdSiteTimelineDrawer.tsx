@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, DatePicker, Drawer, Empty, Input, Result, Space, Spin, Timeline, Typography, message } from 'antd'
+import { Button, DatePicker, Drawer, Empty, Form, Input, Result, Space, Spin, Timeline, Typography, message } from 'antd'
 import {
   ClockCircleOutlined,
   FileTextOutlined,
@@ -75,7 +75,7 @@ export default function AdSiteTimelineDrawer({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [note, setNote] = useState('')
-  const [eventDate, setEventDate] = useState(() => dayjs())
+  const [form] = Form.useForm<{ event_date: dayjs.Dayjs }>()
   const canAddNote = isAdmin()
 
   const { data, isLoading, error } = useQuery<AdSiteEventRow[]>({
@@ -91,14 +91,15 @@ export default function AdSiteTimelineDrawer({
     mutationFn: async () => {
       const trimmed = note.trim()
       if (!siteId || !trimmed) return
+      const values = await form.validateFields()
       await api.post(`/api/admin/ad-sites/${siteId}/events`, {
         note: trimmed,
-        eventDate: eventDate.format('YYYY-MM-DD'),
+        eventDate: values.event_date.format('YYYY-MM-DD'),
       })
     },
     onSuccess: () => {
       setNote('')
-      setEventDate(dayjs())
+      form.setFieldsValue({ event_date: dayjs() })
       message.success(t('timeline.noteAdded'))
       qc.invalidateQueries({ queryKey: ['ad-site-events', siteId] })
     },
@@ -111,6 +112,8 @@ export default function AdSiteTimelineDrawer({
     () =>
       (data ?? []).map((event) => {
         const meta = getEventMeta(event.event_type, t)
+        const eventDate = event.event_date ?? event.created_at
+        const showLoggedAt = event.event_date && dayjs(event.event_date).valueOf() !== dayjs(event.created_at).valueOf()
 
         return {
           key: event.id,
@@ -121,10 +124,10 @@ export default function AdSiteTimelineDrawer({
               <Space size={8} wrap>
                 <Typography.Text strong>{meta.label}</Typography.Text>
                 <Typography.Text type="secondary">
-                  {dayjs(event.event_date ?? event.created_at).format('YYYY-MM-DD')}
+                  {dayjs(eventDate).format(event.event_date ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm')}
                 </Typography.Text>
               </Space>
-              {event.event_date && dayjs(event.event_date).format('YYYY-MM-DD HH:mm') !== dayjs(event.created_at).format('YYYY-MM-DD HH:mm') ? (
+              {showLoggedAt ? (
                 <Typography.Text type="secondary">
                   {t('timeline.loggedAt')}: {dayjs(event.created_at).format('YYYY-MM-DD HH:mm')}
                 </Typography.Text>
@@ -147,15 +150,18 @@ export default function AdSiteTimelineDrawer({
       destroyOnClose={false}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {canAddNote && (
+        {canAddNote ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Typography.Text strong>{t('timeline.addNote')}</Typography.Text>
-            <DatePicker
-              value={eventDate}
-              onChange={(value) => setEventDate(value ?? dayjs())}
-              style={{ width: '100%' }}
-              placeholder={t('timeline.eventDate')}
-            />
+            <Form form={form} layout="vertical" initialValues={{ event_date: dayjs() }}>
+              <Form.Item
+                name="event_date"
+                label={t('timeline.eventDate')}
+                rules={[{ required: true, message: t('timeline.eventDateRequired') }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Form>
             <TextArea
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -174,7 +180,7 @@ export default function AdSiteTimelineDrawer({
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
 
         {isLoading ? (
           <div style={{ padding: 32, textAlign: 'center' }}>

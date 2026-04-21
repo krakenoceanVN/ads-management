@@ -12,11 +12,11 @@ export default function UnlockRecordButton({ loading = false, onConfirm }: Props
 
   return (
     <Button
+      className="app-table-action-button daily-input-unlock-btn"
       size="small"
       type="link"
       icon={<UnlockOutlined />}
       loading={loading}
-      style={{ color: '#d48806' }}
       onClick={() => {
         Modal.confirm({
           title: t('input.unlock'),

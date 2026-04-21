@@ -13,25 +13,14 @@ import {
 import type { MenuProps } from 'antd'
 import brandLogoLightImage from '../../assets/trang-khong-logo.png'
 import brandLogoDarkImage from '../../assets/den-khong-logo.png'
-import type { User } from '../../types'
+import { canAccessSiteList, canViewDashboard, getUser } from '../../api/axios'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useThemeMode } from '../../theme/themeModeContext'
-import { canAccessSiteList, canViewDashboard } from '../../api/axios'
 
 const { Sider, Header, Content } = Layout
 const DEFAULT_SIDER_WIDTH = 220
 const MIN_SIDER_WIDTH = 180
 const MAX_SIDER_WIDTH = 420
-
-function getUser(): User | null {
-  const raw = localStorage.getItem('user')
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as User
-  } catch {
-    return null
-  }
-}
 
 const AD_TYPE_MENU_KEY_MAP: Record<string, string> = {
   '/dashboard/sm': 'dash-sm',

@@ -11,6 +11,7 @@ import ConfirmAllButton from './ConfirmAllButton'
 import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
+import { calculateCpmRevenue, calculateRatioRevenue } from '../../utils/calculations'
 
 interface Props {
   date: string
@@ -50,12 +51,12 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         row.existing_record?.unit_price_snapshot ??
         row.current_unit_price ??
         0
-      return qty * price
+      return calculateCpmRevenue(qty, price)
     } else {
       const a1 = drafts[row.id]?.amount1 ?? row.existing_record?.amount1 ?? 0
       const a2 = drafts[row.id]?.amount2 ?? row.existing_record?.amount2 ?? 0
       const ratio = drafts[row.id]?.ratio_override ?? row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1
-      return (a1 + a2) * ratio
+      return calculateRatioRevenue(a1, a2, ratio)
     }
   }
 

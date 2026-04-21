@@ -3,6 +3,14 @@ import { query, validationResult } from "express-validator"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDateAtHour, getBusinessDayRange, getBusinessMonthRange } from "../utils/date.js"
+import {
+  DEFAULT_LE_PAYOUT_RATE,
+  TAX_RATE,
+  calculateFlatTax,
+  calculateLeRevenueFromSmRevenue,
+  calculateNetProfit,
+  calculateProfitRate,
+} from "../utils/calculations.js"
 
 const router = Router()
 
@@ -162,12 +170,12 @@ router.get(
           upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev
         }
 
-        const leRevenue = smRevenue * 0.9
+        const leRevenue = calculateLeRevenueFromSmRevenue(smRevenue, DEFAULT_LE_PAYOUT_RATE)
         const downstreamCosts = leCostMap.get(date) ?? { vendorCost: 0, mlCost: 0, totalCost: 0 }
-        const taxRate = 0.06
-        const tax = leRevenue * taxRate
-        const profit = leRevenue - tax - downstreamCosts.totalCost
-        const profitRate = leRevenue > 0 ? profit / leRevenue : 0
+        const taxRate = TAX_RATE
+        const tax = calculateFlatTax(leRevenue, taxRate)
+        const profit = calculateNetProfit(leRevenue, downstreamCosts.totalCost, tax)
+        const profitRate = calculateProfitRate(profit, leRevenue)
 
         results.push({
           date,
@@ -204,7 +212,7 @@ router.get(
         date: "TOTAL",
         smRevenue: totalSmRevenue,
         leRevenue: totalLeRevenue,
-        taxRate: 0.06,
+        taxRate: TAX_RATE,
         tax: totalTax,
         vendorCost: totalVendorCost,
         mlCost: totalMlCost,

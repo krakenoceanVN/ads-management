@@ -11,6 +11,7 @@ import ConfirmAllButton from './ConfirmAllButton'
 import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney } from '../../utils/numberFormat'
+import { calculateCpmRevenue } from '../../utils/calculations'
 
 interface Props {
   date: string
@@ -45,7 +46,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
       row.existing_record?.unit_price_snapshot ??
       row.current_unit_price ??
       0
-    return qty * price
+    return calculateCpmRevenue(qty, price)
   }
 
   const isDirty = (row: DailyInputRow) => row.id in drafts

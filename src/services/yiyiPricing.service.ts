@@ -1,8 +1,20 @@
 import { PrismaClient } from "@prisma/client"
 import { getBusinessDayStart } from "../utils/date.js"
+import {
+  YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+  YIYI_DEFAULT_UNIT_PRICE,
+  calculateYiyiAmount,
+  calculateYiyiProfit,
+  calculateYiyiTotal,
+} from "../utils/calculations.js"
 
-export const YIYI_DEFAULT_UNIT_PRICE = 2
-export const YIYI_DEFAULT_PROFIT_UNIT_PRICE = 1
+export {
+  YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+  YIYI_DEFAULT_UNIT_PRICE,
+  calculateYiyiAmount,
+  calculateYiyiProfit,
+  calculateYiyiTotal,
+}
 
 export interface YiyiDailyPricingValues {
   unitPrice: number
@@ -22,20 +34,4 @@ export async function getYiyiDailyPricing(
     unitPrice: Number(pricing?.unitPrice ?? YIYI_DEFAULT_UNIT_PRICE),
     profitUnitPrice: Number(pricing?.profitUnitPrice ?? YIYI_DEFAULT_PROFIT_UNIT_PRICE),
   }
-}
-
-export function calculateYiyiAmount(totalQty: number, unitPrice: number): number {
-  return (totalQty * unitPrice) / 1000
-}
-
-export function calculateYiyiProfit(totalQty: number, profitUnitPrice: number): number {
-  return (totalQty * profitUnitPrice) / 1000
-}
-
-export function calculateYiyiTotal(
-  totalQty: number,
-  unitPrice: number,
-  profitUnitPrice: number
-): number {
-  return calculateYiyiAmount(totalQty, unitPrice) + calculateYiyiProfit(totalQty, profitUnitPrice)
 }

@@ -8,7 +8,7 @@ const express_validator_1 = require("express-validator");
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
-const yiyiPricing_service_js_1 = require("../services/yiyiPricing.service.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const router = (0, express_1.Router)();
 const YIYI_CHANNELS = ["yy-02-01", "yy-02-02", "yy-02-03", "yy-02-04"];
 function createEmptyChannelValues() {
@@ -116,8 +116,8 @@ router.get("/yiyi-data/monthly", auth_js_1.requireAuth, [
         }
         const result = getDaysInMonth(year, month).map((date) => ({
             date,
-            unit_price: pricingByDate.get(date)?.unit_price ?? yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE,
-            profit_unit_price: pricingByDate.get(date)?.profit_unit_price ?? yiyiPricing_service_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+            unit_price: pricingByDate.get(date)?.unit_price ?? calculations_js_1.YIYI_DEFAULT_UNIT_PRICE,
+            profit_unit_price: pricingByDate.get(date)?.profit_unit_price ?? calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE,
             ...Object.fromEntries(YIYI_CHANNELS.map((channel) => [channel, byDate.get(date)?.[channel] ?? 0])),
         }));
         res.json({ success: true, data: result });
@@ -152,13 +152,13 @@ router.post("/yiyi-data/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePerm
         await prisma_js_1.default.yiyiDailyPricing.upsert({
             where: { recordDate },
             update: {
-                unitPrice: normalizeNonNegativeNumber(unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE),
-                profitUnitPrice: normalizeNonNegativeNumber(profit_unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
+                unitPrice: normalizeNonNegativeNumber(unit_price, calculations_js_1.YIYI_DEFAULT_UNIT_PRICE),
+                profitUnitPrice: normalizeNonNegativeNumber(profit_unit_price, calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
             },
             create: {
                 recordDate,
-                unitPrice: normalizeNonNegativeNumber(unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE),
-                profitUnitPrice: normalizeNonNegativeNumber(profit_unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
+                unitPrice: normalizeNonNegativeNumber(unit_price, calculations_js_1.YIYI_DEFAULT_UNIT_PRICE),
+                profitUnitPrice: normalizeNonNegativeNumber(profit_unit_price, calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
             },
         });
         let saved = 0;
@@ -224,13 +224,13 @@ router.post("/yiyi-data/monthly-batch", auth_js_1.requireAuth, (0, auth_js_1.req
                 await prisma_js_1.default.yiyiDailyPricing.upsert({
                     where: { recordDate },
                     update: {
-                        unitPrice: normalizeNonNegativeNumber(row.unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE),
-                        profitUnitPrice: normalizeNonNegativeNumber(row.profit_unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
+                        unitPrice: normalizeNonNegativeNumber(row.unit_price, calculations_js_1.YIYI_DEFAULT_UNIT_PRICE),
+                        profitUnitPrice: normalizeNonNegativeNumber(row.profit_unit_price, calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
                     },
                     create: {
                         recordDate,
-                        unitPrice: normalizeNonNegativeNumber(row.unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_UNIT_PRICE),
-                        profitUnitPrice: normalizeNonNegativeNumber(row.profit_unit_price, yiyiPricing_service_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
+                        unitPrice: normalizeNonNegativeNumber(row.unit_price, calculations_js_1.YIYI_DEFAULT_UNIT_PRICE),
+                        profitUnitPrice: normalizeNonNegativeNumber(row.profit_unit_price, calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
                     },
                 });
                 for (const channel of YIYI_CHANNELS) {

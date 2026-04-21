@@ -11,6 +11,7 @@ import api from '../api/axios'
 import type { ApiResponse } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
+import { DEFAULT_ML_PAYOUT_RATE } from '../utils/calculations'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
 
@@ -734,7 +735,7 @@ function DownstreamsTab() {
     },
   })
 
-  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: 0.8 }) }
+  const openCreate = () => { setModal({}); form.resetFields(); form.setFieldsValue({ status: 'active', payout_rate: DEFAULT_ML_PAYOUT_RATE }) }
   const openEdit = (row: DownstreamRow) => {
     setModal({ id: row.id })
     form.resetFields()

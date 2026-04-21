@@ -1,10 +1,24 @@
 import { Router, Request, Response } from "express"
 import { query, validationResult } from "express-validator"
-import { calculateYiyiAmount, YIYI_DEFAULT_UNIT_PRICE } from "../services/yiyiPricing.service.js"
 import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessMonthRange } from "../utils/date.js"
 import { AD_TYPE_ID_MAP, DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
+import {
+  DEFAULT_LE_PAYOUT_RATE,
+  DEFAULT_LE_UNIT_PRICE,
+  DEFAULT_ML_PAYOUT_RATE,
+  YIYI_DEFAULT_UNIT_PRICE,
+  applyMl80Rate,
+  calculateLeRevenueFromSmRevenue,
+  calculateMlPayoutAmount,
+  calculateNetProfit,
+  calculateProfitRate,
+  calculateSmDashboardCost,
+  calculateTaxOnMargin,
+  calculateUnitPricePayout,
+  calculateYiyiAmount,
+} from "../utils/calculations.js"
 
 const router = Router()
 
@@ -77,7 +91,7 @@ function buildMonthlyTotal(rows: SummaryRow[]): SummaryRow {
   const revenue = rows.reduce((s, r) => s + r.revenue, 0)
   const cost = rows.reduce((s, r) => s + r.cost, 0)
   const tax = rows.reduce((s, r) => s + r.tax, 0)
-  const profit = revenue - cost - tax
+  const profit = calculateNetProfit(revenue, cost, tax)
   const mlPayout = rows.reduce((s, r) => s + r.ml_payout, 0)
   const lePayout = rows.reduce((s, r) => s + (r.le_payout ?? 0), 0)
   const yiyiPayout = rows.reduce((s, r) => s + (r.yiyi_payout ?? 0), 0)
@@ -107,7 +121,7 @@ function buildMonthlyTotal(rows: SummaryRow[]): SummaryRow {
     cost,
     tax,
     profit,
-    profit_rate: revenue > 0 ? profit / revenue : 0,
+    profit_rate: calculateProfitRate(profit, revenue),
     upstream_breakdown: upstreamBreakdown,
     upstream_detail_breakdown: finalizedUpstreamDetailBreakdown,
     ml_payout: mlPayout,
@@ -347,8 +361,8 @@ router.get(
             : undefined
 
         const activeMlPeriod = getActivePeriodForDate(mlPeriodMap.values().next().value, date)
-        const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? 0.8)
-        const mlPayout = totalRevenue * mlPayoutRate
+        const mlPayoutRate = Number(activeMlPeriod?.downstream.payoutRate ?? DEFAULT_ML_PAYOUT_RATE)
+        const mlPayout = calculateMlPayoutAmount(totalRevenue, mlPayoutRate)
 
         let cost = mlPayout
         let lePayout: number | undefined
@@ -356,22 +370,22 @@ router.get(
 
         if (adTypeCode === "SM") {
           const activeLePeriod = getActivePeriodForDate(lePeriodMap.values().next().value, date)
-          const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? 0.9)
-          const leRevenue = totalRevenue * lePayoutRate
-          const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? 16)
-          const leMlCost = totalUV * mlUnitPrice / 1000
-          const leTax = (leRevenue - leMlCost) * 0.06
-          lePayout = leRevenue - leTax - leMlCost
+          const lePayoutRate = Number(activeLePeriod?.downstream.payoutRate ?? DEFAULT_LE_PAYOUT_RATE)
+          const leRevenue = calculateLeRevenueFromSmRevenue(totalRevenue, lePayoutRate)
+          const mlUnitPrice = Number(activeLePeriod?.unitPrice ?? DEFAULT_LE_UNIT_PRICE)
+          const leMlCost = calculateUnitPricePayout(totalUV, mlUnitPrice)
+          const leTax = calculateTaxOnMargin(leRevenue, leMlCost)
+          lePayout = calculateNetProfit(leRevenue, leMlCost, leTax)
 
           const yiyiQty = yiyiQtyByDate.get(date)
           const yiyiUnitPrice = yiyiPricingByDate.get(date) ?? YIYI_DEFAULT_UNIT_PRICE
           yiyiPayout = calculateYiyiAmount(yiyiQty ?? totalUV, yiyiUnitPrice)
 
-          cost = lePayout + yiyiPayout
+          cost = calculateSmDashboardCost(lePayout, yiyiPayout)
         }
 
-        const tax = (totalRevenue - cost) * 0.06
-        const profit = totalRevenue - cost - tax
+        const tax = calculateTaxOnMargin(totalRevenue, cost)
+        const profit = calculateNetProfit(totalRevenue, cost, tax)
 
         results.push({
           date,
@@ -379,7 +393,7 @@ router.get(
           cost,
           tax,
           profit,
-          profit_rate: totalRevenue > 0 ? profit / totalRevenue : 0,
+          profit_rate: calculateProfitRate(profit, totalRevenue),
           upstream_breakdown: upstreamBreakdown,
           upstream_detail_breakdown: finalizedUpstreamDetailBreakdown,
           ml_payout: mlPayout,
@@ -554,7 +568,7 @@ router.get(
         results.push({
           date,
           ml: totalML,
-          ml_80: totalML * 0.8,
+          ml_80: applyMl80Rate(totalML),
           le: totalLE,
         })
       }

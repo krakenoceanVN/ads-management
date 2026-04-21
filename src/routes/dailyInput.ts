@@ -4,6 +4,7 @@ import { requirePermission, requireAuth, AuthRequest } from "../middleware/auth.
 import { AdSite, DailyInputRow, DailyInputRecord, BatchInputItem, AdTypeCode, InputStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart } from "../utils/date.js"
+import { calculateCpmRevenue, calculateRatioRevenue } from "../utils/calculations.js"
 
 const router = Router()
 
@@ -236,7 +237,7 @@ router.post(
           // CPM: use stored snapshot price (or override) for revenue calculation
           const basePrice = existing?.unitPriceSnapshot ?? site.currentUnitPrice ?? 0
           const unitPrice = item.unit_price_override ?? Number(basePrice)
-          revenue = (item.qty ?? 0) * unitPrice
+          revenue = calculateCpmRevenue(item.qty ?? 0, unitPrice)
         } else {
           // RATIO: ratio_override from frontend > existing snapshot > current ratio
           const baseRatio = item.ratio_override ?? existing?.ratioSnapshot ?? site.currentRatio ?? 1
@@ -245,7 +246,7 @@ router.post(
             : (item.amount1 !== undefined || item.amount2 !== undefined
               ? Number(baseRatio)
               : Number(site.currentRatio ?? 1))
-          revenue = ((item.amount1 ?? 0) + (item.amount2 ?? 0)) * ratio
+          revenue = calculateRatioRevenue(item.amount1 ?? 0, item.amount2 ?? 0, ratio)
         }
 
         if (existing) {

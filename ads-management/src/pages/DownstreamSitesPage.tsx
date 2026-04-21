@@ -13,6 +13,7 @@ import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScr
 import LESummaryTable from '../components/downstream/LESummaryTable'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney, formatIsoNumber } from '../utils/numberFormat'
+import { DEFAULT_ML_PAYOUT_RATE } from '../utils/calculations'
 
 interface DownstreamRow {
   id: number
@@ -152,7 +153,7 @@ export default function DownstreamSitesPage() {
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
   const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
-  const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
+  const basePayoutRate = (isMl360 ? DEFAULT_ML_PAYOUT_RATE : Number(downstream?.payout_rate ?? DEFAULT_ML_PAYOUT_RATE)) * 100
   const basePayoutLabel = Number.isInteger(basePayoutRate)
     ? formatIsoNumber(basePayoutRate, { maximumFractionDigits: 0 })
     : formatIsoFixed(basePayoutRate, 2)

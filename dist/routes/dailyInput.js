@@ -8,6 +8,7 @@ const express_validator_1 = require("express-validator");
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const router = (0, express_1.Router)();
 // ============================================================
 // Validation helpers
@@ -204,7 +205,7 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
                 // CPM: use stored snapshot price (or override) for revenue calculation
                 const basePrice = existing?.unitPriceSnapshot ?? site.currentUnitPrice ?? 0;
                 const unitPrice = item.unit_price_override ?? Number(basePrice);
-                revenue = (item.qty ?? 0) * unitPrice;
+                revenue = (0, calculations_js_1.calculateCpmRevenue)(item.qty ?? 0, unitPrice);
             }
             else {
                 // RATIO: ratio_override from frontend > existing snapshot > current ratio
@@ -214,7 +215,7 @@ router.post("/batch", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("p
                     : (item.amount1 !== undefined || item.amount2 !== undefined
                         ? Number(baseRatio)
                         : Number(site.currentRatio ?? 1));
-                revenue = ((item.amount1 ?? 0) + (item.amount2 ?? 0)) * ratio;
+                revenue = (0, calculations_js_1.calculateRatioRevenue)(item.amount1 ?? 0, item.amount2 ?? 0, ratio);
             }
             if (existing) {
                 // UPDATE unconfirmed record

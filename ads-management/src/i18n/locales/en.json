@@ -251,6 +251,21 @@
     "systemRevenue": "System Revenue",
     "loadError": "Failed to load reconciliation data"
   },
+  "timeline": {
+    "open": "Activity Timeline",
+    "title": "Activity Timeline - {{name}}",
+    "addNote": "Add Note",
+    "notePlaceholder": "Enter a manual note for this ad site",
+    "empty": "No events yet",
+    "loadError": "Failed to load activity timeline",
+    "noteAdded": "Note added",
+    "addFailed": "Failed to add note",
+    "created": "Created",
+    "paused": "Paused",
+    "resumed": "Resumed",
+    "died": "Marked Die",
+    "note": "Note"
+  },
   "errorBoundary": {
     "title": "Something went wrong",
     "unknown": "Unknown error",

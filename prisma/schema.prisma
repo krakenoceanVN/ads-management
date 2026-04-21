@@ -60,11 +60,24 @@ model AdSite {
   upstream       Upstream        @relation(fields: [upstreamId], references: [id])
   dailyInputs    DailyInput[]
   downstreams    AdSiteDownstream[]
+  events         AdSiteEvent[]
 
   @@index([upstreamId])
   @@index([isActive])
   @@index([isArchived])
   @@index([upstreamId, isActive, isArchived])
+}
+
+model AdSiteEvent {
+  id        String   @id @default(uuid())
+  adSiteId  Int
+  eventType String
+  note      String?
+  createdAt DateTime @default(now())
+
+  adSite AdSite @relation(fields: [adSiteId], references: [id], onDelete: Cascade)
+
+  @@index([adSiteId, createdAt])
 }
 
 // ============================================================

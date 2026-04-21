@@ -6,12 +6,13 @@ import {
   Select, Drawer, DatePicker, Space, Tag, Tooltip, message, Popconfirm,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { CalculatorOutlined } from '@ant-design/icons'
+import { CalculatorOutlined, HistoryOutlined } from '@ant-design/icons'
 import api from '../api/axios'
 import type { ApiResponse } from '../types'
 import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
+import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
 
 // ============================================================
 // Shared types
@@ -134,6 +135,7 @@ function AdSitesTab() {
   const [priceModal, setPriceModal] = useState<AdSiteRow | null>(null)
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
   const [reconciliationSite, setReconciliationSite] = useState<AdSiteRow | null>(null)
+  const [timelineSite, setTimelineSite] = useState<AdSiteRow | null>(null)
   const [siteForm] = Form.useForm()
   const [priceForm] = Form.useForm()
   const [downstreamPriceForm] = Form.useForm()
@@ -374,7 +376,7 @@ function AdSitesTab() {
       ),
     },
     {
-      title: t('input.action'), key: 'action', width: 320,
+      title: t('input.action'), key: 'action', width: 390,
       render: (_: unknown, row: AdSiteRow) => (
         <Space size="small">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
@@ -390,6 +392,13 @@ function AdSitesTab() {
               size="small"
               icon={<CalculatorOutlined />}
               onClick={() => setReconciliationSite(row)}
+            />
+          </Tooltip>
+          <Tooltip title={t('timeline.open')}>
+            <Button
+              size="small"
+              icon={<HistoryOutlined />}
+              onClick={() => setTimelineSite(row)}
             />
           </Tooltip>
           {!row.is_archived ? (
@@ -549,6 +558,12 @@ function AdSitesTab() {
         siteId={reconciliationSite?.id}
         siteName={reconciliationSite?.ad_site_name}
         onClose={() => setReconciliationSite(null)}
+      />
+      <AdSiteTimelineDrawer
+        open={!!timelineSite}
+        siteId={timelineSite?.id}
+        siteName={timelineSite?.ad_site_name}
+        onClose={() => setTimelineSite(null)}
       />
     </>
   )

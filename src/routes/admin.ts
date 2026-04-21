@@ -32,6 +32,18 @@ const loginRateLimiter = createMemoryRateLimiter({
   errorMessage: "Too many login attempts. Please try again later.",
 })
 
+type AdSiteEventType = "CREATED" | "PAUSED" | "RESUMED" | "DIED" | "NOTE"
+
+async function createAdSiteEvent(adSiteId: number, eventType: AdSiteEventType, note?: string) {
+  return prisma.adSiteEvent.create({
+    data: {
+      adSiteId,
+      eventType,
+      note,
+    },
+  })
+}
+
 // ============================================================
 // GET /api/admin/ad-sites
 // ============================================================
@@ -479,20 +491,31 @@ router.post(
         res.status(400).json({ success: false, error: "Upstream not found" })
         return
       }
-      const site = await prisma.adSite.create({
-        data: {
-          name,
-          upstreamId: upstream_id,
-          billingMethod: billing_method,
-          currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
-          currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
-          isActive: true,
-          isArchived: false,
-          status: status ?? "active",
-          downstreams: downstream_ids?.length
-            ? { create: downstream_ids.map((did: number) => ({ downstreamId: did })) }
-            : undefined,
-        },
+      const site = await prisma.$transaction(async (tx) => {
+        const created = await tx.adSite.create({
+          data: {
+            name,
+            upstreamId: upstream_id,
+            billingMethod: billing_method,
+            currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
+            currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
+            isActive: true,
+            isArchived: false,
+            status: status ?? "active",
+            downstreams: downstream_ids?.length
+              ? { create: downstream_ids.map((did: number) => ({ downstreamId: did })) }
+              : undefined,
+          },
+        })
+
+        await tx.adSiteEvent.create({
+          data: {
+            adSiteId: created.id,
+            eventType: "CREATED",
+          },
+        })
+
+        return created
       })
       res.status(201).json({ success: true, data: { id: site.id, name: site.name } })
     } catch (err: any) {
@@ -570,9 +593,21 @@ router.put(
         return
       }
 
-      const updated = await prisma.adSite.update({
-        where: { id },
-        data: { isActive: !existing.isActive },
+      const nextIsActive = !existing.isActive
+      const updated = await prisma.$transaction(async (tx) => {
+        const site = await tx.adSite.update({
+          where: { id },
+          data: { isActive: nextIsActive },
+        })
+
+        await tx.adSiteEvent.create({
+          data: {
+            adSiteId: id,
+            eventType: nextIsActive ? "RESUMED" : "PAUSED",
+          },
+        })
+
+        return site
       })
 
       res.json({
@@ -605,9 +640,21 @@ router.put(
         return
       }
 
-      const updated = await prisma.adSite.update({
-        where: { id },
-        data: { isArchived: !existing.isArchived },
+      const nextIsArchived = !existing.isArchived
+      const updated = await prisma.$transaction(async (tx) => {
+        const site = await tx.adSite.update({
+          where: { id },
+          data: { isArchived: nextIsArchived },
+        })
+
+        await tx.adSiteEvent.create({
+          data: {
+            adSiteId: id,
+            eventType: nextIsArchived ? "DIED" : "RESUMED",
+          },
+        })
+
+        return site
       })
 
       res.json({
@@ -650,6 +697,89 @@ router.delete(
       res.json({ success: true, message: "Ad site deleted" })
     } catch (err: any) {
       console.error("DELETE /api/admin/ad-sites/:id error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.get(
+  "/admin/ad-sites/:id/events",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [param("id").isInt().toInt()],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id)
+      const site = await prisma.adSite.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+
+      if (!site) {
+        res.status(404).json({ success: false, error: "Ad site not found" })
+        return
+      }
+
+      const events = await prisma.adSiteEvent.findMany({
+        where: { adSiteId: id },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      })
+
+      res.json({
+        success: true,
+        data: events.map((event) => ({
+          id: event.id,
+          ad_site_id: event.adSiteId,
+          event_type: event.eventType,
+          note: event.note,
+          created_at: event.createdAt,
+        })),
+      })
+    } catch (err: any) {
+      console.error("GET /api/admin/ad-sites/:id/events error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.post(
+  "/admin/ad-sites/:id/events",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    body("note").notEmpty().withMessage("note required").isLength({ max: 1000 }),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id)
+      const note = String(req.body.note ?? "").trim()
+      const site = await prisma.adSite.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+
+      if (!site) {
+        res.status(404).json({ success: false, error: "Ad site not found" })
+        return
+      }
+
+      const event = await createAdSiteEvent(id, "NOTE", note)
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id: event.id,
+          ad_site_id: event.adSiteId,
+          event_type: event.eventType,
+          note: event.note,
+          created_at: event.createdAt,
+        },
+      })
+    } catch (err: any) {
+      console.error("POST /api/admin/ad-sites/:id/events error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }

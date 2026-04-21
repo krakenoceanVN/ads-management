@@ -32,6 +32,15 @@ const loginRateLimiter = (0, rateLimit_js_1.createMemoryRateLimiter)({
     },
     errorMessage: "Too many login attempts. Please try again later.",
 });
+async function createAdSiteEvent(adSiteId, eventType, note) {
+    return prisma_js_1.default.adSiteEvent.create({
+        data: {
+            adSiteId,
+            eventType,
+            note,
+        },
+    });
+}
 // ============================================================
 // GET /api/admin/ad-sites
 // ============================================================
@@ -406,20 +415,29 @@ router.post("/admin/ad-sites", auth_js_1.requireAuth, (0, auth_js_1.requirePermi
             res.status(400).json({ success: false, error: "Upstream not found" });
             return;
         }
-        const site = await prisma_js_1.default.adSite.create({
-            data: {
-                name,
-                upstreamId: upstream_id,
-                billingMethod: billing_method,
-                currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
-                currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
-                isActive: true,
-                isArchived: false,
-                status: status ?? "active",
-                downstreams: downstream_ids?.length
-                    ? { create: downstream_ids.map((did) => ({ downstreamId: did })) }
-                    : undefined,
-            },
+        const site = await prisma_js_1.default.$transaction(async (tx) => {
+            const created = await tx.adSite.create({
+                data: {
+                    name,
+                    upstreamId: upstream_id,
+                    billingMethod: billing_method,
+                    currentUnitPrice: billing_method === "CPM" ? (current_unit_price ?? 0) : undefined,
+                    currentRatio: billing_method === "RATIO" ? (current_ratio ?? 1) : undefined,
+                    isActive: true,
+                    isArchived: false,
+                    status: status ?? "active",
+                    downstreams: downstream_ids?.length
+                        ? { create: downstream_ids.map((did) => ({ downstreamId: did })) }
+                        : undefined,
+                },
+            });
+            await tx.adSiteEvent.create({
+                data: {
+                    adSiteId: created.id,
+                    eventType: "CREATED",
+                },
+            });
+            return created;
         });
         res.status(201).json({ success: true, data: { id: site.id, name: site.name } });
     }
@@ -490,9 +508,19 @@ router.put("/admin/ad-sites/:id/toggle-active", auth_js_1.requireAuth, (0, auth_
             res.status(404).json({ success: false, error: "Ad site not found" });
             return;
         }
-        const updated = await prisma_js_1.default.adSite.update({
-            where: { id },
-            data: { isActive: !existing.isActive },
+        const nextIsActive = !existing.isActive;
+        const updated = await prisma_js_1.default.$transaction(async (tx) => {
+            const site = await tx.adSite.update({
+                where: { id },
+                data: { isActive: nextIsActive },
+            });
+            await tx.adSiteEvent.create({
+                data: {
+                    adSiteId: id,
+                    eventType: nextIsActive ? "RESUMED" : "PAUSED",
+                },
+            });
+            return site;
         });
         res.json({
             success: true,
@@ -516,9 +544,19 @@ router.put("/admin/ad-sites/:id/toggle-archive", auth_js_1.requireAuth, (0, auth
             res.status(404).json({ success: false, error: "Ad site not found" });
             return;
         }
-        const updated = await prisma_js_1.default.adSite.update({
-            where: { id },
-            data: { isArchived: !existing.isArchived },
+        const nextIsArchived = !existing.isArchived;
+        const updated = await prisma_js_1.default.$transaction(async (tx) => {
+            const site = await tx.adSite.update({
+                where: { id },
+                data: { isArchived: nextIsArchived },
+            });
+            await tx.adSiteEvent.create({
+                data: {
+                    adSiteId: id,
+                    eventType: nextIsArchived ? "DIED" : "RESUMED",
+                },
+            });
+            return site;
         });
         res.json({
             success: true,
@@ -554,6 +592,69 @@ router.delete("/admin/ad-sites/:id", auth_js_1.requireAuth, (0, auth_js_1.requir
     }
     catch (err) {
         console.error("DELETE /api/admin/ad-sites/:id error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.get("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const site = await prisma_js_1.default.adSite.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!site) {
+            res.status(404).json({ success: false, error: "Ad site not found" });
+            return;
+        }
+        const events = await prisma_js_1.default.adSiteEvent.findMany({
+            where: { adSiteId: id },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        res.json({
+            success: true,
+            data: events.map((event) => ({
+                id: event.id,
+                ad_site_id: event.adSiteId,
+                event_type: event.eventType,
+                note: event.note,
+                created_at: event.createdAt,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("GET /api/admin/ad-sites/:id/events error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.post("/admin/ad-sites/:id/events", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("note").notEmpty().withMessage("note required").isLength({ max: 1000 }),
+], handleValidation, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const note = String(req.body.note ?? "").trim();
+        const site = await prisma_js_1.default.adSite.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!site) {
+            res.status(404).json({ success: false, error: "Ad site not found" });
+            return;
+        }
+        const event = await createAdSiteEvent(id, "NOTE", note);
+        res.status(201).json({
+            success: true,
+            data: {
+                id: event.id,
+                ad_site_id: event.adSiteId,
+                event_type: event.eventType,
+                note: event.note,
+                created_at: event.createdAt,
+            },
+        });
+    }
+    catch (err) {
+        console.error("POST /api/admin/ad-sites/:id/events error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });

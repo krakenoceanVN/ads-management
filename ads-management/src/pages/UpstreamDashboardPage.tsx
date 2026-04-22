@@ -409,7 +409,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   )
 }
 
-export default function UpstreamDashboardPage({ adType }: Props) {
+export default function SummaryDashboardPage({ adType }: Props) {
   const { t } = useTranslation()
   const today = dayjs()
   const [year, setYear] = useState(today.year())

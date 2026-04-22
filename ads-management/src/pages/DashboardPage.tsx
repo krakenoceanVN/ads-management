@@ -40,7 +40,7 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 
 type FR = SummaryRow & { _isTotal?: boolean }
 
-export default function DashboardPage({ adType }: Props) {
+export default function DashboardRoutePage({ adType }: Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const today = dayjs()
@@ -113,7 +113,6 @@ export default function DashboardPage({ adType }: Props) {
         )
       },
     },
-    // Upstream breakdown group
     ...upstreamCols.map((name) => ({
       title: name,
       key: `up_${name}`,
@@ -128,7 +127,6 @@ export default function DashboardPage({ adType }: Props) {
         return <MoneyCell value={getUpstream(row, name)} />
       },
     })),
-    // Downstream breakdown group
     ...downstreamCols.map(({ key, label }) => ({
       title: label,
       key: `ds_${key}`,
@@ -150,7 +148,6 @@ export default function DashboardPage({ adType }: Props) {
 
   return (
     <div className="page-shell dashboard-page-shell">
-      {/* Controls */}
       <div className="page-toolbar">
         <DatePicker.MonthPicker
           value={dayjs(`${year}-${String(month).padStart(2, '0')}-01`)}
@@ -167,7 +164,6 @@ export default function DashboardPage({ adType }: Props) {
         </span>
       </div>
 
-      {/* Summary Cards */}
       <div className="kpi-grid">
         <div className="kpi-card revenue">
           <div className="kpi-icon revenue">💰</div>
@@ -198,7 +194,6 @@ export default function DashboardPage({ adType }: Props) {
         </div>
       </div>
 
-      {/* Table */}
       <div ref={tableHostRef} className="dashboard-table-shell">
         <Table<FR>
           className="app-data-table dashboard-total-table dashboard-total-table--with-bottom-scroll"

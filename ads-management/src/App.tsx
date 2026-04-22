@@ -2,8 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import DailyInputPage from './pages/DailyInputPage'
-import DashboardPage from './pages/DashboardPage'
-import UpstreamDashboardPage from './pages/UpstreamDashboardPage'
+import DashboardRoutePage from './pages/DashboardPage'
+import SummaryDashboardPage from './pages/UpstreamDashboardPage'
 import DownstreamPage from './pages/DownstreamPage'
 import DownstreamSitesPage from './pages/DownstreamSitesPage'
 import AdminPage from './pages/AdminPage'
@@ -56,10 +56,11 @@ function App() {
             }
           >
             <Route index element={<AppHomeRedirect />} />
-            <Route path="dashboard/sm" element={<DashboardRoute><DashboardPage adType="SM" /></DashboardRoute>} />
-            <Route path="dashboard/360" element={<DashboardRoute><DashboardPage adType="360" /></DashboardRoute>} />
-            <Route path="dashboard/baidu" element={<DashboardRoute><DashboardPage adType="BAIDU_JS" /></DashboardRoute>} />
-            <Route path="dashboard/other" element={<DashboardRoute><DashboardPage adType="OTHER" /></DashboardRoute>} />
+            {/* Dashboard menu: màn tổng quan theo route /dashboard/* */}
+            <Route path="dashboard/sm" element={<DashboardRoute><DashboardRoutePage adType="SM" /></DashboardRoute>} />
+            <Route path="dashboard/360" element={<DashboardRoute><DashboardRoutePage adType="360" /></DashboardRoute>} />
+            <Route path="dashboard/baidu" element={<DashboardRoute><DashboardRoutePage adType="BAIDU_JS" /></DashboardRoute>} />
+            <Route path="dashboard/other" element={<DashboardRoute><DashboardRoutePage adType="OTHER" /></DashboardRoute>} />
             <Route path="input/sm" element={<DailyInputPage adType="SM" />} />
             <Route path="input/360" element={<DailyInputPage adType="360" />} />
             <Route path="input/baidu" element={<DailyInputPage adType="BAIDU_JS" />} />
@@ -68,11 +69,12 @@ function App() {
             <Route path="admin" element={<SiteListRoute><AdminPage /></SiteListRoute>} />
             <Route path="downstream" element={<DownstreamPage />} />
             <Route path="downstream/:id" element={<DownstreamSitesPage />} />
-            <Route path="upstream" element={<UpstreamDashboardPage />} />
-            <Route path="upstream/sm" element={<UpstreamDashboardPage adType="SM" />} />
-            <Route path="upstream/360" element={<UpstreamDashboardPage adType="360" />} />
-            <Route path="upstream/baidu" element={<UpstreamDashboardPage adType="BAIDU_JS" />} />
-            <Route path="upstream/other" element={<UpstreamDashboardPage adType="OTHER" />} />
+            {/* Bảng tổng: màn tổng hợp công thức theo route /upstream/* */}
+            <Route path="upstream" element={<SummaryDashboardPage />} />
+            <Route path="upstream/sm" element={<SummaryDashboardPage adType="SM" />} />
+            <Route path="upstream/360" element={<SummaryDashboardPage adType="360" />} />
+            <Route path="upstream/baidu" element={<SummaryDashboardPage adType="BAIDU_JS" />} />
+            <Route path="upstream/other" element={<SummaryDashboardPage adType="OTHER" />} />
           </Route>
         </Routes>
       </ErrorBoundary>

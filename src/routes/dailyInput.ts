@@ -81,6 +81,7 @@ async function unconfirmDailyInputRecord(req: AuthRequest, res: Response) {
 // ============================================================
 router.get(
   "/",
+  requireAuth,
   [
     query("date").notEmpty().withMessage("date is required").isISO8601(),
     query("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
@@ -93,6 +94,7 @@ router.get(
       const dateStr = (req.query.date as string)
       const adTypeCode = (req.query.ad_type as AdTypeCode)
       const search = (req.query.search as string | undefined)?.trim()
+      const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr)
       const searchFilter = search
         ? {
             OR: [
@@ -106,23 +108,57 @@ router.get(
           }
         : undefined
 
-      // 1. Lấy tất cả ad_sites theo ad_type + search (Nguồn trên OR Ad Site)
-      const adSites = await prisma.adSite.findMany({
-        where: {
-          isActive: true,
-          isArchived: false,
-          status: "active",
-          upstream: {
+      // 1. Site đang chạy + site đã có record lịch sử trong ngày đó
+      const [activeSites, records] = await Promise.all([
+        prisma.adSite.findMany({
+          where: {
+            isActive: true,
+            isArchived: false,
             status: "active",
-            adType: { code: adTypeCode },
+            upstream: {
+              status: "active",
+              adType: { code: adTypeCode },
+            },
+            ...searchFilter,
           },
-          ...searchFilter,
-        },
-        include: {
-          upstream: { include: { adType: true } },
-        },
-        orderBy: { name: "asc" },
-      })
+          include: {
+            upstream: { include: { adType: true } },
+          },
+          orderBy: { name: "asc" },
+        }),
+        prisma.dailyInput.findMany({
+          where: {
+            recordDate: { gte: startOfDay, lt: endOfDay },
+            adSite: {
+              isArchived: false,
+              status: "active",
+              upstream: {
+                status: "active",
+                adType: { code: adTypeCode },
+              },
+              ...searchFilter,
+            },
+          },
+          include: {
+            adSite: {
+              include: {
+                upstream: { include: { adType: true } },
+              },
+            },
+          },
+        }),
+      ])
+
+      const siteMap = new Map<number, (typeof activeSites)[number]>()
+      for (const site of activeSites) {
+        siteMap.set(site.id, site)
+      }
+      for (const record of records) {
+        if (!siteMap.has(record.adSiteId)) {
+          siteMap.set(record.adSiteId, record.adSite)
+        }
+      }
+      const adSites = Array.from(siteMap.values()).sort((a, b) => a.name.localeCompare(b.name))
 
       if (adSites.length === 0) {
         res.json({ success: true, data: [] })
@@ -134,15 +170,6 @@ router.get(
         adTypeCode === "SM"
           ? await getActiveAdSiteRebateRateMap(siteIds, getBusinessDayStart(dateStr))
           : new Map<number, number>()
-
-      // 2. LEFT JOIN daily_input WHERE record_date = date (using range for TZ safety)
-      const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr)
-      const records = await prisma.dailyInput.findMany({
-        where: {
-          recordDate: { gte: startOfDay, lt: endOfDay },
-          adSiteId: { in: siteIds },
-        },
-      })
 
       // Map Prisma camelCase → snake_case DailyInputRecord
       const recordMap = new Map<number, DailyInputRecord>()
@@ -224,21 +251,34 @@ router.post(
         return
       }
 
+      const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(date)
+
       // Fetch all involved ad_sites
       const siteIds = records.map((r) => r.ad_site_id)
-      const adSites = await prisma.adSite.findMany({
-        where: {
-          id: { in: siteIds },
-          isActive: true,
-          isArchived: false,
-          status: "active",
-          upstream: {
+      const [adSites, existingRecords] = await Promise.all([
+        prisma.adSite.findMany({
+          where: {
+            id: { in: siteIds },
+            isArchived: false,
             status: "active",
+            upstream: {
+              status: "active",
+            },
           },
-        },
-        include: { upstream: { include: { adType: true } } },
-      })
+          include: { upstream: { include: { adType: true } } },
+        }),
+        prisma.dailyInput.findMany({
+          where: {
+            recordDate: { gte: startOfDay, lt: endOfDay },
+            adSiteId: { in: siteIds },
+          },
+          select: {
+            adSiteId: true,
+          },
+        }),
+      ])
       const siteMap = new Map(adSites.map((s) => [s.id, s]))
+      const existingRecordSiteIds = new Set(existingRecords.map((record) => record.adSiteId))
       const activeRebateRateMap =
         ad_type === "SM"
           ? await getActiveAdSiteRebateRateMap(siteIds, inputDate)
@@ -251,6 +291,10 @@ router.post(
         const site = siteMap.get(item.ad_site_id)
         if (!site) {
           errors.push({ ad_site_id: item.ad_site_id, message: "Ad site not found" })
+          continue
+        }
+        if (!site.isActive && !existingRecordSiteIds.has(item.ad_site_id)) {
+          errors.push({ ad_site_id: item.ad_site_id, message: "Ad site is paused" })
           continue
         }
         if (site.upstream.adType.code !== ad_type) {

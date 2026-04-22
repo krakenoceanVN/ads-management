@@ -1,30 +1,37 @@
-# Ad Management
+# Ads Management System
 
-Hệ thống quản lý nhập liệu, bảng tổng và hạ nguồn cho các nhóm quảng cáo `SM`, `360`, `Baidu JS`, `Other`, kèm màn nhập liệu `Yiyi`.
+Hệ thống quản lý nhập liệu, dashboard, bảng tổng, hạ nguồn và quản trị site quảng cáo.
 
-## Cấu trúc dự án
+## 1. Kiến trúc hiện tại
 
-- Backend: thư mục gốc của repo
-- Frontend Vite/React: `./ads-management`
-- Database Prisma/SQLite: `./prisma`
+- Backend: `Node.js + Express + TypeScript + Prisma`
+- Frontend: `React + Vite + TypeScript + Ant Design + TanStack Query`
+- Database: `PostgreSQL` trên `Supabase`
+- Auth: `JWT`
 
-## Yêu cầu môi trường
+## 2. Cấu trúc thư mục
 
-- Node.js 20+
+- Backend: `D:\Download\manager\kko\150426\ads-management`
+- Frontend: `D:\Download\manager\kko\150426\ads-management\ads-management`
+- Prisma schema: `D:\Download\manager\kko\150426\ads-management\prisma\schema.prisma`
+
+## 3. Môi trường chạy
+
+Yêu cầu:
+
+- Node.js `20+`
 - npm
 
-## Cấu hình môi trường
-
-1. Tạo file `.env` ở thư mục backend từ mẫu `.env.example`.
-2. Cập nhật các biến sau:
+Backend `.env`:
 
 ```env
-DATABASE_URL="file:./dev.db"
-JWT_SECRET="replace-with-a-strong-jwt-secret"
+DATABASE_URL="postgresql://...pooler..."
+DIRECT_URL="postgresql://...direct..."
+JWT_SECRET="replace-with-a-strong-secret"
 PORT=3001
 ```
 
-3. Frontend dùng file `ads-management/.env`:
+Frontend `.env`:
 
 ```env
 VITE_API_URL=http://localhost:3001
@@ -32,169 +39,281 @@ VITE_API_URL=http://localhost:3001
 
 Lưu ý:
 
-- Không commit `.env`, `.db`, `.sqlite` hoặc `prisma/dev.db`.
-- `JWT_SECRET` phải đổi sang chuỗi mạnh khi triển khai thật.
+- `DATABASE_URL` dùng cổng pooler
+- `DIRECT_URL` dùng cho Prisma direct connection
+- không commit `.env`
 
-## Cài đặt
+## 4. Cài đặt
 
-### Backend
+Backend:
 
 ```powershell
+cd D:\Download\manager\kko\150426\ads-management
 npm install
 ```
 
-### Frontend
+Frontend:
 
 ```powershell
-cd ads-management
+cd D:\Download\manager\kko\150426\ads-management\ads-management
 npm install
 ```
 
-## Khởi tạo database
+## 5. Chạy dự án
 
-Chạy tại thư mục backend:
-
-```powershell
-npm run db:push
-npm run seed
-```
-
-`seed` sẽ xóa dữ liệu cũ và tạo dữ liệu mẫu mới.
-
-## Tài khoản mẫu sau khi seed
-
-- Admin: `admin / admin123`
-- User nhập liệu: `editor / editor123`
-
-Khuyến nghị đổi mật khẩu ngay sau khi dùng seed.
-
-## Chạy hệ thống
-
-### Chạy backend
+Backend dev:
 
 ```powershell
+cd D:\Download\manager\kko\150426\ads-management
 npm run dev
 ```
 
-Backend mặc định chạy tại `http://localhost:3001`.
-
-### Chạy frontend
+Backend build:
 
 ```powershell
-cd ads-management
-npm run dev
-```
-
-Frontend mặc định chạy tại `http://localhost:5173`.
-
-## Build production
-
-### Backend
-
-```powershell
+cd D:\Download\manager\kko\150426\ads-management
 npm run build
 npm run start
 ```
 
-### Frontend
+Frontend dev:
 
 ```powershell
-cd ads-management
-npm run build
-npm run preview
-```
-
-## Chức năng chính
-
-### 1. Nhập liệu
-
-- `Nhập liệu -> SM`
-- `Nhập liệu -> 360`
-- `Nhập liệu -> Baidu JS`
-- `Nhập liệu -> Other`
-- `Nhập liệu -> Yiyi`
-
-Người dùng nhập liệu có thể nhập và lưu dữ liệu theo ngày/tháng.
-
-### 2. Bảng tổng
-
-- `Bảng tổng -> SM`
-- `Bảng tổng -> 360`
-- `Bảng tổng -> Baidu JS`
-- `Bảng tổng -> Other`
-
-Màn này dùng để tổng hợp theo loại quảng cáo và các chỉ số doanh thu, chi phí, lợi nhuận, thuế, ML 80%, LE.
-
-### 3. Hạ nguồn
-
-- Mục `Hạ nguồn` hiển thị cho cả admin và user nhập liệu.
-- User nhập liệu xem được dữ liệu draft để xuất PDF báo cáo.
-- Admin xem dữ liệu chính thức, chỉ gồm dữ liệu đã xác nhận.
-- `Hạ nguồn -> LE` có thể xuất PDF trực tiếp.
-
-### 4. Quản trị
-
-Chỉ admin mới thấy và truy cập được:
-
-- `Dashboard`
-- `Quản trị`
-
-Tại màn `Quản trị`, admin có thể quản lý:
-
-- Ad Sites
-- Upstreams
-- Downstreams
-- Kỳ downstream
-- Users
-
-## Phân quyền hiện tại
-
-### Admin
-
-- Xem `Dashboard`
-- Nhập liệu
-- Xem `Bảng tổng`
-- Xem `Hạ nguồn`
-- Truy cập `Quản trị`
-- Chỉnh các cấu hình downstream và user
-
-### User nhập liệu
-
-- Nhập liệu
-- Xem `Bảng tổng`
-- Xem `Hạ nguồn`
-- Xuất PDF hạ nguồn
-- Không truy cập được `Dashboard` và `Quản trị`
-
-## Ghi chú vận hành
-
-- Dữ liệu `confirmed` được coi là dữ liệu chính thức.
-- Ở `Hạ nguồn`, admin nhìn số chính thức; user nhập liệu nhìn bản nháp để phục vụ báo cáo gửi đi.
-- Nếu backend không tự reload sau khi sửa code, hãy dừng và chạy lại `npm run dev`.
-- Nếu frontend không nhận thay đổi mới, refresh trình duyệt hoặc chạy lại `npm run dev`.
-
-## Các lệnh hữu ích
-
-Chạy tại thư mục backend:
-
-```powershell
-npm run db:push
-npm run db:studio
-npm run seed
-npm run build
-```
-
-Chạy tại thư mục frontend:
-
-```powershell
+cd D:\Download\manager\kko\150426\ads-management\ads-management
 npm run dev
-npm run build
-npm run lint
 ```
 
-## Bảo mật
+Frontend build:
 
-- File thật chứa bí mật chỉ để trong `.env`, không đưa lên Git.
-- Dùng `.env.example` để chia sẻ cấu hình mẫu.
-- Không lưu `JWT_SECRET`, password, database credentials vào mã nguồn.
-- Nếu nghi ngờ secret đã lộ, phải đổi `JWT_SECRET` ngay.
+```powershell
+cd D:\Download\manager\kko\150426\ads-management\ads-management
+npm run build
+```
+
+## 6. Prisma / Database
+
+Các lệnh hay dùng:
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management
+npx prisma generate
+npx prisma db push
+npx prisma studio
+```
+
+Schema hiện tại gồm các nhóm chính:
+
+- `AdType`
+- `Upstream`
+- `AdSite`
+- `AdSiteRebateRate`
+- `AdSiteEvent`
+- `DailyInput`
+- `Downstream`
+- `DownstreamPeriod`
+- `DailyDownstreamRate`
+- `User`
+- `YiyiDailyData`
+- `YiyiDailyPricing`
+- `LEDailyCost`
+
+## 7. Phân quyền (RBAC)
+
+### ADMIN
+
+- full quyền
+- quản trị `Ad Sites`, `Upstreams`, `Downstreams`, `Users`
+- chốt / mở khóa / archive / pause / rebate config / reconcile / timeline
+
+### EDITOR
+
+- quyền xem giống `VIEWER`
+- được thao tác nghiệp vụ nhập liệu hằng ngày
+- không có quyền quản trị site / upstream / downstream / user
+
+### VIEWER
+
+- read-only
+- xem được `Dashboard`, `Nhập liệu`, `Bảng tổng`, `Hạ nguồn`, `Danh sách site`
+- không được thêm / sửa / xóa / lưu / chốt / mở khóa
+
+## 8. Các màn hình chính
+
+### Dashboard
+
+Route:
+
+- `/dashboard/sm`
+- `/dashboard/360`
+- `/dashboard/baidu`
+- `/dashboard/other`
+
+Đây là màn tổng quan theo route `dashboard/*`.
+
+### Bảng tổng
+
+Route:
+
+- `/upstream/sm`
+- `/upstream/360`
+- `/upstream/baidu`
+- `/upstream/other`
+
+Đây là màn tổng hợp công thức theo route `upstream/*`.
+
+### Nhập liệu
+
+- `SM`
+- `360`
+- `Baidu JS`
+- `Other`
+- `Yiyi`
+
+### Hạ nguồn
+
+- xem theo downstream
+- có luồng `ML`, `LE`
+- có export PDF cho các màn liên quan
+
+### Quản trị / Danh sách site
+
+- `Ad Sites`
+- `Upstreams`
+- `Downstreams`
+- `Kỳ downstream`
+- `Users`
+- `Timeline`
+- `Reconciliation`
+- `Rebate`
+
+## 9. Nghiệp vụ quan trọng đang chạy
+
+### 9.1 SM rebate
+
+Rebate hiện chỉ áp dụng cho `SM`.
+
+Config:
+
+- theo `Ad Site`
+- có `startDate`
+- có `endDate`
+
+Công thức:
+
+- `Doanh thu gốc = qty * unitPrice`
+- `Hoàn tiền = qty * rebateRate`
+- `Thực thu = Doanh thu gốc - Hoàn tiền`
+
+Lưu DB:
+
+- `DailyInput.rebateAmount = Hoàn tiền`
+- `DailyInput.rebateRateSnapshot = rate tại thời điểm lưu`
+- `DailyInput.revenue = Thực thu`
+
+Điểm quan trọng:
+
+- `Dashboard` và các báo cáo đang đọc `DailyInput.revenue`
+- nghĩa là với `SM`, doanh thu báo cáo là **Thực thu**
+
+### 9.2 Pause / Resume và dữ liệu lịch sử
+
+- `AdSite.isActive = false` nghĩa là site bị pause
+- site pause không còn hiện để nhập mới
+- nhưng nếu ngày đó đã có `DailyInput` lịch sử thì màn `Nhập liệu` vẫn phải hiện row đó để đối chiếu và giữ khớp số với `Dashboard`
+
+### 9.3 Archive / Site Die
+
+- `AdSite.isArchived = true`
+- site archived bị loại khỏi input và các luồng tính tiền hiện hành
+
+### 9.4 Timeline / Audit log
+
+`AdSiteEvent` lưu:
+
+- `eventType`
+- `eventDate`
+- `createdAt`
+- `note`
+
+Các event chính:
+
+- `CREATED`
+- `PAUSED`
+- `RESUMED`
+- `DIED`
+- `NOTE`
+
+### 9.5 Reconciliation
+
+Drawer đối soát hiện hỗ trợ:
+
+- chọn khoảng ngày
+- doanh thu hệ thống
+- UV hệ thống
+- nhập số đối tác báo
+- tự tính chênh lệch
+
+## 10. Công thức tổng quát đang dùng
+
+### SM input
+
+- `revenue = qty * unitPrice` trước rebate
+- sau rebate:
+  - `actualRevenue = qty * unitPrice - qty * rebateRate`
+  - `DailyInput.revenue = actualRevenue`
+
+### 360 / Baidu / Other
+
+Các mảng này giữ nguyên logic riêng hiện tại, không dùng rebate của `SM`.
+
+### Dashboard / Summary
+
+Một số rule quan trọng:
+
+- `SM dashboard cost` khác `SM service cost`
+- `LE dashboard tax` khác `LE payout tax`
+- `360` ở bảng tổng chỉ hiển thị cột tổng quát, không hiển thị breakdown theo từng nhà
+
+## 11. Bảo mật hiện tại
+
+- `GET /api/daily-input` đã bắt buộc `requireAuth`
+- middleware auth không còn tin payload JWT cũ cho quyền/trạng thái
+- mỗi request auth sẽ rehydrate user từ DB
+- nếu user bị khóa hoặc hạ quyền, token cũ mất hiệu lực ngay ở request tiếp theo
+
+## 12. Verify chuẩn sau khi sửa code
+
+Backend:
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management
+npm run build
+```
+
+Frontend:
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management\ads-management
+npm run lint
+npm run build
+```
+
+Nếu có thay schema:
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management
+npx prisma generate
+npx prisma db push
+```
+
+## 13. Ghi chú vận hành
+
+- `Dashboard` và `Bảng tổng` là **2 màn khác nhau**
+- nếu backend không phản ánh code mới, restart server
+- nếu Prisma generate lỗi `EPERM` trên Windows, thường là do file engine đang bị process khác giữ
+- nếu frontend build cảnh báo bundle lớn, hiện tại nguyên nhân chính là asset ảnh/logo lớn và chunk JS lớn
+
+## 14. Tài liệu liên quan
+
+- Phân tích hệ thống cũ: `D:\Download\manager\kko\150426\ads-management\SYSTEM_ANALYSIS.md`
+- Frontend README chỉ là file dẫn hướng, tài liệu chính là file này

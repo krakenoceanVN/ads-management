@@ -98,23 +98,43 @@ router.get("/le", auth_js_1.requireAuth, [
                 },
             },
         });
-        // Fetch all LE daily costs for the month
-        const leCosts = await prisma_js_1.default.lEDailyCost.findMany({
+        // Fetch all Yiyi data/pricing for the month.
+        // LE downstream expense now follows the Yiyi page "Tổng cộng" value by date.
+        const yiyiRecords = await prisma_js_1.default.yiyiDailyData.findMany({
             where: {
                 recordDate: { gte: startOfMonth, lt: endOfMonth },
             },
         });
-        const leCostMap = new Map(leCosts.map((cost) => {
-            const vendorCost = Number(cost.vendorCost ?? 0);
-            const mlCost = Number(cost.mlCost ?? 0);
-            const legacyTotalCost = Number(cost.costAmount ?? 0);
-            const hasBreakdown = vendorCost !== 0 || mlCost !== 0;
+        const yiyiPricings = await prisma_js_1.default.yiyiDailyPricing.findMany({
+            where: {
+                recordDate: { gte: startOfMonth, lt: endOfMonth },
+            },
+        });
+        const yiyiQtyMap = new Map();
+        for (const record of yiyiRecords) {
+            const dateKey = (0, date_js_1.formatBusinessDate)(record.recordDate);
+            yiyiQtyMap.set(dateKey, (yiyiQtyMap.get(dateKey) ?? 0) + Number(record.qty ?? 0));
+        }
+        const yiyiPricingMap = new Map(yiyiPricings.map((pricing) => [
+            (0, date_js_1.formatBusinessDate)(pricing.recordDate),
+            {
+                unitPrice: Number(pricing.unitPrice ?? calculations_js_1.YIYI_DEFAULT_UNIT_PRICE),
+                profitUnitPrice: Number(pricing.profitUnitPrice ?? calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE),
+            },
+        ]));
+        const leCostMap = new Map(days.map((date) => {
+            const totalQty = yiyiQtyMap.get(date) ?? 0;
+            const pricing = yiyiPricingMap.get(date) ?? {
+                unitPrice: calculations_js_1.YIYI_DEFAULT_UNIT_PRICE,
+                profitUnitPrice: calculations_js_1.YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+            };
+            const yiyiTotal = (0, calculations_js_1.calculateYiyiTotal)(totalQty, pricing.unitPrice, pricing.profitUnitPrice);
             return [
-                (0, date_js_1.formatBusinessDate)(cost.recordDate),
+                date,
                 {
-                    vendorCost: hasBreakdown ? vendorCost : legacyTotalCost,
-                    mlCost: hasBreakdown ? mlCost : 0,
-                    totalCost: hasBreakdown ? vendorCost + mlCost : legacyTotalCost,
+                    vendorCost: yiyiTotal,
+                    mlCost: 0,
+                    totalCost: yiyiTotal,
                 },
             ];
         }));
@@ -131,9 +151,15 @@ router.get("/le", auth_js_1.requireAuth, [
             let smRevenue = 0;
             for (const inp of dayInputs) {
                 const name = inp.adSite.name;
-                const rev = Number(inp.revenue);
-                smRevenue += rev;
-                upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev;
+                const actualRevenue = Number(inp.revenue);
+                const rebateAmount = Number(inp.rebateAmount ?? 0);
+                const quantity = Number(inp.qty ?? 0);
+                const unitPriceSnapshot = inp.unitPriceSnapshot === null ? null : Number(inp.unitPriceSnapshot);
+                const grossRevenue = unitPriceSnapshot !== null
+                    ? (0, calculations_js_1.calculateCpmRevenue)(quantity, unitPriceSnapshot)
+                    : actualRevenue + rebateAmount;
+                smRevenue += grossRevenue;
+                upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + grossRevenue;
             }
             const leRevenue = (0, calculations_js_1.calculateLeRevenueFromSmRevenue)(smRevenue, calculations_js_1.DEFAULT_LE_PAYOUT_RATE);
             const downstreamCosts = leCostMap.get(date) ?? { vendorCost: 0, mlCost: 0, totalCost: 0 };

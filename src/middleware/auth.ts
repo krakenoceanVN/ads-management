@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { UserPublic } from '../types/index.js'
+import prisma from '../prisma.js'
+import { UserPublic, UserRole, UserStatus } from '../types/index.js'
 import { getRequiredEnv } from '../utils/env.js'
 
 export interface AuthRequest extends Request {
@@ -11,7 +12,50 @@ function isViewer(user?: UserPublic): boolean {
   return user?.role === 'VIEWER'
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+type JwtPayloadShape = {
+  id?: number
+}
+
+type UserWithRoleShape = {
+  role: string
+  permAdmin: boolean
+}
+
+type UserApiShape = {
+  id: number
+  username: string
+  role: string
+  permDataInput: boolean
+  permDataConfirm: boolean
+  permAdmin: boolean
+  status: string
+  lastLoginAt?: Date | null
+  createdAt: Date
+}
+
+function resolveUserRole(user: UserWithRoleShape): UserRole {
+  if (user.role === 'VIEWER') return 'VIEWER'
+  if (user.permAdmin || user.role === 'ADMIN') return 'ADMIN'
+  return 'EDITOR'
+}
+
+function toUserPublic(user: UserApiShape): UserPublic {
+  const resolvedRole = resolveUserRole(user)
+
+  return {
+    id: user.id,
+    username: user.username,
+    role: resolvedRole,
+    perm_data_input: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataInput),
+    perm_data_confirm: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataConfirm),
+    perm_admin: resolvedRole === 'ADMIN',
+    status: user.status as UserStatus,
+    last_login_at: user.lastLoginAt ?? undefined,
+    created_at: user.createdAt,
+  }
+}
+
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
 
@@ -30,8 +74,33 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
 
   try {
-    const payload = jwt.verify(token, jwtSecret) as UserPublic
-    req.user = payload
+    const payload = jwt.verify(token, jwtSecret) as JwtPayloadShape
+    if (!payload?.id) {
+      res.status(401).json({ success: false, error: 'Invalid or expired token' })
+      return
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        permDataInput: true,
+        permDataConfirm: true,
+        permAdmin: true,
+        status: true,
+        lastLoginAt: true,
+        createdAt: true,
+      },
+    })
+
+    if (!user || user.status !== 'active') {
+      res.status(401).json({ success: false, error: 'Invalid or expired token' })
+      return
+    }
+
+    req.user = toUserPublic(user)
     next()
   } catch {
     res.status(401).json({ success: false, error: 'Invalid or expired token' })

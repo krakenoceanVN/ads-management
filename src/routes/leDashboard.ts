@@ -6,10 +6,14 @@ import { formatBusinessDate, getBusinessDateAtHour, getBusinessDayRange, getBusi
 import {
   DEFAULT_LE_PAYOUT_RATE,
   TAX_RATE,
+  calculateCpmRevenue,
   calculateFlatTax,
   calculateLeRevenueFromSmRevenue,
   calculateNetProfit,
   calculateProfitRate,
+  calculateYiyiTotal,
+  YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+  YIYI_DEFAULT_UNIT_PRICE,
 } from "../utils/calculations.js"
 
 const router = Router()
@@ -126,25 +130,53 @@ router.get(
         },
       })
 
-      // Fetch all LE daily costs for the month
-      const leCosts = await prisma.lEDailyCost.findMany({
+      // Fetch all Yiyi data/pricing for the month.
+      // LE downstream expense now follows the Yiyi page "Tổng cộng" value by date.
+      const yiyiRecords = await prisma.yiyiDailyData.findMany({
         where: {
           recordDate: { gte: startOfMonth, lt: endOfMonth },
         },
       })
+      const yiyiPricings = await prisma.yiyiDailyPricing.findMany({
+        where: {
+          recordDate: { gte: startOfMonth, lt: endOfMonth },
+        },
+      })
+      const yiyiQtyMap = new Map<string, number>()
+      for (const record of yiyiRecords) {
+        const dateKey = formatBusinessDate(record.recordDate)
+        yiyiQtyMap.set(dateKey, (yiyiQtyMap.get(dateKey) ?? 0) + Number(record.qty ?? 0))
+      }
+      const yiyiPricingMap = new Map(
+        yiyiPricings.map((pricing) => [
+          formatBusinessDate(pricing.recordDate),
+          {
+            unitPrice: Number(pricing.unitPrice ?? YIYI_DEFAULT_UNIT_PRICE),
+            profitUnitPrice: Number(
+              pricing.profitUnitPrice ?? YIYI_DEFAULT_PROFIT_UNIT_PRICE
+            ),
+          },
+        ] as const)
+      )
       const leCostMap = new Map(
-        leCosts.map((cost) => {
-          const vendorCost = Number(cost.vendorCost ?? 0)
-          const mlCost = Number(cost.mlCost ?? 0)
-          const legacyTotalCost = Number(cost.costAmount ?? 0)
-          const hasBreakdown = vendorCost !== 0 || mlCost !== 0
+        days.map((date) => {
+          const totalQty = yiyiQtyMap.get(date) ?? 0
+          const pricing = yiyiPricingMap.get(date) ?? {
+            unitPrice: YIYI_DEFAULT_UNIT_PRICE,
+            profitUnitPrice: YIYI_DEFAULT_PROFIT_UNIT_PRICE,
+          }
+          const yiyiTotal = calculateYiyiTotal(
+            totalQty,
+            pricing.unitPrice,
+            pricing.profitUnitPrice
+          )
 
           return [
-            formatBusinessDate(cost.recordDate),
+            date,
             {
-              vendorCost: hasBreakdown ? vendorCost : legacyTotalCost,
-              mlCost: hasBreakdown ? mlCost : 0,
-              totalCost: hasBreakdown ? vendorCost + mlCost : legacyTotalCost,
+              vendorCost: yiyiTotal,
+              mlCost: 0,
+              totalCost: yiyiTotal,
             },
           ] as const
         })
@@ -165,9 +197,18 @@ router.get(
         let smRevenue = 0
         for (const inp of dayInputs) {
           const name = inp.adSite.name
-          const rev = Number(inp.revenue)
-          smRevenue += rev
-          upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + rev
+          const actualRevenue = Number(inp.revenue)
+          const rebateAmount = Number(inp.rebateAmount ?? 0)
+          const quantity = Number(inp.qty ?? 0)
+          const unitPriceSnapshot =
+            inp.unitPriceSnapshot === null ? null : Number(inp.unitPriceSnapshot)
+          const grossRevenue =
+            unitPriceSnapshot !== null
+              ? calculateCpmRevenue(quantity, unitPriceSnapshot)
+              : actualRevenue + rebateAmount
+
+          smRevenue += grossRevenue
+          upstreamBreakdown[name] = (upstreamBreakdown[name] ?? 0) + grossRevenue
         }
 
         const leRevenue = calculateLeRevenueFromSmRevenue(smRevenue, DEFAULT_LE_PAYOUT_RATE)

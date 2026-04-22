@@ -1,230 +1,553 @@
-# Ad Management System - Complete Architecture Analysis
+# Ads Management System - System Analysis
 
-## 1. BACKEND ARCHITECTURE
+## 1. Tổng quan
 
-**Tech Stack:** Node.js + Express + Prisma (SQLite) + TypeScript
+Hệ thống gồm 2 phần:
 
-### API Endpoints
+- Backend: `Node.js + Express + TypeScript + Prisma`
+- Frontend: `React + Vite + TypeScript + Ant Design + TanStack Query`
+- Database runtime: `PostgreSQL` trên `Supabase`
+- Cơ chế xác thực: `JWT`
 
-| Route | Method | Purpose | Auth |
-|-------|--------|---------|------|
-| `/api/auth/login` | POST | User login, returns JWT | Public |
-| `/api/auth/me` | GET | Get current user info | Required |
-| `/api/daily-input` | GET | Get daily input rows for date+ad_type | Required |
-| `/api/daily-input/batch` | POST | Batch save daily inputs | perm_data_input |
-| `/api/daily-input/:id/confirm` | POST | Confirm a record | perm_data_confirm |
-| `/api/daily-input/:id/unconfirm` | POST | Unconfirm a record | perm_data_confirm |
-| `/api/daily-input/:id` | DELETE | Delete unconfirmed record | perm_data_input |
-| `/api/dashboard/monthly` | GET | Monthly summary with cost/revenue/profit | Required |
-| `/api/admin/upstreams` | GET/POST | List/Create upstreams | perm_admin |
-| `/api/admin/upstreams/:id` | PUT/DELETE | Update/Delete upstream | perm_admin |
-| `/api/admin/ad-sites` | GET/POST | List/Create ad sites | perm_admin |
-| `/api/admin/ad-sites/:id` | PUT/DELETE | Update/Delete ad site | perm_admin |
-| `/api/admin/ad-sites/:id/price` | PUT | Update CPM price or RATIO | perm_admin |
-| `/api/admin/ad-sites/:id/downstream-price` | PUT | Set custom downstream prices | perm_admin |
-| `/api/admin/downstreams` | GET/POST/PUT/DELETE | CRUD downstreams | perm_admin |
-| `/api/admin/downstream-periods` | GET | List all periods | perm_admin |
-| `/api/admin/downstream-periods/:id` | PUT/DELETE | Update/Delete period | perm_admin |
-| `/api/downstream/:id/periods` | GET/POST | Get/Create periods for downstream | perm_admin |
-| `/api/admin/ad-types` | GET | List ad types | perm_admin |
-| `/api/users` | GET/POST | List/Create users | perm_admin |
-| `/api/users/:id` | PUT/DELETE | Update/Delete user | perm_admin |
+Thư mục chính:
 
-### Database Schema (Prisma Models)
+- Backend: `D:\Download\manager\kko\150426\ads-management`
+- Frontend: `D:\Download\manager\kko\150426\ads-management\ads-management`
 
-```
-AdType (id, code: SM|360|BAIDU_JS, name)
-  └── Upstream (id, adTypeId, name, status)
-        └── AdSite (id, upstreamId, name, billingMethod: CPM|RATIO, currentUnitPrice, currentRatio, status)
-              ├── DailyInput (id, recordDate, adSiteId, qty, unitPriceSnapshot, amount1, amount2, ratioSnapshot, revenue, status, createdBy)
-              └── AdSiteDownstream (id, adSiteId, downstreamId, customPrice) [junction]
+Lưu ý quan trọng:
 
-Downstream (id, adTypeId, downstreamType: ML|LE|YIYI, payoutRate, status)
-  └── DownstreamPeriod (id, downstreamId, pctHal, unitPrice, startDate, endDate, createdBy)
-
-User (id, username, passwordHash, permDataInput, permDataConfirm, permAdmin, status)
-```
-
-### Authentication/Authorization
-
-- **JWT tokens** with 8-hour expiry, stored in `localStorage`
-- Three permission flags: `perm_data_input`, `perm_data_confirm`, `perm_admin`
-- Middleware `requireAuth` verifies token; `requirePermission` checks specific flag
-- 401 interceptor on frontend clears token and redirects to login
+- `Dashboard` ở `/dashboard/*` và `Bảng tổng` ở `/upstream/*` là **2 màn khác nhau**
+- `SM rebate` hiện chỉ áp dụng cho `SM` và cấu hình theo **Ad Site**
+- `GET /api/daily-input` hiện đã bắt buộc đăng nhập
+- `requireAuth` hiện lấy lại user từ DB ở mỗi request, không tin quyền/trạng thái cũ trong JWT
 
 ---
 
-## 2. FRONTEND ARCHITECTURE
+## 2. Kiến trúc backend
 
-**Tech Stack:** React 18 + Vite + TanStack Query v5 + Ant Design + React Router v6
+### 2.1 Entry points và module chính
 
-### Page Structure & Routing
+- `D:\Download\manager\kko\150426\ads-management\src\index.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\prisma.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\middleware\auth.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\routes\admin.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\routes\dailyInput.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\routes\dashboard.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\routes\leDashboard.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\routes\yiyiData.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\services\mlPayout.service.ts`
+- `D:\Download\manager\kko\150426\ads-management\src\utils\calculations.ts`
 
-```
-/login                          → LoginPage (public)
-/                                → AppLayout (protected shell)
-  /dashboard/sm|360|baidu|other → DashboardPage (monthly revenue/cost/profit)
-  /input/sm|360|baidu|other      → DailyInputPage (data entry tables)
-  /upstream/sm|360|baidu|other   → UpstreamDashboardPage
-  /downstream                    → DownstreamPage (list)
-  /downstream/:id                → DownstreamSitesPage (per-site UV data)
-  /admin                         → AdminPage (5-tab: AdSites/Upstreams/Downstreams/Periods/Users)
-```
+### 2.2 Route groups
 
-### State Management
+#### Auth / user session
 
-- **TanStack Query** for all server state with 30s staleTime
-- Local component state (`useState`) for UI drafts (dirty state in input tables)
-- Token stored in `localStorage` via `axios` interceptor
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 
-### API Calling Patterns
+#### Nhập liệu
 
-```typescript
-// TanStack Query usage
-useQuery({
-  queryKey: ['daily-input', 'SM', date, search],
-  queryFn: () => api.get('/api/daily-input', { params: { date, ad_type, search } })
-})
+- `GET /api/daily-input`
+- `POST /api/daily-input/batch`
+- `POST /api/daily-input/confirm-batch`
+- `POST /api/daily-input/:id/confirm`
+- `PUT /api/daily-input/:id/unconfirm`
+- `POST /api/daily-input/:id/unconfirm` (alias cũ, vẫn admin-only)
+- `DELETE /api/daily-input/:id`
 
-useMutation({
-  mutationFn: (payload) => api.post('/api/daily-input/batch', payload),
-  onSuccess: () => qc.invalidateQueries({ queryKey: ['daily-input', ...] })
-})
-```
+#### Dashboard / bảng tổng / hạ nguồn
 
----
+- `GET /api/dashboard/monthly`
+- `GET /api/dashboard/downstream-monthly`
+- `GET /api/dashboard/le`
+- `POST /api/dashboard/le/cost`
 
-## 3. CORE BUSINESS FLOWS
+#### Yiyi
 
-### Daily Data Input Flow
+- `GET /api/yiyi-data`
+- `POST /api/yiyi-data/batch`
+- `POST /api/yiyi-data/monthly-batch`
 
-1. User selects date + ad type on `/input/{type}` page
-2. Backend returns all active AdSites for that ad type, LEFT JOINED with any existing `DailyInput` records for that date
-3. Frontend displays table grouped by upstream name
-4. For **CPM billing (SM)**: user enters `qty` (impressions) and optionally overrides `unit_price` (admin only)
-5. For **RATIO billing (360/Baidu)**: user enters `amount1` + `amount2`, ratio is applied
-6. Revenue is calculated on frontend live: `qty * price` (CPM) or `(amount1 + amount2) * ratio` (RATIO)
-7. On save, batch POST to `/api/daily-input/batch` with all dirty rows
-8. Backend recalculates revenue using stored snapshot prices (or overrides)
-9. **Cannot edit confirmed records** - API returns 409 error
+#### Admin
 
-### Dashboard Aggregation Logic
-
-For each day in the selected month:
-1. Group confirmed `DailyInput` records by `adSiteId`, sum revenue
-2. Map each `adSiteId` back to its upstream name → produce `upstream_breakdown`
-3. **ML payout** = `totalRevenue * 0.8` (or period's payoutRate if set)
-4. For **SM only**: also calculate LE payout + yiyi payout
-5. **Tax** = `(revenue - cost) * 0.06`
-6. **Profit** = `revenue - cost - tax`
-7. Append a "TOTAL" row summing all daily values
-
-### Confirmation Flow
-
-- **unconfirmed** → **confirmed**: User with `perm_data_confirm` clicks "Confirm" button on a row
-- **confirmed** → **unconfirmed**: Same user clicks "Unconfirm"
-- **Once confirmed**: record cannot be edited or deleted (backend enforces this)
-- Daily inputs are only aggregated into dashboard if `status = confirmed`
-
-### Admin Management Flows
-
-- **Upstreams/Downstreams/AdSites**: Standard CRUD with active/inactive toggle
-- **AdSites** have a billing method (CPM or RATIO) which determines which price fields are used
-- **Downstream Periods**: Created with `start_date`. When a new period starts, the previous period's `end_date` is auto-set to day before. Periods with `endDate = NULL` are "current"
-- **Users**: Created with three boolean permissions; passwords hashed with bcrypt
+- CRUD `upstreams`
+- CRUD `ad-sites`
+- CRUD `downstreams`
+- CRUD `downstream-periods`
+- CRUD `users`
+- `ad-sites` timeline / reconciliation
+- `ad-sites` rebate config
 
 ---
 
-## 4. DATA MODEL RELATIONSHIPS
+## 3. Mô hình dữ liệu hiện tại
 
+Các model chính trong `prisma/schema.prisma`:
+
+- `AdType`
+- `Upstream`
+- `AdSite`
+- `AdSiteRebateRate`
+- `AdSiteEvent`
+- `DailyInput`
+- `Downstream`
+- `DownstreamPeriod`
+- `DailyDownstreamRate`
+- `User`
+- `YiyiDailyData`
+- `YiyiDailyPricing`
+- `LEDailyCost`
+
+### 3.1 Quan hệ lõi
+
+```text
+AdType (1) -> (N) Upstream (1) -> (N) AdSite (1) -> (N) DailyInput
+                                           |                 |
+                                           |                 -> snapshot giá / rebate / revenue
+                                           |
+                                           -> (N) AdSiteEvent
+                                           -> (N) AdSiteRebateRate
+
+Downstream (1) -> (N) DownstreamPeriod
+Downstream (1) -> (N) DailyDownstreamRate
 ```
-AdType (1) → (N) Upstream (1) → (N) AdSite (1) → (N) DailyInput
-                                           ↘
-                                            AdSiteDownstream → Downstream (1) → (N) DownstreamPeriod
-```
 
-### How Billing Methods Work
+### 3.2 Các cờ nghiệp vụ quan trọng
 
-**CPM (SM type)**:
-- `qty` = number of impressions/UV
-- `unit_price_snapshot` = price per 1000 impressions (stored at input time)
-- Revenue = `qty * unit_price_snapshot`
-- Example: qty=10000, price=15 → revenue=150,000
+#### AdSite
 
-**RATIO (360/Baidu type)**:
-- `amount1` + `amount2` = base amounts (revenue figures)
-- `ratio_snapshot` = multiplier applied (stored at input time)
-- Revenue = `(amount1 + amount2) * ratio_snapshot`
-- Example: amount1=50000, amount2=30000, ratio=0.4 → revenue=32,000
+- `isActive`
+  - `false` = site bị pause
+  - không cho tạo input mới
+  - nhưng dữ liệu lịch sử vẫn phải hiện và vẫn được tính vào dashboard
 
-### Revenue/Cost/Profit Calculation Chain
+- `isArchived`
+  - `true` = site die / archive
+  - bị loại khỏi input và các luồng tính tiền hiện hành
 
-```
-DailyInput.revenue (from input, confirmed)
-    ↓
-Dashboard sums confirmed revenue → upstream_breakdown
-    ↓
-ML Payout = revenue * 0.8 (or downstream's payoutRate)
-    ↓
-For SM only:
-  - LE Payout = (revenue * 0.9) - tax(6%) - ML_cost
-  - yiyi Payout = qty * 2 / 1000
-    ↓
-Total Cost = ML + LE + yiyi (SM) or just ML (other types)
-    ↓
-Tax = (revenue - cost) * 0.06
-    ↓
-Profit = revenue - cost - tax
-```
+#### DailyInput
+
+- `status`
+  - `unconfirmed`
+  - `confirmed`
+
+- `revenue`
+  - là doanh thu cuối cùng được dùng cho dashboard/payout
+  - với `SM`, đây là **Thực thu sau rebate**
+
+- `rebateAmount`
+  - số hoàn tiền đã snapshot
+
+- `rebateRateSnapshot`
+  - rebate rate tại thời điểm lưu
 
 ---
 
-## 5. KEY BUSINESS RULES
+## 4. Phân quyền hiện tại
 
-### Edit vs Lock Rules
+### ADMIN
 
-| Condition | Can Edit? | Can Delete? | Can Confirm? |
-|-----------|----------|------------|--------------|
-| `status = unconfirmed` | Yes | Yes | Yes (if has perm) |
-| `status = confirmed` | No | No | N/A |
-| Future date input | Blocked at API level | - | - |
+- full quyền
+- quản trị `Ad Sites`, `Upstreams`, `Downstreams`, `Users`
+- pause / resume / archive / restore
+- timeline
+- reconciliation
+- rebate config
+- mở khóa dữ liệu đã chốt
 
-### Period Pricing Logic
+### EDITOR
 
-- When creating a new `DownstreamPeriod` for a downstream, the system:
-  1. Rejects if `start_date` overlaps with an existing period
-  2. Automatically closes the current active period (sets `endDate = start_date - 1 day`)
-  3. Creates the new period with `endDate = NULL` (meaning "current")
-- Prices are looked up by finding the period where `startDate <= targetDate AND (endDate IS NULL OR endDate >= targetDate)`
+- quyền xem phải giống `VIEWER` 100%
+- được thao tác ở nghiệp vụ nhập liệu hằng ngày
+- không có quyền quản trị site / upstream / downstream / user
 
-### Snapshot Price Preservation
+### VIEWER
 
-When daily input is saved:
-- **CPM**: stores `unitPriceSnapshot` (either from `currentUnitPrice` or an override). This snapshot is used for revenue calculation and remains fixed even if the site price changes later.
-- **RATIO**: stores `ratioSnapshot` similarly. If `amount1` or `amount2` is entered without a ratio override, uses the current site's ratio.
+- read-only
+- xem được:
+  - `Dashboard`
+  - `Nhập liệu`
+  - `Bảng tổng`
+  - `Hạ nguồn`
+  - `Danh sách site`
+- không được:
+  - thêm
+  - sửa
+  - xóa
+  - lưu
+  - chốt
+  - mở khóa
 
-### Permission Summary
+### 4.1 Cơ chế auth hiện tại
 
-| Permission | Grants Access To |
-|------------|-----------------|
-| `perm_data_input` | POST /api/daily-input/batch, DELETE daily-input/:id |
-| `perm_data_confirm` | POST /api/daily-input/:id/confirm, /unconfirm |
-| `perm_admin` | All admin CRUD endpoints, price updates, user management |
+- JWT vẫn dùng để xác thực chữ ký và lấy `user.id`
+- `requireAuth` sau đó query DB để lấy lại:
+  - `role`
+  - `permDataInput`
+  - `permDataConfirm`
+  - `permAdmin`
+  - `status`
+- nếu user bị khóa hoặc đổi quyền, token cũ mất hiệu lực ở request tiếp theo
+
+Đây là fix trực tiếp cho lỗi cũ "JWT không thu hồi quyền/trạng thái ngay".
 
 ---
 
-## 6. KEY FILE PATHS
+## 5. Frontend architecture
+
+### 5.1 Files chính
+
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\App.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\api\axios.ts`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\layout\AppLayout.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\pages\DashboardPage.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\pages\UpstreamDashboardPage.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\pages\AdminPage.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\pages\DownstreamSitesPage.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\pages\YiyiInputPage.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\daily-input\SmInputTable.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\daily-input\S360InputTable.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\daily-input\BaiduInputTable.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\daily-input\OtherInputTable.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\ad-sites\AdSiteTimelineDrawer.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\ad-sites\ReconciliationDrawer.tsx`
+- `D:\Download\manager\kko\150426\ads-management\ads-management\src\components\ad-sites\AdSiteRebateDrawer.tsx`
+
+### 5.2 Route mapping
+
+#### Dashboard
+
+- `/dashboard/sm`
+- `/dashboard/360`
+- `/dashboard/baidu`
+- `/dashboard/other`
+
+#### Bảng tổng
+
+- `/upstream/sm`
+- `/upstream/360`
+- `/upstream/baidu`
+- `/upstream/other`
+
+#### Nhập liệu
+
+- `/input/sm`
+- `/input/360`
+- `/input/baidu`
+- `/input/other`
+- `/input/yiyi`
+
+#### Hạ nguồn
+
+- `/downstream`
+- `/downstream/:id`
+
+#### Quản trị / danh sách site
+
+- `/admin`
+
+### 5.3 State management
+
+- TanStack Query cho server state
+- local draft state cho các bảng nhập liệu
+- token lưu ở `localStorage`
+- stale cache hiện được tăng để tránh refetch quá nhiều khi đổi tab
+
+---
+
+## 6. Luồng nhập liệu
+
+### 6.1 Daily input GET
+
+`GET /api/daily-input` nhận:
+
+- `date`
+- `ad_type`
+- `search`
+
+Behavior hiện tại:
+
+- luôn cần auth
+- trả về site đang active
+- đồng thời trả thêm site đã pause nếu ngày đó đã có `DailyInput` lịch sử
+- mục tiêu là giữ tổng nhìn thấy ở `Input` khớp `Dashboard`
+
+Đây là fix trực tiếp cho lỗi cũ:
+
+- `Input` ẩn site paused
+- nhưng `Dashboard` vẫn cộng doanh thu lịch sử của site đó
+- gây lệch số và làm user tưởng công thức sai
+
+### 6.2 Daily input POST batch
+
+Behavior hiện tại:
+
+- site paused:
+  - nếu ngày đó chưa từng có record -> chặn tạo mới
+  - nếu ngày đó đã có record lịch sử -> cho phép update
+
+### 6.3 Confirm / unconfirm
+
+- `confirmed`:
+  - không được sửa bình thường
+  - admin có thể mở khóa bằng `unconfirm`
+
+---
+
+## 7. Rebate hiện tại
+
+### 7.1 Scope
+
+- chỉ áp dụng cho `SM`
+- cấu hình theo **Ad Site**
+- có khoảng thời gian hiệu lực:
+  - `startDate`
+  - `endDate` nullable
+
+### 7.2 Công thức hiện tại
+
+- `Doanh thu gốc = qty * unitPrice`
+- `Hoàn tiền = qty * rebateRate`
+- `Thực thu = Doanh thu gốc - Hoàn tiền`
+
+Lưu xuống DB:
+
+- `DailyInput.rebateAmount = Hoàn tiền`
+- `DailyInput.rebateRateSnapshot = rebateRate tại thời điểm lưu`
+- `DailyInput.revenue = Thực thu`
+
+### 7.3 Active rate lookup
+
+Một rate được coi là active khi:
+
+- `startDate <= recordDate`
+- và:
+  - `endDate >= recordDate`
+  - hoặc `endDate IS NULL`
+
+### 7.4 UI behavior
+
+Ở `SmInputTable.tsx`:
+
+- input gốc:
+  - `qty`
+  - `unitPrice`
+- cột tính toán:
+  - `Doanh thu gốc`
+  - `Hoàn tiền`
+  - `Thực thu`
+
+Hiện tại:
+
+- `Hoàn tiền` và `Thực thu` là read-only
+- user không được override tay
+
+### 7.5 Recalculate rebate
+
+Admin có thể chạy:
+
+- `Áp dụng lại rebate`
+
+Behavior:
+
+- theo `Ad Site`
+- chọn khoảng ngày
+- có tùy chọn `include_confirmed`
+
+Nếu bật `include_confirmed`, hệ thống có thể sửa lại cả dữ liệu đã chốt. Đây là thao tác mạnh và có popup cảnh báo.
+
+---
+
+## 8. Dashboard / Bảng tổng / Hạ nguồn
+
+### 8.1 Những khác biệt phải bảo toàn
+
+- `SM dashboard cost` khác `SM service cost`
+- `LE dashboard tax` khác `LE payout tax`
+- `360`, `Baidu JS`, `Other` có công thức doanh thu riêng và không dùng rebate của `SM`
+
+### 8.2 Công thức nhập liệu
+
+#### SM
+
+- trước rebate:
+  - `baseRevenue = qty * unitPrice`
+- sau rebate:
+  - `rebateAmount = qty * rebateRate`
+  - `revenue = baseRevenue - rebateAmount`
+
+#### 360 / Baidu JS
+
+- `revenue = (amount1 + amount2) * ratio`
+
+#### Other
+
+- tùy billing method:
+  - `CPM`: `qty * unitPrice`
+  - `RATIO`: `(amount1 + amount2) * ratio`
+
+### 8.3 Dashboard monthly
+
+`/api/dashboard/monthly` trả:
+
+- row theo từng ngày
+- total row
+- upstream breakdown theo màn dashboard
+
+Các chỉ số lõi:
+
+- `revenue`
+- `cost`
+- `tax`
+- `profit`
+- `profit_rate`
+
+Riêng với `SM`, dashboard đọc `DailyInput.revenue`, nên đây là **Thực thu sau rebate**.
+
+### 8.4 Bảng tổng 360
+
+Màn `Bảng tổng -> 360` đã được gọn lại, chỉ còn:
+
+- `Ngày`
+- `Doanh thu`
+- `Chi phí`
+- `Lợi nhuận`
+- `Thuế`
+- `Lợi nhuận ròng`
+- `Tỷ suất LN`
+- `ML 80%`
+- `LE`
+
+Không còn breakdown theo từng nhà trong bảng này.
+
+### 8.5 Hạ nguồn
+
+- có luồng `ML`
+- có luồng `LE`
+- `LE` hiển thị theo ad site nhỏ thực tế
+- có export PDF
+
+---
+
+## 9. Timeline / Reconciliation / trạng thái site
+
+### 9.1 Timeline
+
+`AdSiteEvent` dùng cho:
+
+- `CREATED`
+- `PAUSED`
+- `RESUMED`
+- `DIED`
+- `NOTE`
+
+Phân biệt:
+
+- `createdAt` = ngày hệ thống ghi nhận
+- `eventDate` = ngày thực tế xảy ra
+
+UI timeline sort theo `eventDate`.
+
+### 9.2 Pause / Resume
+
+- `isActive = false` chỉ ảnh hưởng khả năng nhập mới
+- không được làm mất dữ liệu lịch sử khỏi dashboard
+
+### 9.3 Archive / Site Die
+
+- `isArchived = true`
+- bị loại khỏi input và các luồng tính tiền hiện hành
+
+### 9.4 Reconciliation
+
+Drawer đối soát hiện hỗ trợ:
+
+- chọn khoảng ngày
+- doanh thu hệ thống
+- UV hệ thống
+- nhập số đối tác báo
+- chênh lệch doanh thu
+- chênh lệch UV
+
+---
+
+## 10. Security notes
+
+### 10.1 Đã fix
+
+- `GET /api/daily-input` không còn public
+- JWT không còn giữ quyền/trạng thái cũ tới hết hạn
+
+### 10.2 Tradeoff hiện tại
+
+- `requireAuth` giờ thêm 1 query DB mỗi request protected
+- tradeoff này được chấp nhận vì an toàn RBAC quan trọng hơn
+
+---
+
+## 11. Verify chuẩn
 
 ### Backend
-- `d:/Download/manager/kko/ad-management/src/index.ts` - Express app entry
-- `d:/Download/manager/kko/ad-management/src/routes/admin.ts` - Admin/user/auth routes
-- `d:/Download/manager/kko/ad-management/src/routes/dailyInput.ts` - Data input CRUD
-- `d:/Download/manager/kko/ad-management/src/routes/dashboard.ts` - Monthly aggregation
-- `d:/Download/manager/kko/ad-management/src/services/mlPayout.service.ts` - Cost calculation logic
-- `d:/Download/manager/kko/ad-management/prisma/schema.prisma` - Full data model
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management
+npm run build
+```
 
 ### Frontend
-- `d:/Download/manager/kko/ad-management/ads-management/src/App.tsx` - Route definitions
-- `d:/Download/manager/kko/ad-management/ads-management/src/components/daily-input/SmInputTable.tsx` - CPM input table
-- `d:/Download/manager/kko/ad-management/ads-management/src/pages/DashboardPage.tsx` - Monthly summary view
-- `d:/Download/manager/kko/ad-management/ads-management/src/pages/AdminPage.tsx` - 5-tab admin panel
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management\ads-management
+npm run lint
+npm run build
+```
+
+### Nếu có thay schema
+
+```powershell
+cd D:\Download\manager\kko\150426\ads-management
+npx prisma generate
+npx prisma db push
+```
+
+---
+
+## 12. Các lỗi cũ đã xử lý gần đây
+
+### 12.1 Lộ dữ liệu daily input
+
+Đã fix bằng:
+
+- thêm `requireAuth` cho `GET /api/daily-input`
+
+### 12.2 Lệch số giữa Input và Dashboard do site paused
+
+Đã fix bằng:
+
+- trả lại row lịch sử của site paused ở `GET /api/daily-input`
+- cho phép update record lịch sử paused ở `POST /batch`
+- vẫn chặn tạo record mới cho site paused
+
+### 12.3 JWT không thu hồi quyền/trạng thái ngay
+
+Đã fix bằng:
+
+- rehydrate `req.user` từ DB tại `requireAuth`
+
+---
+
+## 13. Kết luận
+
+Trạng thái hiện tại của hệ thống:
+
+- kiến trúc backend/frontend ổn định
+- RBAC đã rõ hơn và an toàn hơn
+- `SM rebate` đang hoạt động theo `Ad Site`
+- `Dashboard`, `Bảng tổng`, `Nhập liệu`, `Hạ nguồn`, `Admin` đã có nhiều nghiệp vụ custom, cần cực kỳ cẩn thận khi sửa
+
+Nguyên tắc khi sửa tiếp:
+
+- không phá công thức đang chạy
+- không nhầm giữa `/dashboard/*` và `/upstream/*`
+- không tự ý mở rộng rebate sang `360 / Baidu / Other`
+- luôn verify bằng build + runtime check trước khi kết luận

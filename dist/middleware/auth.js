@@ -7,11 +7,33 @@ exports.requireAuth = requireAuth;
 exports.requirePermission = requirePermission;
 exports.requireWriteAccess = requireWriteAccess;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const prisma_js_1 = __importDefault(require("../prisma.js"));
 const env_js_1 = require("../utils/env.js");
 function isViewer(user) {
     return user?.role === 'VIEWER';
 }
-function requireAuth(req, res, next) {
+function resolveUserRole(user) {
+    if (user.role === 'VIEWER')
+        return 'VIEWER';
+    if (user.permAdmin || user.role === 'ADMIN')
+        return 'ADMIN';
+    return 'EDITOR';
+}
+function toUserPublic(user) {
+    const resolvedRole = resolveUserRole(user);
+    return {
+        id: user.id,
+        username: user.username,
+        role: resolvedRole,
+        perm_data_input: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataInput),
+        perm_data_confirm: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataConfirm),
+        perm_admin: resolvedRole === 'ADMIN',
+        status: user.status,
+        last_login_at: user.lastLoginAt ?? undefined,
+        created_at: user.createdAt,
+    };
+}
+async function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!token) {
@@ -29,7 +51,29 @@ function requireAuth(req, res, next) {
     }
     try {
         const payload = jsonwebtoken_1.default.verify(token, jwtSecret);
-        req.user = payload;
+        if (!payload?.id) {
+            res.status(401).json({ success: false, error: 'Invalid or expired token' });
+            return;
+        }
+        const user = await prisma_js_1.default.user.findUnique({
+            where: { id: payload.id },
+            select: {
+                id: true,
+                username: true,
+                role: true,
+                permDataInput: true,
+                permDataConfirm: true,
+                permAdmin: true,
+                status: true,
+                lastLoginAt: true,
+                createdAt: true,
+            },
+        });
+        if (!user || user.status !== 'active') {
+            res.status(401).json({ success: false, error: 'Invalid or expired token' });
+            return;
+        }
+        req.user = toUserPublic(user);
         next();
     }
     catch {

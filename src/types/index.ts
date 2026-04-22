@@ -50,9 +50,9 @@ export interface AdSite {
   ad_type_code?: AdTypeCode
 }
 
-export interface UpstreamRebateRate {
+export interface AdSiteRebateRate {
   id: string
-  upstream_id: number
+  ad_site_id: number
   rate: number
   start_date: string
   end_date?: string

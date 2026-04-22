@@ -299,6 +299,8 @@
     "recalculateDescription": "Chỉ tính lại các bản ghi SM chưa chốt trong khoảng ngày đã chọn.",
     "recalculateRange": "Khoảng ngày áp dụng",
     "recalculateRangeRequired": "Vui lòng chọn khoảng ngày áp dụng",
+    "includeConfirmed": "Bao gồm dữ liệu đã xác nhận",
+    "includeConfirmedWarning": "Bạn đang cho phép hệ thống thay đổi dữ liệu đã xác nhận. Điều này sẽ làm thay đổi số liệu lịch sử của báo cáo.",
     "recalculatedSuccess": "Đã áp dụng lại rebate cho {{count}} bản ghi",
     "baseRevenue": "Doanh thu gốc",
     "rebateAmount": "Hoàn tiền",

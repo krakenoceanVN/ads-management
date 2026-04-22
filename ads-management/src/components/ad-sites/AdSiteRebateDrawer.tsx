@@ -1,25 +1,25 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, DatePicker, Drawer, Empty, Form, InputNumber, message, Modal, Popconfirm, Space, Table, Tag } from 'antd'
+import { Alert, Button, Checkbox, DatePicker, Drawer, Empty, Form, InputNumber, message, Modal, Popconfirm, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
 import api from '../../api/axios'
-import type { ApiResponse, UpstreamRebateRate } from '../../types'
+import type { AdSiteRebateRate, ApiResponse } from '../../types'
 import { withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed } from '../../utils/numberFormat'
 
 const { RangePicker } = DatePicker
 
-interface UpstreamSummary {
+interface AdSiteSummary {
   id: number
   name: string
-  ad_type_code: string
+  upstream_name: string
 }
 
 interface Props {
   open: boolean
-  upstream: UpstreamSummary | null
+  adSite: AdSiteSummary | null
   onClose: () => void
 }
 
@@ -31,30 +31,32 @@ interface RebateFormValues {
 
 interface RecalculateFormValues {
   range: [Dayjs, Dayjs]
+  include_confirmed?: boolean
 }
 
-export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props) {
+export default function AdSiteRebateDrawer({ open, adSite, onClose }: Props) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const [modal, setModal] = useState<UpstreamRebateRate | null | undefined>(undefined)
+  const [modal, setModal] = useState<AdSiteRebateRate | null | undefined>(undefined)
   const [recalculateOpen, setRecalculateOpen] = useState(false)
   const [form] = Form.useForm<RebateFormValues>()
   const [recalculateForm] = Form.useForm<RecalculateFormValues>()
+  const includeConfirmed = Form.useWatch('include_confirmed', recalculateForm)
 
-  const queryKey = ['admin', 'upstream-rebates', upstream?.id ?? 0]
+  const queryKey = ['admin', 'ad-site-rebates', adSite?.id ?? 0]
 
   const { data: rebates = [], isLoading } = useQuery({
     queryKey,
-    enabled: open && Boolean(upstream?.id),
+    enabled: open && Boolean(adSite?.id),
     queryFn: () =>
       api
-        .get<ApiResponse<UpstreamRebateRate[]>>(`/api/admin/upstreams/${upstream!.id}/rebates`)
+        .get<ApiResponse<AdSiteRebateRate[]>>(`/api/admin/ad-sites/${adSite!.id}/rebates`)
         .then((response) => response.data.data ?? []),
   })
 
   const createMutation = useMutation({
     mutationFn: (payload: { rate: number; start_date: string; end_date?: string | null }) =>
-      api.post(`/api/admin/upstreams/${upstream!.id}/rebates`, payload),
+      api.post(`/api/admin/ad-sites/${adSite!.id}/rebates`, payload),
     onSuccess: () => {
       message.success(t('rebate.created'))
       qc.invalidateQueries({ queryKey })
@@ -67,7 +69,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
 
   const updateMutation = useMutation({
     mutationFn: ({ rebateId, payload }: { rebateId: string; payload: { rate: number; start_date: string; end_date?: string | null } }) =>
-      api.put(`/api/admin/upstreams/${upstream!.id}/rebates/${rebateId}`, payload),
+      api.put(`/api/admin/ad-sites/${adSite!.id}/rebates/${rebateId}`, payload),
     onSuccess: () => {
       message.success(t('rebate.updated'))
       qc.invalidateQueries({ queryKey })
@@ -79,7 +81,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (rebateId: string) => api.delete(`/api/admin/upstreams/${upstream!.id}/rebates/${rebateId}`),
+    mutationFn: (rebateId: string) => api.delete(`/api/admin/ad-sites/${adSite!.id}/rebates/${rebateId}`),
     onSuccess: () => {
       message.success(t('rebate.deleted'))
       qc.invalidateQueries({ queryKey })
@@ -90,11 +92,12 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
   })
 
   const recalculateMutation = useMutation({
-    mutationFn: (payload: { start_date: string; end_date: string }) =>
-      api.post(`/api/admin/upstreams/${upstream!.id}/rebates/recalculate`, payload),
+    mutationFn: (payload: { start_date: string; end_date: string; include_confirmed?: boolean }) =>
+      api.post(`/api/admin/ad-sites/${adSite!.id}/rebates/recalculate`, payload),
     onSuccess: (response: { data?: { updated?: number } }) => {
       const updated = response.data?.updated ?? 0
       message.success(t('rebate.recalculatedSuccess', { count: updated }))
+      qc.invalidateQueries({ queryKey })
       qc.invalidateQueries({ queryKey: ['daily-input'] })
       setRecalculateOpen(false)
       recalculateForm.resetFields()
@@ -114,7 +117,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
     })
   }
 
-  const openEdit = (row: UpstreamRebateRate) => {
+  const openEdit = (row: AdSiteRebateRate) => {
     setModal(row)
     form.resetFields()
     form.setFieldsValue({
@@ -134,6 +137,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
     recalculateForm.resetFields()
     recalculateForm.setFieldsValue({
       range: [dayjs().startOf('month'), dayjs()],
+      include_confirmed: false,
     })
   }
 
@@ -160,11 +164,12 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
       recalculateMutation.mutate({
         start_date: startDate.format('YYYY-MM-DD'),
         end_date: endDate.format('YYYY-MM-DD'),
+        include_confirmed: values.include_confirmed === true,
       })
     })
   }
 
-  const columns: ColumnsType<UpstreamRebateRate> = withTableEllipsis([
+  const columns: ColumnsType<AdSiteRebateRate> = withTableEllipsis([
     {
       title: t('rebate.rate'),
       dataIndex: 'rate',
@@ -189,7 +194,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
       title: t('input.action'),
       key: 'action',
       width: 120,
-      render: (_: unknown, row: UpstreamRebateRate) => (
+      render: (_: unknown, row: AdSiteRebateRate) => (
         <Space size="small" className="app-table-action-group">
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm
@@ -208,7 +213,7 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
   return (
     <>
       <Drawer
-        title={upstream ? `${t('rebate.title')} - ${upstream.name}` : t('rebate.title')}
+        title={adSite ? `${t('rebate.title')} - ${adSite.name} (${adSite.upstream_name})` : t('rebate.title')}
         open={open}
         onClose={() => {
           closeModal()
@@ -216,19 +221,15 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
         }}
         width={720}
         extra={
-          upstream ? (
+          adSite ? (
             <Space>
-              <Button onClick={openRecalculate}>
-                {t('rebate.recalculate')}
-              </Button>
-              <Button type="primary" onClick={openCreate}>
-                {t('rebate.add')}
-              </Button>
+              <Button onClick={openRecalculate}>{t('rebate.recalculate')}</Button>
+              <Button type="primary" onClick={openCreate}>{t('rebate.add')}</Button>
             </Space>
           ) : null
         }
       >
-        {upstream ? (
+        {adSite ? (
           <Table
             className="app-data-table"
             columns={columns}
@@ -288,6 +289,14 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
           style={{ marginBottom: 16 }}
           message={t('rebate.recalculateDescription')}
         />
+        {includeConfirmed ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t('rebate.includeConfirmedWarning')}
+          />
+        ) : null}
         <Form form={recalculateForm} layout="vertical">
           <Form.Item
             name="range"
@@ -295,6 +304,9 @@ export default function UpstreamRebateDrawer({ open, upstream, onClose }: Props)
             rules={[{ required: true, message: t('rebate.recalculateRangeRequired') }]}
           >
             <RangePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="include_confirmed" valuePropName="checked">
+            <Checkbox>{t('rebate.includeConfirmed')}</Checkbox>
           </Form.Item>
         </Form>
       </Modal>

@@ -14,9 +14,9 @@ export interface AdSite {
   active_rebate_rate?: number
 }
 
-export interface UpstreamRebateRate {
+export interface AdSiteRebateRate {
   id: string
-  upstream_id: number
+  ad_site_id: number
   rate: number
   start_date: string
   end_date?: string | null

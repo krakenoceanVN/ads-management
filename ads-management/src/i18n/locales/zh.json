@@ -299,6 +299,8 @@
     "recalculateDescription": "只会重算所选日期范围内尚未确认的 SM 记录。",
     "recalculateRange": "应用日期范围",
     "recalculateRangeRequired": "请选择应用日期范围",
+    "includeConfirmed": "包含已确认数据",
+    "includeConfirmedWarning": "你正在允许系统修改已确认的数据，这会改变历史报表中的数值。",
     "recalculatedSuccess": "已对 {{count}} 条记录重新应用返点",
     "baseRevenue": "原始收入",
     "rebateAmount": "返点",

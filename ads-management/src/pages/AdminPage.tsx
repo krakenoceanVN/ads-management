@@ -14,7 +14,7 @@ import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
-import UpstreamRebateDrawer from '../components/upstreams/UpstreamRebateDrawer'
+import AdSiteRebateDrawer from '../components/ad-sites/AdSiteRebateDrawer'
 
 // ============================================================
 // Shared types
@@ -149,6 +149,7 @@ function AdSitesTab() {
   const [downstreamPriceModal, setDownstreamPriceModal] = useState<AdSiteRow | null>(null)
   const [reconciliationSite, setReconciliationSite] = useState<AdSiteRow | null>(null)
   const [timelineSite, setTimelineSite] = useState<AdSiteRow | null>(null)
+  const [rebateSite, setRebateSite] = useState<AdSiteRow | null>(null)
   const [siteForm] = Form.useForm()
   const [priceForm] = Form.useForm()
   const [downstreamPriceForm] = Form.useForm()
@@ -439,6 +440,15 @@ function AdSitesTab() {
           </Tooltip>
           {isAdminUser ? (
             <>
+              {row.ad_type_code === 'SM' ? (
+                <Tooltip title={t('rebate.open')}>
+                  <Button
+                    size="small"
+                    icon={<PercentageOutlined />}
+                    onClick={() => setRebateSite(row)}
+                  />
+                </Tooltip>
+              ) : null}
               <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
               <Button size="small" onClick={() => {
                 setPriceModal(row)
@@ -643,6 +653,11 @@ function AdSitesTab() {
         siteName={timelineSite?.ad_site_name}
         onClose={() => setTimelineSite(null)}
       />
+      <AdSiteRebateDrawer
+        open={!!rebateSite}
+        adSite={rebateSite ? { id: rebateSite.id, name: rebateSite.ad_site_name, upstream_name: rebateSite.upstream_name } : null}
+        onClose={() => setRebateSite(null)}
+      />
     </>
   )
 }
@@ -654,7 +669,6 @@ function UpstreamsTab() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<Partial<UpstreamFormValues> & { id?: number } | null>(null)
-  const [rebateUpstream, setRebateUpstream] = useState<UpstreamRow | null>(null)
   const [form] = Form.useForm()
   const qc = useQueryClient()
 
@@ -717,14 +731,9 @@ function UpstreamsTab() {
       render: (v: string) => <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag>,
     },
     {
-      title: t('input.action'), key: 'action', width: 190,
+      title: t('input.action'), key: 'action', width: 120,
       render: (_: unknown, row: UpstreamRow) => (
         <Space size="small" className="app-table-action-group">
-          {row.ad_type_code === 'SM' ? (
-            <Tooltip title={t('rebate.open')}>
-              <Button size="small" icon={<PercentageOutlined />} onClick={() => setRebateUpstream(row)} />
-            </Tooltip>
-          ) : null}
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUpstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -773,12 +782,6 @@ function UpstreamsTab() {
           </Form.Item>
         </Form>
       </Modal>
-
-      <UpstreamRebateDrawer
-        open={rebateUpstream !== null}
-        upstream={rebateUpstream}
-        onClose={() => setRebateUpstream(null)}
-      />
     </>
   )
 }

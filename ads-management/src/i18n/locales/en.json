@@ -299,6 +299,8 @@
     "recalculateDescription": "Only unconfirmed SM records inside the selected date range will be recalculated.",
     "recalculateRange": "Date range",
     "recalculateRangeRequired": "Please select a date range",
+    "includeConfirmed": "Include confirmed records",
+    "includeConfirmedWarning": "You are allowing the system to change already confirmed data. This will modify historical report numbers.",
     "recalculatedSuccess": "Rebate reapplied to {{count}} records",
     "baseRevenue": "Base Revenue",
     "rebateAmount": "Rebate",

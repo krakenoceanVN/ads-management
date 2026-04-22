@@ -93,6 +93,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
   const getRebateAmount = (row: DailyInputRow) => {
     const draft = drafts[row.id]
     const baseRevenue = getBaseRevenue(row)
+    const qty = getQty(row)
 
     if (draft?.manual_field === 'rebate' && draft.rebate_amount !== undefined) {
       return draft.rebate_amount
@@ -106,7 +107,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
       return row.existing_record.rebate_amount ?? 0
     }
 
-    return calculateRebateAmount(baseRevenue, getConfiguredRebateRate(row))
+    return calculateRebateAmount(qty, getConfiguredRebateRate(row))
   }
 
   const getActualRevenue = (row: DailyInputRow) => {
@@ -125,7 +126,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
       return row.existing_record.actual_revenue ?? row.existing_record.revenue
     }
 
-    return calculateActualRevenue(baseRevenue, calculateRebateAmount(baseRevenue, getConfiguredRebateRate(row)))
+    return calculateActualRevenue(baseRevenue, calculateRebateAmount(getQty(row), getConfiguredRebateRate(row)))
   }
 
   const isDirty = (row: DailyInputRow) => row.id in drafts

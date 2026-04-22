@@ -35,25 +35,24 @@ model Upstream {
 
   adType   AdType    @relation(fields: [adTypeId], references: [id])
   adSites  AdSite[]
-  rebateRates UpstreamRebateRate[]
 
   @@index([adTypeId])
   @@index([adTypeId, status])
 }
 
-model UpstreamRebateRate {
+model AdSiteRebateRate {
   id        String   @id @default(uuid())
-  upstreamId Int
+  adSiteId  Int
   rate      Decimal
   startDate DateTime
   endDate   DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  upstream Upstream @relation(fields: [upstreamId], references: [id], onDelete: Cascade)
+  adSite AdSite @relation(fields: [adSiteId], references: [id], onDelete: Cascade)
 
-  @@index([upstreamId, startDate])
-  @@index([upstreamId, endDate])
+  @@index([adSiteId, startDate])
+  @@index([adSiteId, endDate])
 }
 
 // ============================================================
@@ -77,6 +76,7 @@ model AdSite {
   dailyInputs    DailyInput[]
   downstreams    AdSiteDownstream[]
   events         AdSiteEvent[]
+  rebateRates    AdSiteRebateRate[]
 
   @@index([upstreamId])
   @@index([isActive])

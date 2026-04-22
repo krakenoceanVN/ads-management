@@ -114,32 +114,36 @@ function rebateWindowsOverlap(
   return startDate.getTime() <= otherEnd.getTime() && otherStartDate.getTime() <= selfEnd.getTime()
 }
 
-async function ensureSmUpstream(upstreamId: number) {
-  const upstream = await prisma.upstream.findUnique({
-    where: { id: upstreamId },
-    include: { adType: true },
+async function ensureSmAdSite(adSiteId: number) {
+  const adSite = await prisma.adSite.findUnique({
+    where: { id: adSiteId },
+    include: {
+      upstream: {
+        include: { adType: true },
+      },
+    },
   })
 
-  if (!upstream) {
-    return { ok: false as const, error: "Upstream not found" }
+  if (!adSite) {
+    return { ok: false as const, error: "Ad site not found" }
   }
 
-  if (upstream.adType.code !== "SM") {
-    return { ok: false as const, error: "Rebate config is only available for SM upstreams" }
+  if (adSite.upstream.adType.code !== "SM") {
+    return { ok: false as const, error: "Rebate config is only available for SM ad sites" }
   }
 
-  return { ok: true as const, upstream }
+  return { ok: true as const, adSite }
 }
 
-async function findOverlappingUpstreamRebate(
-  upstreamId: number,
+async function findOverlappingAdSiteRebate(
+  adSiteId: number,
   startDate: Date,
   endDate: Date | null,
   excludeId?: string
 ) {
-  const existing = await prisma.upstreamRebateRate.findMany({
+  const existing = await prisma.adSiteRebateRate.findMany({
     where: {
-      upstreamId,
+      adSiteId,
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },
     select: {
@@ -154,7 +158,7 @@ async function findOverlappingUpstreamRebate(
   )
 }
 
-function resolveUpstreamRebateRateForDate(
+function resolveAdSiteRebateRateForDate(
   rates: Array<{ startDate: Date; endDate: Date | null; rate: number }>,
   targetDate: Date
 ) {
@@ -576,22 +580,22 @@ router.delete(
 )
 
 router.get(
-  "/admin/upstreams/:id/rebates",
+  "/admin/ad-sites/:id/rebates",
   requireAuth,
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const upstreamId = Number(req.params.id)
-      const upstreamResult = await ensureSmUpstream(upstreamId)
-      if (!upstreamResult.ok) {
-        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+      const adSiteId = Number(req.params.id)
+      const adSiteResult = await ensureSmAdSite(adSiteId)
+      if (!adSiteResult.ok) {
+        res.status(adSiteResult.error === "Ad site not found" ? 404 : 400).json({ success: false, error: adSiteResult.error })
         return
       }
 
-      const rebates = await prisma.upstreamRebateRate.findMany({
-        where: { upstreamId },
+      const rebates = await prisma.adSiteRebateRate.findMany({
+        where: { adSiteId },
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
       })
 
@@ -599,7 +603,7 @@ router.get(
         success: true,
         data: rebates.map((rebate) => ({
           id: rebate.id,
-          upstream_id: rebate.upstreamId,
+          ad_site_id: rebate.adSiteId,
           rate: Number(rebate.rate),
           start_date: formatBusinessDate(rebate.startDate),
           end_date: rebate.endDate ? formatBusinessDate(rebate.endDate) : null,
@@ -608,14 +612,14 @@ router.get(
         })),
       })
     } catch (err: any) {
-      console.error("GET /api/admin/upstreams/:id/rebates error:", err)
+      console.error("GET /api/admin/ad-sites/:id/rebates error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
 )
 
 router.post(
-  "/admin/upstreams/:id/rebates",
+  "/admin/ad-sites/:id/rebates",
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
@@ -628,10 +632,10 @@ router.post(
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const upstreamId = Number(req.params.id)
-      const upstreamResult = await ensureSmUpstream(upstreamId)
-      if (!upstreamResult.ok) {
-        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+      const adSiteId = Number(req.params.id)
+      const adSiteResult = await ensureSmAdSite(adSiteId)
+      if (!adSiteResult.ok) {
+        res.status(adSiteResult.error === "Ad site not found" ? 404 : 400).json({ success: false, error: adSiteResult.error })
         return
       }
 
@@ -642,15 +646,15 @@ router.post(
         return
       }
 
-      const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate)
+      const overlap = await findOverlappingAdSiteRebate(adSiteId, startDate, endDate)
       if (overlap) {
         res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" })
         return
       }
 
-      const created = await prisma.upstreamRebateRate.create({
+      const created = await prisma.adSiteRebateRate.create({
         data: {
-          upstreamId,
+          adSiteId,
           rate: req.body.rate,
           startDate,
           endDate,
@@ -661,7 +665,7 @@ router.post(
         success: true,
         data: {
           id: created.id,
-          upstream_id: created.upstreamId,
+          ad_site_id: created.adSiteId,
           rate: Number(created.rate),
           start_date: formatBusinessDate(created.startDate),
           end_date: created.endDate ? formatBusinessDate(created.endDate) : null,
@@ -670,14 +674,14 @@ router.post(
         },
       })
     } catch (err: any) {
-      console.error("POST /api/admin/upstreams/:id/rebates error:", err)
+      console.error("POST /api/admin/ad-sites/:id/rebates error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
 )
 
 router.put(
-  "/admin/upstreams/:id/rebates/:rebateId",
+  "/admin/ad-sites/:id/rebates/:rebateId",
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
@@ -691,18 +695,18 @@ router.put(
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const upstreamId = Number(req.params.id)
+      const adSiteId = Number(req.params.id)
       const rebateId = String(req.params.rebateId)
-      const upstreamResult = await ensureSmUpstream(upstreamId)
-      if (!upstreamResult.ok) {
-        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+      const adSiteResult = await ensureSmAdSite(adSiteId)
+      if (!adSiteResult.ok) {
+        res.status(adSiteResult.error === "Ad site not found" ? 404 : 400).json({ success: false, error: adSiteResult.error })
         return
       }
 
-      const existing = await prisma.upstreamRebateRate.findFirst({
+      const existing = await prisma.adSiteRebateRate.findFirst({
         where: {
           id: rebateId,
-          upstreamId,
+          adSiteId,
         },
       })
       if (!existing) {
@@ -717,13 +721,13 @@ router.put(
         return
       }
 
-      const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate, rebateId)
+      const overlap = await findOverlappingAdSiteRebate(adSiteId, startDate, endDate, rebateId)
       if (overlap) {
         res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" })
         return
       }
 
-      const updated = await prisma.upstreamRebateRate.update({
+      const updated = await prisma.adSiteRebateRate.update({
         where: { id: rebateId },
         data: {
           rate: req.body.rate,
@@ -736,7 +740,7 @@ router.put(
         success: true,
         data: {
           id: updated.id,
-          upstream_id: updated.upstreamId,
+          ad_site_id: updated.adSiteId,
           rate: Number(updated.rate),
           start_date: formatBusinessDate(updated.startDate),
           end_date: updated.endDate ? formatBusinessDate(updated.endDate) : null,
@@ -745,14 +749,14 @@ router.put(
         },
       })
     } catch (err: any) {
-      console.error("PUT /api/admin/upstreams/:id/rebates/:rebateId error:", err)
+      console.error("PUT /api/admin/ad-sites/:id/rebates/:rebateId error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
 )
 
 router.delete(
-  "/admin/upstreams/:id/rebates/:rebateId",
+  "/admin/ad-sites/:id/rebates/:rebateId",
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
@@ -763,12 +767,12 @@ router.delete(
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const upstreamId = Number(req.params.id)
+      const adSiteId = Number(req.params.id)
       const rebateId = String(req.params.rebateId)
-      const existing = await prisma.upstreamRebateRate.findFirst({
+      const existing = await prisma.adSiteRebateRate.findFirst({
         where: {
           id: rebateId,
-          upstreamId,
+          adSiteId,
         },
       })
 
@@ -777,17 +781,17 @@ router.delete(
         return
       }
 
-      await prisma.upstreamRebateRate.delete({ where: { id: rebateId } })
+      await prisma.adSiteRebateRate.delete({ where: { id: rebateId } })
       res.json({ success: true, message: "Rebate config deleted" })
     } catch (err: any) {
-      console.error("DELETE /api/admin/upstreams/:id/rebates/:rebateId error:", err)
+      console.error("DELETE /api/admin/ad-sites/:id/rebates/:rebateId error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
 )
 
 router.post(
-  "/admin/upstreams/:id/rebates/recalculate",
+  "/admin/ad-sites/:id/rebates/recalculate",
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
@@ -795,26 +799,28 @@ router.post(
     param("id").isInt().toInt(),
     body("start_date").notEmpty().withMessage("start_date required").isISO8601(),
     body("end_date").notEmpty().withMessage("end_date required").isISO8601(),
+    body("include_confirmed").optional().isBoolean(),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
-      const upstreamId = Number(req.params.id)
-      const upstreamResult = await ensureSmUpstream(upstreamId)
-      if (!upstreamResult.ok) {
-        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+      const adSiteId = Number(req.params.id)
+      const adSiteResult = await ensureSmAdSite(adSiteId)
+      if (!adSiteResult.ok) {
+        res.status(adSiteResult.error === "Ad site not found" ? 404 : 400).json({ success: false, error: adSiteResult.error })
         return
       }
 
       const startDate = normalizeRebateBoundary(req.body.start_date)
       const endDate = normalizeRebateBoundary(req.body.end_date)
+      const includeConfirmed = Boolean(req.body.include_confirmed)
       if (endDate.getTime() < startDate.getTime()) {
         res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" })
         return
       }
 
-      const rateWindows = await prisma.upstreamRebateRate.findMany({
-        where: { upstreamId },
+      const rateWindows = await prisma.adSiteRebateRate.findMany({
+        where: { adSiteId },
         orderBy: { startDate: "desc" },
       })
 
@@ -822,9 +828,9 @@ router.post(
       const records = await prisma.dailyInput.findMany({
         where: {
           recordDate: { gte: startDate, lt: rangeEnd },
-          status: "unconfirmed",
+          status: includeConfirmed ? { in: ["unconfirmed", "confirmed"] } : "unconfirmed",
           adSite: {
-            upstreamId,
+            id: adSiteId,
             billingMethod: "CPM",
           },
         },
@@ -854,11 +860,11 @@ router.post(
           const unitPrice = Number(record.unitPriceSnapshot ?? record.adSite.currentUnitPrice ?? 0)
           const qty = Number(record.qty ?? 0)
           const baseRevenue = calculateCpmRevenue(qty, unitPrice)
-          const activeRate = resolveUpstreamRebateRateForDate(
+          const activeRate = resolveAdSiteRebateRateForDate(
             normalizedRates,
             getBusinessDayStart(formatBusinessDate(record.recordDate))
           )
-          const rebateAmount = calculateRebateAmount(baseRevenue, activeRate)
+          const rebateAmount = calculateRebateAmount(qty, activeRate)
           const actualRevenue = calculateActualRevenue(baseRevenue, rebateAmount)
 
           return prisma.dailyInput.update({
@@ -874,7 +880,7 @@ router.post(
 
       res.json({ success: true, updated: records.length })
     } catch (err: any) {
-      console.error("POST /api/admin/upstreams/:id/rebates/recalculate error:", err)
+      console.error("POST /api/admin/ad-sites/:id/rebates/recalculate error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }

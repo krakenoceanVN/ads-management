@@ -25,22 +25,22 @@ function toNumber(value, fallback = 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
-async function getActiveUpstreamRebateRateMap(upstreamIds, targetDate) {
-    if (upstreamIds.length === 0) {
+async function getActiveAdSiteRebateRateMap(adSiteIds, targetDate) {
+    if (adSiteIds.length === 0) {
         return new Map();
     }
-    const rates = await prisma_js_1.default.upstreamRebateRate.findMany({
+    const rates = await prisma_js_1.default.adSiteRebateRate.findMany({
         where: {
-            upstreamId: { in: upstreamIds },
+            adSiteId: { in: adSiteIds },
             startDate: { lte: targetDate },
             OR: [{ endDate: null }, { endDate: { gte: targetDate } }],
         },
-        orderBy: [{ upstreamId: "asc" }, { startDate: "desc" }],
+        orderBy: [{ adSiteId: "asc" }, { startDate: "desc" }],
     });
     const rateMap = new Map();
     for (const rate of rates) {
-        if (!rateMap.has(rate.upstreamId)) {
-            rateMap.set(rate.upstreamId, Number(rate.rate));
+        if (!rateMap.has(rate.adSiteId)) {
+            rateMap.set(rate.adSiteId, Number(rate.rate));
         }
     }
     return rateMap;
@@ -117,7 +117,7 @@ router.get("/", [
         }
         const siteIds = adSites.map((s) => s.id);
         const activeRebateRateMap = adTypeCode === "SM"
-            ? await getActiveUpstreamRebateRateMap([...new Set(adSites.map((site) => site.upstreamId))], (0, date_js_1.getBusinessDayStart)(dateStr))
+            ? await getActiveAdSiteRebateRateMap(siteIds, (0, date_js_1.getBusinessDayStart)(dateStr))
             : new Map();
         // 2. LEFT JOIN daily_input WHERE record_date = date (using range for TZ safety)
         const { gte: startOfDay, lt: endOfDay } = (0, date_js_1.getBusinessDayRange)(dateStr);
@@ -160,7 +160,7 @@ router.get("/", [
             upstream_name: site.upstream.name,
             ad_type_id: site.upstream.adTypeId,
             ad_type_code: site.upstream.adType.code,
-            active_rebate_rate: adTypeCode === "SM" ? (activeRebateRateMap.get(site.upstreamId) ?? 0) : undefined,
+            active_rebate_rate: adTypeCode === "SM" ? (activeRebateRateMap.get(site.id) ?? 0) : undefined,
             existing_record: recordMap.get(site.id) ?? null,
             created_at: site.createdAt,
             updated_at: site.updatedAt,
@@ -207,7 +207,7 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
         });
         const siteMap = new Map(adSites.map((s) => [s.id, s]));
         const activeRebateRateMap = ad_type === "SM"
-            ? await getActiveUpstreamRebateRateMap([...new Set(adSites.map((site) => site.upstreamId))], inputDate)
+            ? await getActiveAdSiteRebateRateMap(siteIds, inputDate)
             : new Map();
         const errors = [];
         let saved = 0;
@@ -244,7 +244,7 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                 const qty = item.qty ?? existing?.qty ?? 0;
                 const baseRevenue = (0, calculations_js_1.calculateCpmRevenue)(qty, unitPrice);
                 if (ad_type === "SM") {
-                    rebateRateSnapshot = activeRebateRateMap.get(site.upstreamId) ?? 0;
+                    rebateRateSnapshot = activeRebateRateMap.get(site.id) ?? 0;
                     if (item.actual_revenue !== undefined) {
                         revenue = toNumber(item.actual_revenue);
                         rebateAmount = baseRevenue - revenue;
@@ -261,7 +261,7 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                         rebateRateSnapshot = Number(existing.rebateRateSnapshot);
                     }
                     else {
-                        rebateAmount = (0, calculations_js_1.calculateRebateAmount)(baseRevenue, rebateRateSnapshot);
+                        rebateAmount = (0, calculations_js_1.calculateRebateAmount)(qty, rebateRateSnapshot);
                         revenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
                     }
                 }

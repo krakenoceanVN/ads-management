@@ -5,11 +5,23 @@ export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER'
 
 export interface AdSite {
   id: number
+  upstream_id?: number
   upstream_name: string
   name: string
   billing_method: BillingMethod
   current_unit_price?: number
   current_ratio?: number
+  active_rebate_rate?: number
+}
+
+export interface UpstreamRebateRate {
+  id: string
+  upstream_id: number
+  rate: number
+  start_date: string
+  end_date?: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface DailyInputRow extends AdSite {
@@ -20,6 +32,9 @@ export interface DailyInputRow extends AdSite {
     amount2?: number
     unit_price_snapshot?: number
     ratio_snapshot?: number
+    rebate_amount?: number
+    rebate_rate_snapshot?: number
+    actual_revenue?: number
     revenue: number
     status: InputStatus
   } | null

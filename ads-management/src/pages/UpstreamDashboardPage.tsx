@@ -34,14 +34,6 @@ interface LeDashboardResponse {
   rows: LeDashboardRow[]
 }
 
-interface DisplayFinancials {
-  cost: number
-  grossProfit: number
-  tax: number
-  netProfit: number
-  profitRate: number
-}
-
 interface UpstreamDetailMetrics {
   pv: number
   unit_price: number
@@ -110,43 +102,12 @@ function formatPv(value: number): string {
   return formatIsoInteger(value)
 }
 
-function calculateCost(ml80 = 0, le = 0): number {
-  return ml80 + le
-}
-
 function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
   if (adType === '360') {
     return revenue * 0.8
   }
 
   return downstreamMl80
-}
-
-function calculateCostByAdType(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): number {
-  if (adType === '360') {
-    return revenue * 0.8
-  }
-
-  return calculateCost(ml80, le)
-}
-
-function calculateTax(revenue: number, cost: number): number {
-  return (revenue - cost) * 0.06
-}
-
-function calculateDisplayFinancials(adType: AdTypeCode, revenue: number, ml80 = 0, le = 0): DisplayFinancials {
-  const cost = calculateCostByAdType(adType, revenue, ml80, le)
-  const grossProfit = revenue - cost
-  const tax = calculateTax(revenue, cost)
-  const netProfit = grossProfit - tax
-
-  return {
-    cost,
-    grossProfit,
-    tax,
-    netProfit,
-    profitRate: revenue > 0 ? netProfit / revenue : 0,
-  }
 }
 
 function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
@@ -189,14 +150,9 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       const le = adType === 'SM'
         ? (leRevenueByDate.get(r.date) ?? 0)
         : (downstream?.le ?? 0)
-      const financials = calculateDisplayFinancials(adType, r.revenue, ml80, le)
 
       return {
         ...r,
-        cost: financials.cost,
-        tax: financials.tax,
-        profit: financials.netProfit,
-        profit_rate: financials.profitRate,
         ml_80: ml80,
         le,
       }
@@ -205,8 +161,8 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const totalRevenue = displayRows.reduce((sum, row) => sum + row.revenue, 0)
   const totalML80 = displayRows.reduce((sum, row) => sum + (row.ml_80 ?? 0), 0)
   const totalLE = displayRows.reduce((sum, row) => sum + (row.le ?? 0), 0)
-  const totalCost = calculateCostByAdType(adType, totalRevenue, totalML80, totalLE)
-  const totalTax = calculateTax(totalRevenue, totalCost)
+  const totalCost = displayRows.reduce((sum, row) => sum + row.cost, 0)
+  const totalTax = displayRows.reduce((sum, row) => sum + row.tax, 0)
   const totalNetProfit = displayRows.reduce((sum, row) => sum + row.profit, 0)
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]

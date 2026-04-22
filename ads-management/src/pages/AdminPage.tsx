@@ -6,7 +6,7 @@ import {
   Select, Drawer, DatePicker, Space, Tag, Tooltip, message, Popconfirm, Checkbox,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { CalculatorOutlined, HistoryOutlined } from '@ant-design/icons'
+import { CalculatorOutlined, HistoryOutlined, PercentageOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import api, { isAdmin } from '../api/axios'
 import type { ApiResponse, UserRole } from '../types'
@@ -14,6 +14,7 @@ import { withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoNumber, formatIsoPercent } from '../utils/numberFormat'
 import ReconciliationDrawer from '../components/ad-sites/ReconciliationDrawer'
 import AdSiteTimelineDrawer from '../components/ad-sites/AdSiteTimelineDrawer'
+import UpstreamRebateDrawer from '../components/upstreams/UpstreamRebateDrawer'
 
 // ============================================================
 // Shared types
@@ -653,6 +654,7 @@ function UpstreamsTab() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<Partial<UpstreamFormValues> & { id?: number } | null>(null)
+  const [rebateUpstream, setRebateUpstream] = useState<UpstreamRow | null>(null)
   const [form] = Form.useForm()
   const qc = useQueryClient()
 
@@ -715,9 +717,14 @@ function UpstreamsTab() {
       render: (v: string) => <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag>,
     },
     {
-      title: t('input.action'), key: 'action', width: 120,
+      title: t('input.action'), key: 'action', width: 190,
       render: (_: unknown, row: UpstreamRow) => (
         <Space size="small" className="app-table-action-group">
+          {row.ad_type_code === 'SM' ? (
+            <Tooltip title={t('rebate.open')}>
+              <Button size="small" icon={<PercentageOutlined />} onClick={() => setRebateUpstream(row)} />
+            </Tooltip>
+          ) : null}
           <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
           <Popconfirm title={t('admin.deleteUpstreamConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
             <Button size="small" danger>{t('admin.delete')}</Button>
@@ -766,6 +773,12 @@ function UpstreamsTab() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <UpstreamRebateDrawer
+        open={rebateUpstream !== null}
+        upstream={rebateUpstream}
+        onClose={() => setRebateUpstream(null)}
+      />
     </>
   )
 }

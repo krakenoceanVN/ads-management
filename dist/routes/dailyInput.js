@@ -21,6 +21,30 @@ const handleValidation = (req, res, next) => {
     }
     next();
 };
+function toNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+async function getActiveUpstreamRebateRateMap(upstreamIds, targetDate) {
+    if (upstreamIds.length === 0) {
+        return new Map();
+    }
+    const rates = await prisma_js_1.default.upstreamRebateRate.findMany({
+        where: {
+            upstreamId: { in: upstreamIds },
+            startDate: { lte: targetDate },
+            OR: [{ endDate: null }, { endDate: { gte: targetDate } }],
+        },
+        orderBy: [{ upstreamId: "asc" }, { startDate: "desc" }],
+    });
+    const rateMap = new Map();
+    for (const rate of rates) {
+        if (!rateMap.has(rate.upstreamId)) {
+            rateMap.set(rate.upstreamId, Number(rate.rate));
+        }
+    }
+    return rateMap;
+}
 async function unconfirmDailyInputRecord(req, res) {
     try {
         const id = Number(req.params.id);
@@ -92,6 +116,9 @@ router.get("/", [
             return;
         }
         const siteIds = adSites.map((s) => s.id);
+        const activeRebateRateMap = adTypeCode === "SM"
+            ? await getActiveUpstreamRebateRateMap([...new Set(adSites.map((site) => site.upstreamId))], (0, date_js_1.getBusinessDayStart)(dateStr))
+            : new Map();
         // 2. LEFT JOIN daily_input WHERE record_date = date (using range for TZ safety)
         const { gte: startOfDay, lt: endOfDay } = (0, date_js_1.getBusinessDayRange)(dateStr);
         const records = await prisma_js_1.default.dailyInput.findMany({
@@ -112,6 +139,9 @@ router.get("/", [
                 amount1: Number(r.amount1),
                 amount2: Number(r.amount2),
                 ratio_snapshot: r.ratioSnapshot ? Number(r.ratioSnapshot) : undefined,
+                rebate_amount: Number(r.rebateAmount),
+                rebate_rate_snapshot: Number(r.rebateRateSnapshot),
+                actual_revenue: Number(r.revenue),
                 revenue: Number(r.revenue),
                 status: r.status,
                 created_at: r.createdAt,
@@ -130,6 +160,7 @@ router.get("/", [
             upstream_name: site.upstream.name,
             ad_type_id: site.upstream.adTypeId,
             ad_type_code: site.upstream.adType.code,
+            active_rebate_rate: adTypeCode === "SM" ? (activeRebateRateMap.get(site.upstreamId) ?? 0) : undefined,
             existing_record: recordMap.get(site.id) ?? null,
             created_at: site.createdAt,
             updated_at: site.updatedAt,
@@ -175,6 +206,9 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
             include: { upstream: { include: { adType: true } } },
         });
         const siteMap = new Map(adSites.map((s) => [s.id, s]));
+        const activeRebateRateMap = ad_type === "SM"
+            ? await getActiveUpstreamRebateRateMap([...new Set(adSites.map((site) => site.upstreamId))], inputDate)
+            : new Map();
         const errors = [];
         let saved = 0;
         for (const item of records) {
@@ -201,11 +235,39 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                 continue;
             }
             let revenue;
+            let rebateAmount = 0;
+            let rebateRateSnapshot = 0;
             if (site.billingMethod === "CPM") {
                 // CPM: use stored snapshot price (or override) for revenue calculation
                 const basePrice = existing?.unitPriceSnapshot ?? site.currentUnitPrice ?? 0;
                 const unitPrice = item.unit_price_override ?? Number(basePrice);
-                revenue = (0, calculations_js_1.calculateCpmRevenue)(item.qty ?? 0, unitPrice);
+                const qty = item.qty ?? existing?.qty ?? 0;
+                const baseRevenue = (0, calculations_js_1.calculateCpmRevenue)(qty, unitPrice);
+                if (ad_type === "SM") {
+                    rebateRateSnapshot = activeRebateRateMap.get(site.upstreamId) ?? 0;
+                    if (item.actual_revenue !== undefined) {
+                        revenue = toNumber(item.actual_revenue);
+                        rebateAmount = baseRevenue - revenue;
+                    }
+                    else if (item.rebate_amount !== undefined) {
+                        rebateAmount = toNumber(item.rebate_amount);
+                        revenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
+                    }
+                    else if (existing &&
+                        item.qty === undefined &&
+                        item.unit_price_override === undefined) {
+                        rebateAmount = Number(existing.rebateAmount);
+                        revenue = Number(existing.revenue);
+                        rebateRateSnapshot = Number(existing.rebateRateSnapshot);
+                    }
+                    else {
+                        rebateAmount = (0, calculations_js_1.calculateRebateAmount)(baseRevenue, rebateRateSnapshot);
+                        revenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
+                    }
+                }
+                else {
+                    revenue = baseRevenue;
+                }
             }
             else {
                 // RATIO: ratio_override from frontend > existing snapshot > current ratio
@@ -225,6 +287,8 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                     ratioSnapshot: site.billingMethod === "RATIO"
                         ? (item.ratio_override ?? existing.ratioSnapshot ?? site.currentRatio)
                         : undefined,
+                    rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : existing.rebateAmount,
+                    rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : existing.rebateRateSnapshot,
                     revenue,
                     updatedAt: new Date(),
                 };
@@ -255,6 +319,8 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                         ratioSnapshot: site.billingMethod === "RATIO"
                             ? (item.ratio_override ?? site.currentRatio)
                             : undefined,
+                        rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : 0,
+                        rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : 0,
                         revenue,
                         status: "unconfirmed",
                         createdBy: userId,

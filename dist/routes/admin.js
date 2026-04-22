@@ -13,6 +13,7 @@ const date_js_1 = require("../utils/date.js");
 const env_js_1 = require("../utils/env.js");
 const constants_js_1 = require("../utils/constants.js");
 const rateLimit_js_1 = require("../utils/rateLimit.js");
+const calculations_js_1 = require("../utils/calculations.js");
 const router = (0, express_1.Router)();
 const JWT_EXPIRES_IN = "8h";
 const handleValidation = (req, res, next) => {
@@ -62,6 +63,50 @@ async function createAdSiteEvent(adSiteId, eventType, input = {}) {
             eventDate: input.eventDate ?? new Date(),
         },
     });
+}
+function normalizeRebateBoundary(dateValue) {
+    return (0, date_js_1.getBusinessDayStart)(typeof dateValue === "string" ? dateValue : (0, date_js_1.formatBusinessDate)(dateValue));
+}
+function rebateWindowsOverlap(startDate, endDate, otherStartDate, otherEndDate) {
+    const selfEnd = endDate ?? new Date("9999-12-31T00:00:00.000Z");
+    const otherEnd = otherEndDate ?? new Date("9999-12-31T00:00:00.000Z");
+    return startDate.getTime() <= otherEnd.getTime() && otherStartDate.getTime() <= selfEnd.getTime();
+}
+async function ensureSmUpstream(upstreamId) {
+    const upstream = await prisma_js_1.default.upstream.findUnique({
+        where: { id: upstreamId },
+        include: { adType: true },
+    });
+    if (!upstream) {
+        return { ok: false, error: "Upstream not found" };
+    }
+    if (upstream.adType.code !== "SM") {
+        return { ok: false, error: "Rebate config is only available for SM upstreams" };
+    }
+    return { ok: true, upstream };
+}
+async function findOverlappingUpstreamRebate(upstreamId, startDate, endDate, excludeId) {
+    const existing = await prisma_js_1.default.upstreamRebateRate.findMany({
+        where: {
+            upstreamId,
+            ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+        },
+    });
+    return existing.find((rate) => rebateWindowsOverlap(startDate, endDate, rate.startDate, rate.endDate));
+}
+function resolveUpstreamRebateRateForDate(rates, targetDate) {
+    for (const rate of rates) {
+        if (rate.startDate.getTime() <= targetDate.getTime() &&
+            (rate.endDate === null || rate.endDate.getTime() >= targetDate.getTime())) {
+            return rate.rate;
+        }
+    }
+    return 0;
 }
 // ============================================================
 // GET /api/admin/ad-sites
@@ -402,6 +447,246 @@ router.delete("/admin/upstreams/:id", auth_js_1.requireAuth, auth_js_1.requireWr
     }
     catch (err) {
         console.error("DELETE /api/admin/upstreams/:id error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.get("/admin/upstreams/:id/rebates", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+    try {
+        const upstreamId = Number(req.params.id);
+        const upstreamResult = await ensureSmUpstream(upstreamId);
+        if (!upstreamResult.ok) {
+            res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error });
+            return;
+        }
+        const rebates = await prisma_js_1.default.upstreamRebateRate.findMany({
+            where: { upstreamId },
+            orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+        });
+        res.json({
+            success: true,
+            data: rebates.map((rebate) => ({
+                id: rebate.id,
+                upstream_id: rebate.upstreamId,
+                rate: Number(rebate.rate),
+                start_date: (0, date_js_1.formatBusinessDate)(rebate.startDate),
+                end_date: rebate.endDate ? (0, date_js_1.formatBusinessDate)(rebate.endDate) : null,
+                created_at: rebate.createdAt,
+                updated_at: rebate.updatedAt,
+            })),
+        });
+    }
+    catch (err) {
+        console.error("GET /api/admin/upstreams/:id/rebates error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.post("/admin/upstreams/:id/rebates", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("rate").notEmpty().withMessage("rate required").isDecimal().toFloat(),
+    (0, express_validator_1.body)("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    (0, express_validator_1.body)("end_date").optional({ nullable: true }).isISO8601(),
+], handleValidation, async (req, res) => {
+    try {
+        const upstreamId = Number(req.params.id);
+        const upstreamResult = await ensureSmUpstream(upstreamId);
+        if (!upstreamResult.ok) {
+            res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error });
+            return;
+        }
+        const startDate = normalizeRebateBoundary(req.body.start_date);
+        const endDate = req.body.end_date ? normalizeRebateBoundary(req.body.end_date) : null;
+        if (endDate && endDate.getTime() < startDate.getTime()) {
+            res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" });
+            return;
+        }
+        const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate);
+        if (overlap) {
+            res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" });
+            return;
+        }
+        const created = await prisma_js_1.default.upstreamRebateRate.create({
+            data: {
+                upstreamId,
+                rate: req.body.rate,
+                startDate,
+                endDate,
+            },
+        });
+        res.status(201).json({
+            success: true,
+            data: {
+                id: created.id,
+                upstream_id: created.upstreamId,
+                rate: Number(created.rate),
+                start_date: (0, date_js_1.formatBusinessDate)(created.startDate),
+                end_date: created.endDate ? (0, date_js_1.formatBusinessDate)(created.endDate) : null,
+                created_at: created.createdAt,
+                updated_at: created.updatedAt,
+            },
+        });
+    }
+    catch (err) {
+        console.error("POST /api/admin/upstreams/:id/rebates error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.put("/admin/upstreams/:id/rebates/:rebateId", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.param)("rebateId").notEmpty().isString(),
+    (0, express_validator_1.body)("rate").notEmpty().withMessage("rate required").isDecimal().toFloat(),
+    (0, express_validator_1.body)("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    (0, express_validator_1.body)("end_date").optional({ nullable: true }).isISO8601(),
+], handleValidation, async (req, res) => {
+    try {
+        const upstreamId = Number(req.params.id);
+        const rebateId = String(req.params.rebateId);
+        const upstreamResult = await ensureSmUpstream(upstreamId);
+        if (!upstreamResult.ok) {
+            res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error });
+            return;
+        }
+        const existing = await prisma_js_1.default.upstreamRebateRate.findFirst({
+            where: {
+                id: rebateId,
+                upstreamId,
+            },
+        });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Rebate config not found" });
+            return;
+        }
+        const startDate = normalizeRebateBoundary(req.body.start_date);
+        const endDate = req.body.end_date ? normalizeRebateBoundary(req.body.end_date) : null;
+        if (endDate && endDate.getTime() < startDate.getTime()) {
+            res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" });
+            return;
+        }
+        const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate, rebateId);
+        if (overlap) {
+            res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" });
+            return;
+        }
+        const updated = await prisma_js_1.default.upstreamRebateRate.update({
+            where: { id: rebateId },
+            data: {
+                rate: req.body.rate,
+                startDate,
+                endDate,
+            },
+        });
+        res.json({
+            success: true,
+            data: {
+                id: updated.id,
+                upstream_id: updated.upstreamId,
+                rate: Number(updated.rate),
+                start_date: (0, date_js_1.formatBusinessDate)(updated.startDate),
+                end_date: updated.endDate ? (0, date_js_1.formatBusinessDate)(updated.endDate) : null,
+                created_at: updated.createdAt,
+                updated_at: updated.updatedAt,
+            },
+        });
+    }
+    catch (err) {
+        console.error("PUT /api/admin/upstreams/:id/rebates/:rebateId error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.delete("/admin/upstreams/:id/rebates/:rebateId", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.param)("rebateId").notEmpty().isString(),
+], handleValidation, async (req, res) => {
+    try {
+        const upstreamId = Number(req.params.id);
+        const rebateId = String(req.params.rebateId);
+        const existing = await prisma_js_1.default.upstreamRebateRate.findFirst({
+            where: {
+                id: rebateId,
+                upstreamId,
+            },
+        });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "Rebate config not found" });
+            return;
+        }
+        await prisma_js_1.default.upstreamRebateRate.delete({ where: { id: rebateId } });
+        res.json({ success: true, message: "Rebate config deleted" });
+    }
+    catch (err) {
+        console.error("DELETE /api/admin/upstreams/:id/rebates/:rebateId error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.post("/admin/upstreams/:id/rebates/recalculate", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    (0, express_validator_1.body)("end_date").notEmpty().withMessage("end_date required").isISO8601(),
+], handleValidation, async (req, res) => {
+    try {
+        const upstreamId = Number(req.params.id);
+        const upstreamResult = await ensureSmUpstream(upstreamId);
+        if (!upstreamResult.ok) {
+            res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error });
+            return;
+        }
+        const startDate = normalizeRebateBoundary(req.body.start_date);
+        const endDate = normalizeRebateBoundary(req.body.end_date);
+        if (endDate.getTime() < startDate.getTime()) {
+            res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" });
+            return;
+        }
+        const rateWindows = await prisma_js_1.default.upstreamRebateRate.findMany({
+            where: { upstreamId },
+            orderBy: { startDate: "desc" },
+        });
+        const rangeEnd = (0, date_js_1.getBusinessDayRange)(req.body.end_date).lt;
+        const records = await prisma_js_1.default.dailyInput.findMany({
+            where: {
+                recordDate: { gte: startDate, lt: rangeEnd },
+                status: "unconfirmed",
+                adSite: {
+                    upstreamId,
+                    billingMethod: "CPM",
+                },
+            },
+            include: {
+                adSite: {
+                    select: {
+                        currentUnitPrice: true,
+                    },
+                },
+            },
+            orderBy: { recordDate: "asc" },
+        });
+        if (records.length === 0) {
+            res.json({ success: true, updated: 0 });
+            return;
+        }
+        const normalizedRates = rateWindows.map((rate) => ({
+            startDate: normalizeRebateBoundary(rate.startDate),
+            endDate: rate.endDate ? normalizeRebateBoundary(rate.endDate) : null,
+            rate: Number(rate.rate),
+        }));
+        await prisma_js_1.default.$transaction(records.map((record) => {
+            const unitPrice = Number(record.unitPriceSnapshot ?? record.adSite.currentUnitPrice ?? 0);
+            const qty = Number(record.qty ?? 0);
+            const baseRevenue = (0, calculations_js_1.calculateCpmRevenue)(qty, unitPrice);
+            const activeRate = resolveUpstreamRebateRateForDate(normalizedRates, (0, date_js_1.getBusinessDayStart)((0, date_js_1.formatBusinessDate)(record.recordDate)));
+            const rebateAmount = (0, calculations_js_1.calculateRebateAmount)(baseRevenue, activeRate);
+            const actualRevenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
+            return prisma_js_1.default.dailyInput.update({
+                where: { id: record.id },
+                data: {
+                    rebateAmount,
+                    rebateRateSnapshot: activeRate,
+                    revenue: actualRevenue,
+                },
+            });
+        }));
+        res.json({ success: true, updated: records.length });
+    }
+    catch (err) {
+        console.error("POST /api/admin/upstreams/:id/rebates/recalculate error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });

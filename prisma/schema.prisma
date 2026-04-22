@@ -35,9 +35,25 @@ model Upstream {
 
   adType   AdType    @relation(fields: [adTypeId], references: [id])
   adSites  AdSite[]
+  rebateRates UpstreamRebateRate[]
 
   @@index([adTypeId])
   @@index([adTypeId, status])
+}
+
+model UpstreamRebateRate {
+  id        String   @id @default(uuid())
+  upstreamId Int
+  rate      Decimal
+  startDate DateTime
+  endDate   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  upstream Upstream @relation(fields: [upstreamId], references: [id], onDelete: Cascade)
+
+  @@index([upstreamId, startDate])
+  @@index([upstreamId, endDate])
 }
 
 // ============================================================
@@ -110,6 +126,8 @@ model DailyInput {
   amount1            Decimal   @default(0)          // RATIO amount1
   amount2            Decimal   @default(0)          // RATIO amount2
   ratioSnapshot      Decimal?                       // RATIO ratio snapshot
+  rebateAmount       Decimal   @default(0)
+  rebateRateSnapshot Decimal   @default(0)
   revenue            Decimal   @default(0)
   status             String    @default("unconfirmed") // unconfirmed | confirmed
   note               String?

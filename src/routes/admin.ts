@@ -9,6 +9,7 @@ import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart, getBusine
 import { getRequiredEnv } from "../utils/env.js"
 import { DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import { createMemoryRateLimiter } from "../utils/rateLimit.js"
+import { calculateActualRevenue, calculateCpmRevenue, calculateRebateAmount } from "../utils/calculations.js"
 
 const router = Router()
 const JWT_EXPIRES_IN = "8h"
@@ -61,6 +62,12 @@ type AdSiteEventCreateInput = {
   note?: string
 }
 
+type RebateWindow = {
+  id: string
+  startDate: Date
+  endDate: Date | null
+}
+
 function toUserPublic(user: UserApiShape): UserPublic {
   const resolvedRole = resolveUserRole(user)
 
@@ -90,6 +97,77 @@ async function createAdSiteEvent(
       eventDate: input.eventDate ?? new Date(),
     },
   })
+}
+
+function normalizeRebateBoundary(dateValue: string | Date) {
+  return getBusinessDayStart(typeof dateValue === "string" ? dateValue : formatBusinessDate(dateValue))
+}
+
+function rebateWindowsOverlap(
+  startDate: Date,
+  endDate: Date | null,
+  otherStartDate: Date,
+  otherEndDate: Date | null
+) {
+  const selfEnd = endDate ?? new Date("9999-12-31T00:00:00.000Z")
+  const otherEnd = otherEndDate ?? new Date("9999-12-31T00:00:00.000Z")
+  return startDate.getTime() <= otherEnd.getTime() && otherStartDate.getTime() <= selfEnd.getTime()
+}
+
+async function ensureSmUpstream(upstreamId: number) {
+  const upstream = await prisma.upstream.findUnique({
+    where: { id: upstreamId },
+    include: { adType: true },
+  })
+
+  if (!upstream) {
+    return { ok: false as const, error: "Upstream not found" }
+  }
+
+  if (upstream.adType.code !== "SM") {
+    return { ok: false as const, error: "Rebate config is only available for SM upstreams" }
+  }
+
+  return { ok: true as const, upstream }
+}
+
+async function findOverlappingUpstreamRebate(
+  upstreamId: number,
+  startDate: Date,
+  endDate: Date | null,
+  excludeId?: string
+) {
+  const existing = await prisma.upstreamRebateRate.findMany({
+    where: {
+      upstreamId,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: {
+      id: true,
+      startDate: true,
+      endDate: true,
+    },
+  })
+
+  return existing.find((rate: RebateWindow) =>
+    rebateWindowsOverlap(startDate, endDate, rate.startDate, rate.endDate)
+  )
+}
+
+function resolveUpstreamRebateRateForDate(
+  rates: Array<{ startDate: Date; endDate: Date | null; rate: number }>,
+  targetDate: Date
+) {
+  for (const rate of rates) {
+    if (
+      rate.startDate.getTime() <= targetDate.getTime() &&
+      (rate.endDate === null || rate.endDate.getTime() >= targetDate.getTime())
+    ) {
+      return rate.rate
+    }
+  }
+
+  return 0
 }
 
 // ============================================================
@@ -492,6 +570,311 @@ router.delete(
       res.json({ success: true, message: "Upstream deleted" })
     } catch (err: any) {
       console.error("DELETE /api/admin/upstreams/:id error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.get(
+  "/admin/upstreams/:id/rebates",
+  requireAuth,
+  requirePermission("perm_admin"),
+  [param("id").isInt().toInt()],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const upstreamId = Number(req.params.id)
+      const upstreamResult = await ensureSmUpstream(upstreamId)
+      if (!upstreamResult.ok) {
+        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+        return
+      }
+
+      const rebates = await prisma.upstreamRebateRate.findMany({
+        where: { upstreamId },
+        orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+      })
+
+      res.json({
+        success: true,
+        data: rebates.map((rebate) => ({
+          id: rebate.id,
+          upstream_id: rebate.upstreamId,
+          rate: Number(rebate.rate),
+          start_date: formatBusinessDate(rebate.startDate),
+          end_date: rebate.endDate ? formatBusinessDate(rebate.endDate) : null,
+          created_at: rebate.createdAt,
+          updated_at: rebate.updatedAt,
+        })),
+      })
+    } catch (err: any) {
+      console.error("GET /api/admin/upstreams/:id/rebates error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.post(
+  "/admin/upstreams/:id/rebates",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    body("rate").notEmpty().withMessage("rate required").isDecimal().toFloat(),
+    body("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    body("end_date").optional({ nullable: true }).isISO8601(),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const upstreamId = Number(req.params.id)
+      const upstreamResult = await ensureSmUpstream(upstreamId)
+      if (!upstreamResult.ok) {
+        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+        return
+      }
+
+      const startDate = normalizeRebateBoundary(req.body.start_date)
+      const endDate = req.body.end_date ? normalizeRebateBoundary(req.body.end_date) : null
+      if (endDate && endDate.getTime() < startDate.getTime()) {
+        res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" })
+        return
+      }
+
+      const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate)
+      if (overlap) {
+        res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" })
+        return
+      }
+
+      const created = await prisma.upstreamRebateRate.create({
+        data: {
+          upstreamId,
+          rate: req.body.rate,
+          startDate,
+          endDate,
+        },
+      })
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id: created.id,
+          upstream_id: created.upstreamId,
+          rate: Number(created.rate),
+          start_date: formatBusinessDate(created.startDate),
+          end_date: created.endDate ? formatBusinessDate(created.endDate) : null,
+          created_at: created.createdAt,
+          updated_at: created.updatedAt,
+        },
+      })
+    } catch (err: any) {
+      console.error("POST /api/admin/upstreams/:id/rebates error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.put(
+  "/admin/upstreams/:id/rebates/:rebateId",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    param("rebateId").notEmpty().isString(),
+    body("rate").notEmpty().withMessage("rate required").isDecimal().toFloat(),
+    body("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    body("end_date").optional({ nullable: true }).isISO8601(),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const upstreamId = Number(req.params.id)
+      const rebateId = String(req.params.rebateId)
+      const upstreamResult = await ensureSmUpstream(upstreamId)
+      if (!upstreamResult.ok) {
+        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+        return
+      }
+
+      const existing = await prisma.upstreamRebateRate.findFirst({
+        where: {
+          id: rebateId,
+          upstreamId,
+        },
+      })
+      if (!existing) {
+        res.status(404).json({ success: false, error: "Rebate config not found" })
+        return
+      }
+
+      const startDate = normalizeRebateBoundary(req.body.start_date)
+      const endDate = req.body.end_date ? normalizeRebateBoundary(req.body.end_date) : null
+      if (endDate && endDate.getTime() < startDate.getTime()) {
+        res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" })
+        return
+      }
+
+      const overlap = await findOverlappingUpstreamRebate(upstreamId, startDate, endDate, rebateId)
+      if (overlap) {
+        res.status(409).json({ success: false, error: "Rebate period overlaps with existing config" })
+        return
+      }
+
+      const updated = await prisma.upstreamRebateRate.update({
+        where: { id: rebateId },
+        data: {
+          rate: req.body.rate,
+          startDate,
+          endDate,
+        },
+      })
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          upstream_id: updated.upstreamId,
+          rate: Number(updated.rate),
+          start_date: formatBusinessDate(updated.startDate),
+          end_date: updated.endDate ? formatBusinessDate(updated.endDate) : null,
+          created_at: updated.createdAt,
+          updated_at: updated.updatedAt,
+        },
+      })
+    } catch (err: any) {
+      console.error("PUT /api/admin/upstreams/:id/rebates/:rebateId error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.delete(
+  "/admin/upstreams/:id/rebates/:rebateId",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    param("rebateId").notEmpty().isString(),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const upstreamId = Number(req.params.id)
+      const rebateId = String(req.params.rebateId)
+      const existing = await prisma.upstreamRebateRate.findFirst({
+        where: {
+          id: rebateId,
+          upstreamId,
+        },
+      })
+
+      if (!existing) {
+        res.status(404).json({ success: false, error: "Rebate config not found" })
+        return
+      }
+
+      await prisma.upstreamRebateRate.delete({ where: { id: rebateId } })
+      res.json({ success: true, message: "Rebate config deleted" })
+    } catch (err: any) {
+      console.error("DELETE /api/admin/upstreams/:id/rebates/:rebateId error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.post(
+  "/admin/upstreams/:id/rebates/recalculate",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    param("id").isInt().toInt(),
+    body("start_date").notEmpty().withMessage("start_date required").isISO8601(),
+    body("end_date").notEmpty().withMessage("end_date required").isISO8601(),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const upstreamId = Number(req.params.id)
+      const upstreamResult = await ensureSmUpstream(upstreamId)
+      if (!upstreamResult.ok) {
+        res.status(upstreamResult.error === "Upstream not found" ? 404 : 400).json({ success: false, error: upstreamResult.error })
+        return
+      }
+
+      const startDate = normalizeRebateBoundary(req.body.start_date)
+      const endDate = normalizeRebateBoundary(req.body.end_date)
+      if (endDate.getTime() < startDate.getTime()) {
+        res.status(400).json({ success: false, error: "end_date must be greater than or equal to start_date" })
+        return
+      }
+
+      const rateWindows = await prisma.upstreamRebateRate.findMany({
+        where: { upstreamId },
+        orderBy: { startDate: "desc" },
+      })
+
+      const rangeEnd = getBusinessDayRange(req.body.end_date).lt
+      const records = await prisma.dailyInput.findMany({
+        where: {
+          recordDate: { gte: startDate, lt: rangeEnd },
+          status: "unconfirmed",
+          adSite: {
+            upstreamId,
+            billingMethod: "CPM",
+          },
+        },
+        include: {
+          adSite: {
+            select: {
+              currentUnitPrice: true,
+            },
+          },
+        },
+        orderBy: { recordDate: "asc" },
+      })
+
+      if (records.length === 0) {
+        res.json({ success: true, updated: 0 })
+        return
+      }
+
+      const normalizedRates = rateWindows.map((rate) => ({
+        startDate: normalizeRebateBoundary(rate.startDate),
+        endDate: rate.endDate ? normalizeRebateBoundary(rate.endDate) : null,
+        rate: Number(rate.rate),
+      }))
+
+      await prisma.$transaction(
+        records.map((record) => {
+          const unitPrice = Number(record.unitPriceSnapshot ?? record.adSite.currentUnitPrice ?? 0)
+          const qty = Number(record.qty ?? 0)
+          const baseRevenue = calculateCpmRevenue(qty, unitPrice)
+          const activeRate = resolveUpstreamRebateRateForDate(
+            normalizedRates,
+            getBusinessDayStart(formatBusinessDate(record.recordDate))
+          )
+          const rebateAmount = calculateRebateAmount(baseRevenue, activeRate)
+          const actualRevenue = calculateActualRevenue(baseRevenue, rebateAmount)
+
+          return prisma.dailyInput.update({
+            where: { id: record.id },
+            data: {
+              rebateAmount,
+              rebateRateSnapshot: activeRate,
+              revenue: actualRevenue,
+            },
+          })
+        })
+      )
+
+      res.json({ success: true, updated: records.length })
+    } catch (err: any) {
+      console.error("POST /api/admin/upstreams/:id/rebates/recalculate error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }

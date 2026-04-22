@@ -442,7 +442,7 @@ router.get("/downstream-monthly", auth_js_1.requireAuth, [
                     const effectiveRate = dailyRateMap.get(cacheKey) ??
                         cachedPeriod.pctHal * 100;
                     const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100));
-                    const mlValue = adjustedUV * price;
+                    const mlValue = (0, calculations_js_1.calculateUnitPricePayout)(adjustedUV, price);
                     if (ds.downstreamType === "ML") {
                         totalML += mlValue;
                     }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, message, Spin, Empty, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import api, { isAdmin, canConfirmInput } from '../../api/axios'
+import api, { isAdmin, canConfirmInput, canInputData } from '../../api/axios'
 import type { DailyInputRow, ApiResponse } from '../../types'
 import TableNumberInput from '../common/TableNumberInput'
 import StatusBadge from '../common/StatusBadge'
@@ -12,13 +12,22 @@ import ConfirmAllButton from './ConfirmAllButton'
 import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
 import { formatIsoFixed, formatIsoInteger, formatIsoMoney } from '../../utils/numberFormat'
+import { calculateActualRevenue, calculateCpmRevenue, calculateRebateAmount } from '../../utils/calculations'
 
 interface Props {
   date: string
   search?: string
 }
 
-type DraftSM = Record<number, { qty?: number; unit_price?: number }>
+type DraftSMItem = {
+  qty?: number
+  unit_price?: number
+  rebate_amount?: number
+  actual_revenue?: number
+  manual_field?: 'rebate' | 'actual'
+}
+
+type DraftSM = Record<number, DraftSMItem>
 
 const ERR_HIGHLIGHT_MS = 3000
 
@@ -30,6 +39,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
   const [unlockingId, setUnlockingId] = useState<number | null>(null)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const admin = isAdmin()
+  const canInput = canInputData()
   const canConfirm = canConfirmInput()
 
   const { data: rows = [], isLoading, isError } = useQuery({
@@ -39,14 +49,83 @@ export default function SmInputTable({ date, search = '' }: Props) {
         .then((r) => r.data.data ?? []),
   })
 
-  const getRevenue = (row: DailyInputRow) => {
-    const qty = drafts[row.id]?.qty ?? row.existing_record?.qty ?? 0
-    const price =
-      drafts[row.id]?.unit_price ??
-      row.existing_record?.unit_price_snapshot ??
-      row.current_unit_price ??
-      0
-    return qty * price
+  const updateDraft = useCallback((rowId: number, patch: Partial<DraftSMItem>) => {
+    setDrafts((prev) => {
+      const nextRow: DraftSMItem = {
+        ...(prev[rowId] ?? {}),
+        ...patch,
+      }
+
+      if (
+        nextRow.qty === undefined &&
+        nextRow.unit_price === undefined &&
+        nextRow.rebate_amount === undefined &&
+        nextRow.actual_revenue === undefined &&
+        nextRow.manual_field === undefined
+      ) {
+        if (!(rowId in prev)) return prev
+        const next = { ...prev }
+        delete next[rowId]
+        return next
+      }
+
+      return { ...prev, [rowId]: nextRow }
+    })
+  }, [])
+
+  const getQty = (row: DailyInputRow) => drafts[row.id]?.qty ?? row.existing_record?.qty ?? 0
+
+  const getUnitPrice = (row: DailyInputRow) =>
+    drafts[row.id]?.unit_price ??
+    row.existing_record?.unit_price_snapshot ??
+    row.current_unit_price ??
+    0
+
+  const hasQtyOrPriceDraft = (row: DailyInputRow) =>
+    drafts[row.id]?.qty !== undefined || drafts[row.id]?.unit_price !== undefined
+
+  const getConfiguredRebateRate = (row: DailyInputRow) => row.active_rebate_rate ?? 0
+
+  const getBaseRevenue = (row: DailyInputRow) => {
+    return calculateCpmRevenue(getQty(row), getUnitPrice(row))
+  }
+
+  const getRebateAmount = (row: DailyInputRow) => {
+    const draft = drafts[row.id]
+    const baseRevenue = getBaseRevenue(row)
+
+    if (draft?.manual_field === 'rebate' && draft.rebate_amount !== undefined) {
+      return draft.rebate_amount
+    }
+
+    if (draft?.manual_field === 'actual' && draft.actual_revenue !== undefined) {
+      return baseRevenue - draft.actual_revenue
+    }
+
+    if (!hasQtyOrPriceDraft(row) && row.existing_record) {
+      return row.existing_record.rebate_amount ?? 0
+    }
+
+    return calculateRebateAmount(baseRevenue, getConfiguredRebateRate(row))
+  }
+
+  const getActualRevenue = (row: DailyInputRow) => {
+    const draft = drafts[row.id]
+    const baseRevenue = getBaseRevenue(row)
+
+    if (draft?.manual_field === 'actual' && draft.actual_revenue !== undefined) {
+      return draft.actual_revenue
+    }
+
+    if (draft?.manual_field === 'rebate' && draft.rebate_amount !== undefined) {
+      return calculateActualRevenue(baseRevenue, draft.rebate_amount)
+    }
+
+    if (!hasQtyOrPriceDraft(row) && row.existing_record) {
+      return row.existing_record.actual_revenue ?? row.existing_record.revenue
+    }
+
+    return calculateActualRevenue(baseRevenue, calculateRebateAmount(baseRevenue, getConfiguredRebateRate(row)))
   }
 
   const isDirty = (row: DailyInputRow) => row.id in drafts
@@ -56,7 +135,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
   )
 
   const mutation = useMutation({
-    mutationFn: (records: { ad_site_id: number; qty?: number; unit_price_override?: number }[]) =>
+    mutationFn: (records: { ad_site_id: number; qty?: number; unit_price_override?: number; rebate_amount?: number; actual_revenue?: number }[]) =>
       api.post('/api/daily-input/batch', { date, ad_type: 'SM', records }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['daily-input', 'SM', date] })
@@ -106,6 +185,8 @@ export default function SmInputTable({ date, search = '' }: Props) {
         ad_site_id: +id,
         qty: (d as DraftSM[number]).qty,
         unit_price_override: (d as DraftSM[number]).unit_price,
+        rebate_amount: (d as DraftSM[number]).manual_field === 'rebate' ? (d as DraftSM[number]).rebate_amount : undefined,
+        actual_revenue: (d as DraftSM[number]).manual_field === 'actual' ? (d as DraftSM[number]).actual_revenue : undefined,
       }))
     )
   }, [drafts, mutation])
@@ -191,7 +272,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
             controls={false}
             value={drafts[row.id]?.qty ?? row.existing_record?.qty}
             onChange={(v) =>
-              setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], qty: v ?? undefined } }))
+              updateDraft(row.id, { qty: v ?? undefined })
             }
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === 'Tab') {
@@ -200,6 +281,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
               }
             }}
             style={{ width: '100%' }}
+            disabled={!canInput}
           />
         )
       },
@@ -225,7 +307,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
             controls={false}
             value={drafts[row.id]?.unit_price ?? row.existing_record?.unit_price_snapshot ?? row.current_unit_price}
             onChange={(v) =>
-              setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], unit_price: v ?? undefined } }))
+              updateDraft(row.id, { unit_price: v ?? undefined })
             }
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === 'Tab') {
@@ -236,24 +318,64 @@ export default function SmInputTable({ date, search = '' }: Props) {
               }
             }}
             style={{ width: '100%' }}
-            disabled={!admin}
+            disabled={!admin || !canInput}
           />
         )
       },
     },
     {
-      title: t('input.revenue'),
-      dataIndex: 'revenue',
-      key: 'revenue',
+      title: t('rebate.baseRevenue'),
+      dataIndex: 'base_revenue',
+      key: 'base_revenue',
       width: 140,
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        const revenue = getRevenue(row)
+        const revenue = getBaseRevenue(row)
         return (
           <span className="revenue-cell">
             {formatIsoMoney(revenue)}
           </span>
+        )
+      },
+    },
+    {
+      title: t('rebate.rebateAmount'),
+      dataIndex: 'rebate_amount',
+      key: 'rebate_amount',
+      width: 140,
+      render: (_: unknown, record: FlatRow) => {
+        if ('_isGroupHeader' in record && record._isGroupHeader) return null
+        const row = getData(record)
+        return (
+          <TableNumberInput
+            size="small"
+            precision={2}
+            controls={false}
+            value={getRebateAmount(row)}
+            style={{ width: '100%' }}
+            disabled
+          />
+        )
+      },
+    },
+    {
+      title: t('rebate.actualRevenue'),
+      dataIndex: 'actual_revenue',
+      key: 'actual_revenue',
+      width: 140,
+      render: (_: unknown, record: FlatRow) => {
+        if ('_isGroupHeader' in record && record._isGroupHeader) return null
+        const row = getData(record)
+        return (
+          <TableNumberInput
+            size="small"
+            precision={2}
+            controls={false}
+            value={getActualRevenue(row)}
+            style={{ width: '100%' }}
+            disabled
+          />
         )
       },
     },
@@ -324,12 +446,18 @@ export default function SmInputTable({ date, search = '' }: Props) {
     return ''
   }
 
-  const totalQty = rows.reduce((s: number, r: DailyInputRow) => s + (drafts[r.id]?.qty ?? r.existing_record?.qty ?? 0), 0)
-  const totalRevenue = rows.reduce((s: number, r: DailyInputRow) => s + getRevenue(r), 0)
+  const totalQty = rows.reduce((s: number, r: DailyInputRow) => s + getQty(r), 0)
+  const totalBaseRevenue = rows.reduce((s: number, r: DailyInputRow) => s + getBaseRevenue(r), 0)
+  const totalRebate = rows.reduce((s: number, r: DailyInputRow) => s + getRebateAmount(r), 0)
+  const totalActualRevenue = rows.reduce((s: number, r: DailyInputRow) => s + getActualRevenue(r), 0)
   const qtyColumnIndex = Math.max(columns.findIndex((column) => column.key === 'qty'), 0)
-  const revenueColumnIndex = Math.max(columns.findIndex((column) => column.key === 'revenue'), qtyColumnIndex)
-  const middleColumns = columns.slice(qtyColumnIndex + 1, revenueColumnIndex)
-  const trailingColumns = columns.slice(revenueColumnIndex + 1)
+  const baseRevenueColumnIndex = Math.max(columns.findIndex((column) => column.key === 'base_revenue'), qtyColumnIndex)
+  const rebateColumnIndex = Math.max(columns.findIndex((column) => column.key === 'rebate_amount'), baseRevenueColumnIndex)
+  const actualRevenueColumnIndex = Math.max(columns.findIndex((column) => column.key === 'actual_revenue'), rebateColumnIndex)
+  const firstMiddleColumns = columns.slice(qtyColumnIndex + 1, baseRevenueColumnIndex)
+  const secondMiddleColumns = columns.slice(baseRevenueColumnIndex + 1, rebateColumnIndex)
+  const thirdMiddleColumns = columns.slice(rebateColumnIndex + 1, actualRevenueColumnIndex)
+  const trailingColumns = columns.slice(actualRevenueColumnIndex + 1)
 
   return (
     <div>
@@ -367,7 +495,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
             }}
             size="small"
             bordered
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 320px)' }}
             sticky={{ offsetHeader: 64, offsetScroll: 52 }}
             loading={isLoading}
             rowClassName={rowClassName}
@@ -382,22 +510,46 @@ export default function SmInputTable({ date, search = '' }: Props) {
                   <Table.Summary.Cell index={qtyColumnIndex}>
                     {renderTableText(formatIsoInteger(totalQty), { fontWeight: 'var(--font-weight-semibold)' })}
                   </Table.Summary.Cell>
-                  {middleColumns.map((column, offset) => (
+                  {firstMiddleColumns.map((column, offset) => (
                     <Table.Summary.Cell
-                      key={`middle-${String(column.key ?? qtyColumnIndex + offset + 1)}`}
+                      key={`middle-first-${String(column.key ?? qtyColumnIndex + offset + 1)}`}
                       index={qtyColumnIndex + offset + 1}
                     />
                   ))}
-                  <Table.Summary.Cell index={revenueColumnIndex}>
-                    {renderTableText(formatIsoMoney(totalRevenue), {
+                  <Table.Summary.Cell index={baseRevenueColumnIndex}>
+                    {renderTableText(formatIsoMoney(totalBaseRevenue), {
                       color: 'var(--color-primary)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                    })}
+                  </Table.Summary.Cell>
+                  {secondMiddleColumns.map((column, offset) => (
+                    <Table.Summary.Cell
+                      key={`middle-second-${String(column.key ?? baseRevenueColumnIndex + offset + 1)}`}
+                      index={baseRevenueColumnIndex + offset + 1}
+                    />
+                  ))}
+                  <Table.Summary.Cell index={rebateColumnIndex}>
+                    {renderTableText(formatIsoMoney(totalRebate), {
+                      color: 'var(--color-danger)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                    })}
+                  </Table.Summary.Cell>
+                  {thirdMiddleColumns.map((column, offset) => (
+                    <Table.Summary.Cell
+                      key={`middle-third-${String(column.key ?? rebateColumnIndex + offset + 1)}`}
+                      index={rebateColumnIndex + offset + 1}
+                    />
+                  ))}
+                  <Table.Summary.Cell index={actualRevenueColumnIndex}>
+                    {renderTableText(formatIsoMoney(totalActualRevenue), {
+                      color: 'var(--color-success)',
                       fontWeight: 'var(--font-weight-semibold)',
                     })}
                   </Table.Summary.Cell>
                   {trailingColumns.map((column, offset) => (
                     <Table.Summary.Cell
-                      key={`tail-${String(column.key ?? revenueColumnIndex + offset + 1)}`}
-                      index={revenueColumnIndex + offset + 1}
+                      key={`tail-${String(column.key ?? actualRevenueColumnIndex + offset + 1)}`}
+                      index={actualRevenueColumnIndex + offset + 1}
                     />
                   ))}
                 </Table.Summary.Row>

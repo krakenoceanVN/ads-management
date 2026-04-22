@@ -50,6 +50,16 @@ export interface AdSite {
   ad_type_code?: AdTypeCode
 }
 
+export interface UpstreamRebateRate {
+  id: string
+  upstream_id: number
+  rate: number
+  start_date: string
+  end_date?: string
+  created_at: Date
+  updated_at: Date
+}
+
 // ============================================================
 // daily_input
 // ============================================================
@@ -62,6 +72,9 @@ export interface DailyInputRecord {
   amount1?: number           // 360/Baidu: amount before ratio
   amount2?: number           // 360/Baidu: amount before ratio
   ratio_snapshot?: number     // 360/Baidu: ratio at input time
+  rebate_amount?: number
+  rebate_rate_snapshot?: number
+  actual_revenue?: number
   revenue: number
   status: InputStatus
   note?: string
@@ -72,6 +85,7 @@ export interface DailyInputRecord {
 
 // Extended row for UI table — joins ad_site info
 export interface DailyInputRow extends AdSite {
+  active_rebate_rate?: number
   existing_record: DailyInputRecord | null
 }
 
@@ -82,6 +96,8 @@ export interface BatchInputItem {
   ad_site_id: number
   qty?: number                  // CPM
   unit_price_override?: number  // override snapshot price
+  rebate_amount?: number        // SM rebate override
+  actual_revenue?: number       // SM actual revenue override
   amount1?: number              // RATIO
   amount2?: number              // RATIO
   ratio_override?: number       // RATIO - override stored ratio

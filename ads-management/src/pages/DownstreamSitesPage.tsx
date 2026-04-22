@@ -87,6 +87,10 @@ function formatDisplayValue(value: number | string, formatter: (n: number) => st
   return formatter(value)
 }
 
+function calculateUnitPricePayout(quantity: number, unitPrice: number): number {
+  return (quantity * unitPrice) / 1000
+}
+
 function getRowInputs(row: DownstreamInputRow): DownstreamInputValue[] {
   if (Array.isArray(row.inputs)) return row.inputs
   if (row.inputs && typeof row.inputs === 'object') return Object.values(row.inputs)
@@ -493,7 +497,7 @@ export default function DownstreamSitesPage() {
         if (isMl360) {
           totalML += amount
         } else if (sitePrices.get(siteId)) {
-          totalML += adjustedUV * (sitePrices.get(siteId) ?? 0)
+          totalML += calculateUnitPricePayout(adjustedUV, sitePrices.get(siteId) ?? 0)
         }
       } else {
         if (is360) {

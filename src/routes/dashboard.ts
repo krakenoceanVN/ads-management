@@ -558,7 +558,7 @@ router.get(
               cachedPeriod.pctHal * 100
 
             const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100))
-            const mlValue = adjustedUV * price
+            const mlValue = calculateUnitPricePayout(adjustedUV, price)
 
             if (ds.downstreamType === "ML") {
               totalML += mlValue

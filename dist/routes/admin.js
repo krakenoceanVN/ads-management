@@ -340,6 +340,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
         const result = siteDownstreams.map((sd) => ({
             id: sd.adSite.id,
             ad_site_name: sd.adSite.name,
+            is_active: sd.adSite.isActive,
             upstream_name: sd.adSite.upstream.name,
             billing_method: sd.adSite.billingMethod,
             custom_price: sd.customPrice ? Number(sd.customPrice) : null,

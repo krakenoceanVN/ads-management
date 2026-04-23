@@ -438,6 +438,7 @@ router.get(
       const result = siteDownstreams.map((sd) => ({
         id: sd.adSite.id,
         ad_site_name: sd.adSite.name,
+        is_active: sd.adSite.isActive,
         upstream_name: sd.adSite.upstream.name,
         billing_method: sd.adSite.billingMethod,
         custom_price: (sd as any).customPrice ? Number((sd as any).customPrice) : null,

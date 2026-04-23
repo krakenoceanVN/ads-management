@@ -52,6 +52,7 @@ interface DownstreamInputValue {
 interface DownstreamInputRow {
   id: number
   ad_site_name: string
+  is_active?: boolean
   upstream_name: string
   billing_method: string
   custom_price: number | null
@@ -99,6 +100,10 @@ function calculateUnitPricePayout(quantity: number, unitPrice: number): number {
 
 function formatPdfPriceLabel(price: number): string {
   return price < 1 ? formatIsoFixed(price, 4) : formatIsoMoney(price)
+}
+
+function formatPdfSiteLabel(name: string, isActive: boolean | undefined, pausedTag: string): string {
+  return isActive === false ? `${name} ${pausedTag}` : name
 }
 
 function getRowInputs(row: DownstreamInputRow): DownstreamInputValue[] {
@@ -243,17 +248,16 @@ export default function DownstreamSitesPage() {
     const pageMargin = 6
     const dateColWidth = 96
     const totalMlColWidth = 120
-    const payoutColWidth = 120
     const groupedTotalUvColWidth = 110
+    const groupedTotalAmountColWidth = 120
     const siteColWidth = 96
     const siteMetricColWidth = 96
     const tableWidthPx = dateColWidth
       + totalMlColWidth
-      + payoutColWidth
       + (
         is360
           ? (adSiteIds.length * (siteMetricColWidth * 3))
-          : pdfPriceGroups.reduce((sum, group) => sum + groupedTotalUvColWidth + (group.siteIds.length * siteColWidth), 0)
+          : pdfPriceGroups.reduce((sum, group) => sum + groupedTotalUvColWidth + groupedTotalAmountColWidth + (group.siteIds.length * siteColWidth), 0)
       )
     const pageWidthPx = tableWidthPx + (pageMargin * 2) + 24
     const pageHeightPx = Math.max(1200, 220 + ((pivotRows.length + 2) * 28))
@@ -280,6 +284,18 @@ export default function DownstreamSitesPage() {
 
     const totalML = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_ml || 0), 0)
     const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
+    const pausedSiteTag = '(Stop)'
+    const pausedSiteNote = adSiteIds
+      .filter((siteId) => adSiteActiveMap.get(siteId) === false)
+      .map((siteId) => adSiteNames.get(siteId) ?? String(siteId))
+    const getPausedHeaderStyle = (siteId: number) =>
+      adSiteActiveMap.get(siteId) === false
+        ? 'background: #fff7d6; color: #9a3412;'
+        : ''
+    const getPausedCellStyle = (siteId: number) =>
+      adSiteActiveMap.get(siteId) === false
+        ? 'background: #fffaf0; color: #9a3412;'
+        : 'color: #555;'
 
     const renderTable = (siteIds: number[]) => `
       <table class="ml-report-table">
@@ -289,20 +305,20 @@ export default function DownstreamSitesPage() {
             <th class="col-total" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
             ${is360
               ? siteIds.map((siteId) => `
-                  <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
+                  <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${formatPdfSiteLabel(adSiteNames.get(siteId) ?? String(siteId), adSiteActiveMap.get(siteId), pausedSiteTag)}</th>
                 `).join('')
               : pdfPriceGroups.map((group) => `
-                  <th class="col-site-group" colspan="${group.siteIds.length + 1}" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.unitPrice')} ${formatPdfPriceLabel(group.price)}</th>
+                  <th class="col-site-group" colspan="${group.siteIds.length + 2}" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.unitPrice')} ${formatPdfPriceLabel(group.price)}</th>
                 `).join('')}
           </tr>
           ${is360 ? `
             <tr style="background: #ececec;">
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
-              ${siteIds.map(() => `
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.pv')}</th>
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.unitPrice')}</th>
-                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.amount')}</th>
+              ${siteIds.map((siteId) => `
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${t('downstream.pv')}</th>
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${t('downstream.unitPrice')}</th>
+                <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${t('downstream.amount')}</th>
               `).join('')}
             </tr>
           ` : `
@@ -310,9 +326,10 @@ export default function DownstreamSitesPage() {
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               ${pdfPriceGroups.map((group) => `
-                <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
+                <th class="col-group-uv" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
+                <th class="col-group-amount" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
                 ${group.siteIds.map((siteId) => `
-                  <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
+                  <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${formatPdfSiteLabel(adSiteNames.get(siteId) ?? String(siteId), adSiteActiveMap.get(siteId), pausedSiteTag)}</th>
                 `).join('')}
               `).join('')}
             </tr>
@@ -330,9 +347,9 @@ export default function DownstreamSitesPage() {
                     const unitPrice = r[`${siteId}_unit_price`]
                     const amount = r[`${siteId}_amount`]
                     return `
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${pv === '' || pv === null || pv === undefined ? '' : formatIsoInteger(Number(pv))}</td>
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${unitPrice === '' || unitPrice === null || unitPrice === undefined ? '' : formatIsoMoney(Number(unitPrice))}</td>
-                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${amount === '' || amount === null || amount === undefined ? '' : formatIsoMoney(Number(amount))}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${pv === '' || pv === null || pv === undefined ? '' : formatIsoInteger(Number(pv))}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${unitPrice === '' || unitPrice === null || unitPrice === undefined ? '' : formatIsoMoney(Number(unitPrice))}</td>
+                      <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${amount === '' || amount === null || amount === undefined ? '' : formatIsoMoney(Number(amount))}</td>
                     `
                   }).join('')
                 : pdfPriceGroups.map((group) => {
@@ -340,12 +357,14 @@ export default function DownstreamSitesPage() {
                       const value = r[String(siteId)]
                       return sum + (typeof value === 'number' ? value : 0)
                     }, 0)
+                    const groupTotalAmount = groupTotalUv * group.price
 
                     return `
-                      <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; font-weight: 600; color: #1f2937;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                      <td class="col-group-uv" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; font-weight: 600; color: #1f2937;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                      <td class="col-group-amount" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${groupTotalAmount > 0 ? formatIsoMoney(groupTotalAmount) : ''}</td>
                       ${group.siteIds.map((siteId) => {
                         const value = r[String(siteId)]
-                        return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
+                        return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
                       }).join('')}
                     `
                   }).join('')}
@@ -361,9 +380,9 @@ export default function DownstreamSitesPage() {
                   const totalAmount = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_amount`] === 'number' ? Number(r[`${siteId}_amount`]) : 0), 0)
                   const totalUnitPrice = totalPv > 0 ? (totalAmount / totalPv) * 1000 : 0
                   return `
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalPv > 0 ? formatIsoInteger(totalPv) : ''}</td>
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalUnitPrice > 0 ? formatIsoMoney(totalUnitPrice) : ''}</td>
-                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalAmount > 0 ? formatIsoMoney(totalAmount) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalPv > 0 ? formatIsoInteger(totalPv) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalUnitPrice > 0 ? formatIsoMoney(totalUnitPrice) : ''}</td>
+                    <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalAmount > 0 ? formatIsoMoney(totalAmount) : ''}</td>
                   `
                 }).join('')
               : pdfPriceGroups.map((group) => {
@@ -374,15 +393,17 @@ export default function DownstreamSitesPage() {
                     }, 0)
                     return sum + colTotal
                   }, 0)
+                  const groupTotalAmount = groupTotalUv * group.price
 
                   return `
-                    <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                    <td class="col-group-uv" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                    <td class="col-group-amount" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${groupTotalAmount > 0 ? formatIsoMoney(groupTotalAmount) : ''}</td>
                     ${group.siteIds.map((siteId) => {
                       const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
                         const value = r[String(siteId)]
                         return siteSum + (typeof value === 'number' ? value : 0)
                       }, 0)
-                      return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
+                      return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
                     }).join('')}
                   `
                 }).join('')}
@@ -430,6 +451,14 @@ export default function DownstreamSitesPage() {
           .ml-report-table td.col-total {
             width: ${totalMlColWidth}px;
           }
+          .ml-report-table th.col-group-uv,
+          .ml-report-table td.col-group-uv {
+            width: ${groupedTotalUvColWidth}px;
+          }
+          .ml-report-table th.col-group-amount,
+          .ml-report-table td.col-group-amount {
+            width: ${groupedTotalAmountColWidth}px;
+          }
           .ml-report-table th.col-site,
           .ml-report-table td.col-site {
             width: ${is360 ? siteMetricColWidth : siteColWidth}px;
@@ -448,12 +477,14 @@ export default function DownstreamSitesPage() {
             month: selectedMonth,
           })}
         </h2>
-        <p style="text-align: center; margin: 0 0 10px 0; color: #666; font-size: 11px;">
-          ${t('downstream.defaultPayout')}: <strong>${basePayoutLabel}%</strong> &nbsp;|&nbsp; ${selectedMonth}
-        </p>
         <p style="text-align: center; margin: 0 0 10px 0; color: ${isOfficialView ? '#0f766e' : '#b45309'}; font-size: 11px; font-weight: 600;">
           ${reportNote}
         </p>
+        ${pausedSiteNote.length > 0 ? `
+          <p style="text-align: left; margin: 0 0 10px 0; color: #9a3412; font-size: 11px; font-weight: 600;">
+            ${pausedSiteTag}: ${pausedSiteNote.join(', ')}
+          </p>
+        ` : ''}
         ${renderTable(adSiteIds)}
         <p style="margin-top: 10px; font-size: 10px; color: #aaa; text-align: right;">
           ${t('downstream.reportFooter', {
@@ -479,6 +510,7 @@ export default function DownstreamSitesPage() {
 
   const adSiteIds = [...new Set(siteInputs.map((r) => r.id))]
   const adSiteNames = new Map(siteInputs.map((r) => [r.id, r.ad_site_name]))
+  const adSiteActiveMap = new Map(siteInputs.map((r) => [r.id, r.is_active !== false]))
   const sitePrices = new Map(
     siteInputs.map((r) => [r.id, r.resolved_price ?? r.custom_price ?? 0])
   )

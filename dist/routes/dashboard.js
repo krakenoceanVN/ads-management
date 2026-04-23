@@ -121,6 +121,9 @@ function getActivePeriodForDate(periods, date) {
     return periods.find((period) => period.startDate <= currentDate &&
         (period.endDate === null || period.endDate >= currentDate));
 }
+function calculateDownstreamSiteValue(quantity, unitPrice) {
+    return quantity * unitPrice;
+}
 const handleValidation = (req, res, next) => {
     const errors = (0, express_validator_1.validationResult)(req);
     if (!errors.isEmpty()) {
@@ -442,7 +445,7 @@ router.get("/downstream-monthly", auth_js_1.requireAuth, [
                     const effectiveRate = dailyRateMap.get(cacheKey) ??
                         cachedPeriod.pctHal * 100;
                     const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100));
-                    const mlValue = (0, calculations_js_1.calculateUnitPricePayout)(adjustedUV, price);
+                    const mlValue = calculateDownstreamSiteValue(adjustedUV, price);
                     if (ds.downstreamType === "ML") {
                         totalML += mlValue;
                     }

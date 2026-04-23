@@ -56,19 +56,19 @@ const UPSTREAM_COLUMNS: Record<AdTypeCode, string[]> = {
 
 const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> = {
   SM: [
-    { key: 'ml_80', label: 'ML 80%' },
+    { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
   ],
   '360': [
-    { key: 'ml_80', label: 'ML 80%' },
+    { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
   ],
   BAIDU_JS: [
-    { key: 'ml_80', label: 'ML 80%' },
+    { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
   ],
   OTHER: [
-    { key: 'ml_80', label: 'ML 80%' },
+    { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
   ],
 }
@@ -108,6 +108,22 @@ function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0):
   }
 
   return downstreamMl80
+}
+
+function calculateSmSummaryCost(le: number, ml80: number): number {
+  return le + ml80
+}
+
+function calculateSmSummaryTax(revenue: number, cost: number): number {
+  return (revenue - cost) * 0.06
+}
+
+function calculateSmSummaryNetProfit(revenue: number, cost: number, tax: number): number {
+  return revenue - cost - tax
+}
+
+function calculateSmSummaryProfitRate(revenue: number, netProfit: number): number {
+  return revenue > 0 ? netProfit / revenue : 0
 }
 
 function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
@@ -151,6 +167,22 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
         ? (leRevenueByDate.get(r.date) ?? 0)
         : (downstream?.le ?? 0)
 
+      if (adType === 'SM') {
+        const cost = calculateSmSummaryCost(le, ml80)
+        const tax = calculateSmSummaryTax(r.revenue, cost)
+        const netProfit = calculateSmSummaryNetProfit(r.revenue, cost, tax)
+
+        return {
+          ...r,
+          cost,
+          tax,
+          profit: netProfit,
+          profit_rate: calculateSmSummaryProfitRate(r.revenue, netProfit),
+          ml_80: ml80,
+          le,
+        }
+      }
+
       return {
         ...r,
         ml_80: ml80,
@@ -167,7 +199,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
 
-  const totalGrossProfit = totalRevenue - totalCost
+  const totalGrossProfit = adType === 'SM' ? totalNetProfit : (totalRevenue - totalCost)
   const totalProfitRate = totalRevenue > 0 ? totalNetProfit / totalRevenue : 0
   const totalUpstreamBreakdown = displayRows.reduce<Record<string, number>>((acc, row) => {
     for (const [name, value] of Object.entries(row.upstream_breakdown ?? {})) {
@@ -224,7 +256,9 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       title: t('dashboard.profit'),
       key: 'profit',
       width: 110,
-      render: (_: unknown, row: FR) => <MoneyCell value={row.revenue - row.cost} colorize />,
+      render: (_: unknown, row: FR) => (
+        <MoneyCell value={adType === 'SM' ? row.profit : (row.revenue - row.cost)} colorize />
+      ),
     },
     {
       title: t('dashboard.tax'),
@@ -293,7 +327,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     { key: 'cost', label: t('dashboard.totalCost'), value: totalCost, color: 'var(--color-danger)' },
     { key: 'profit', label: t('dashboard.profitLabel'), value: totalGrossProfit, color: 'var(--color-warning)' },
     { key: 'net', label: t('dashboard.netProfit'), value: totalNetProfit, color: 'var(--color-success)' },
-    { key: 'ml80', label: 'ML 80%', value: totalML80, color: 'var(--color-primary)' },
+    { key: 'ml80', label: 'ML', value: totalML80, color: 'var(--color-primary)' },
     { key: 'le', label: 'LE', value: totalLE, color: 'var(--color-text-primary)' },
   ]
 

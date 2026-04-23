@@ -88,7 +88,7 @@ function formatDisplayValue(value: number | string, formatter: (n: number) => st
 }
 
 function calculateUnitPricePayout(quantity: number, unitPrice: number): number {
-  return (quantity * unitPrice) / 1000
+  return (quantity * unitPrice)
 }
 
 function getRowInputs(row: DownstreamInputRow): DownstreamInputValue[] {

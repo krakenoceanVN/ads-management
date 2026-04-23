@@ -186,6 +186,10 @@ function getActivePeriodForDate(periods: PeriodWithDownstream[] | undefined, dat
   )
 }
 
+function calculateDownstreamSiteValue(quantity: number, unitPrice: number): number {
+  return quantity * unitPrice
+}
+
 const handleValidation = (req: Request, res: Response, next: Function) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -558,7 +562,7 @@ router.get(
               cachedPeriod.pctHal * 100
 
             const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100))
-            const mlValue = calculateUnitPricePayout(adjustedUV, price)
+            const mlValue = calculateDownstreamSiteValue(adjustedUV, price)
 
             if (ds.downstreamType === "ML") {
               totalML += mlValue

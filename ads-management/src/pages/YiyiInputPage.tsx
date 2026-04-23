@@ -357,7 +357,7 @@ export default function YiyiInputPage() {
               }
             }}
           />
-          <span className="page-subtitle">Nhập liệu Yiyi (下游12)</span>
+          <span className="page-subtitle">{t('yiyi.title')}</span>
         </div>
 
         <ConfirmAllButton

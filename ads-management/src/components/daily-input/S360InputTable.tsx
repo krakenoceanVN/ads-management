@@ -449,7 +449,13 @@ export default function S360InputTable({ date, search = '' }: Props) {
         )}
       </div>
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      <SaveBar
+        dirtyCount={dirtyCount}
+        loading={mutation.isPending}
+        canSave={admin}
+        disabledReason={t('permission.adminRequired')}
+        onSave={handleSave}
+      />
     </div>
   )
 }

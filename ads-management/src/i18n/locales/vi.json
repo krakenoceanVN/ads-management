@@ -3,6 +3,11 @@
     "brand": "AD MANAGEMENT",
     "brandShort": "AD"
   },
+  "common": {
+    "loading": "Đang tải...",
+    "loadError": "Không thể tải dữ liệu",
+    "noData": "Không có dữ liệu"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "input": "Nhập liệu",
@@ -64,6 +69,8 @@
     "confirmAllFail": "Xác nhận tất cả thất bại",
     "dayTotal": "TỔNG NGÀY",
     "saveN": "Lưu {{n}} dòng thay đổi",
+    "changeCount_one": "{{count}} thay đổi",
+    "changeCount_other": "{{count}} thay đổi",
     "loadError": "Không thể tải dữ liệu",
     "noData": "Chưa có dữ liệu cho ngày này",
     "saveSuccess": "Đã lưu thành công",
@@ -230,6 +237,14 @@
     "downstreamPricePlaceholder": "Nhập giá hạ nguồn",
     "actionFailed": "Thao tác thất bại"
   },
+  "layout": {
+    "resizeSidebar": "Điều chỉnh độ rộng thanh bên"
+  },
+  "permission": {
+    "inputRequired": "Cần quyền nhập liệu",
+    "adminRequired": "Cần quyền quản trị",
+    "confirmRequired": "Cần quyền xác nhận"
+  },
   "theme": {
     "light": "Sáng",
     "dark": "Tối",
@@ -313,10 +328,13 @@
   },
   "login": {
     "title": "Đăng nhập",
+    "subtitle": "Đăng nhập vào tài khoản của bạn",
     "username": "Tên đăng nhập",
     "enterUsername": "Vui lòng nhập tên đăng nhập",
+    "usernamePlaceholder": "Nhập tên đăng nhập",
     "password": "Mật khẩu",
     "enterPassword": "Vui lòng nhập mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu",
     "submit": "Đăng nhập",
     "success": "Đăng nhập thành công",
     "fail": "Sai tài khoản hoặc mật khẩu"

@@ -3,6 +3,11 @@
     "brand": "AD MANAGEMENT",
     "brandShort": "AD"
   },
+  "common": {
+    "loading": "Loading...",
+    "loadError": "Failed to load data",
+    "noData": "No data available"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "input": "Data Entry",
@@ -64,6 +69,8 @@
     "confirmAllFail": "Confirm all failed",
     "dayTotal": "DAY TOTAL",
     "saveN": "Save {{n}} changes",
+    "changeCount_one": "{{count}} change",
+    "changeCount_other": "{{count}} changes",
     "loadError": "Failed to load data",
     "noData": "No data for this date",
     "saveSuccess": "Saved successfully",
@@ -230,6 +237,14 @@
     "downstreamPricePlaceholder": "Enter downstream price",
     "actionFailed": "Action failed"
   },
+  "layout": {
+    "resizeSidebar": "Resize sidebar"
+  },
+  "permission": {
+    "inputRequired": "Data entry permission required",
+    "adminRequired": "Admin permission required",
+    "confirmRequired": "Confirm permission required"
+  },
   "theme": {
     "light": "Light",
     "dark": "Dark",
@@ -313,10 +328,13 @@
   },
   "login": {
     "title": "Login",
+    "subtitle": "Sign in to your account",
     "username": "Username",
     "enterUsername": "Please enter username",
+    "usernamePlaceholder": "Enter your username",
     "password": "Password",
     "enterPassword": "Please enter password",
+    "passwordPlaceholder": "Enter your password",
     "submit": "Login",
     "success": "Login successful",
     "fail": "Invalid username or password"

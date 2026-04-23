@@ -295,11 +295,18 @@ export default function SmInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
+        const displayPrice = formatIsoFixed(
+          drafts[row.id]?.unit_price ?? row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0,
+          4,
+        )
         if (isConfirmed(row)) {
           const price = row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0
           return <span>{formatIsoFixed(price, 4)}</span>
         }
         const admin = isAdmin()
+        if (!admin || !canInput) {
+          return <span>{displayPrice}</span>
+        }
         return (
           <TableNumberInput
             ref={(el) => { inputRefs.current[`${row.id}-price`] = el as HTMLInputElement | null }}
@@ -319,7 +326,6 @@ export default function SmInputTable({ date, search = '' }: Props) {
               }
             }}
             style={{ width: '100%' }}
-            disabled={!admin || !canInput}
           />
         )
       },
@@ -348,16 +354,20 @@ export default function SmInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        return (
-          <TableNumberInput
-            size="small"
-            precision={2}
-            controls={false}
-            value={getRebateAmount(row)}
-            style={{ width: '100%' }}
-            disabled
-          />
-        )
+        const admin = isAdmin()
+        if (admin) {
+          return (
+            <TableNumberInput
+              size="small"
+              precision={2}
+              controls={false}
+              value={getRebateAmount(row)}
+              style={{ width: '100%' }}
+              disabled
+            />
+          )
+        }
+        return <span>{formatIsoMoney(getRebateAmount(row))}</span>
       },
     },
     {
@@ -368,16 +378,20 @@ export default function SmInputTable({ date, search = '' }: Props) {
       render: (_: unknown, record: FlatRow) => {
         if ('_isGroupHeader' in record && record._isGroupHeader) return null
         const row = getData(record)
-        return (
-          <TableNumberInput
-            size="small"
-            precision={2}
-            controls={false}
-            value={getActualRevenue(row)}
-            style={{ width: '100%' }}
-            disabled
-          />
-        )
+        const admin = isAdmin()
+        if (admin) {
+          return (
+            <TableNumberInput
+              size="small"
+              precision={2}
+              controls={false}
+              value={getActualRevenue(row)}
+              style={{ width: '100%' }}
+              disabled
+            />
+          )
+        }
+        return <span>{formatIsoMoney(getActualRevenue(row))}</span>
       },
     },
     {
@@ -560,7 +574,13 @@ export default function SmInputTable({ date, search = '' }: Props) {
         )}
       </div>
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      <SaveBar
+        dirtyCount={dirtyCount}
+        loading={mutation.isPending}
+        canSave={canInput}
+        disabledReason={t('permission.inputRequired')}
+        onSave={handleSave}
+      />
     </div>
   )
 }

@@ -46,7 +46,7 @@ export default function LoginPage() {
             <img src={brandLogoImage} alt={t('app.brand')} className="login-brand-image" />
           </div>
           <h2>{t('login.title')}</h2>
-          <p>Sign in to your account</p>
+          <p>{t('login.subtitle')}</p>
         </div>
 
         <div className="login-card">
@@ -68,7 +68,7 @@ export default function LoginPage() {
               <Input
                 className="login-input"
                 size="large"
-                placeholder="Enter your username"
+                placeholder={t('login.usernamePlaceholder')}
               />
             </Form.Item>
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
               <Input.Password
                 className="login-input"
                 size="large"
-                placeholder="Enter your password"
+                placeholder={t('login.passwordPlaceholder')}
               />
             </Form.Item>
 

@@ -194,8 +194,13 @@ export default function OtherInputTable({ date, search = '' }: Props) {
       if ('_isGroupHeader' in record && record._isGroupHeader) return null
       const row = getData(record)
       if (row.billing_method !== 'CPM') return null
+      const displayPrice = formatIsoFixed(
+        drafts[row.id]?.unit_price ?? row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0,
+        4,
+      )
       if (isConfirmed(row)) return <span>{formatIsoFixed(row.existing_record?.unit_price_snapshot ?? row.current_unit_price ?? 0, 4)}</span>
       const admin = isAdmin()
+      if (!admin) return <span>{displayPrice}</span>
       return (
         <TableNumberInput
           ref={(el) => { inputRefs.current[`${row.id}-up`] = el as HTMLInputElement | null }}
@@ -207,7 +212,6 @@ export default function OtherInputTable({ date, search = '' }: Props) {
             setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], unit_price: v ?? undefined } }))
           }
           style={{ width: '100%' }}
-          disabled={!admin}
         />
       )
     },
@@ -499,7 +503,13 @@ export default function OtherInputTable({ date, search = '' }: Props) {
         )}
       </div>
 
-      <SaveBar dirtyCount={dirtyCount} loading={mutation.isPending} onSave={handleSave} />
+      <SaveBar
+        dirtyCount={dirtyCount}
+        loading={mutation.isPending}
+        canSave={admin}
+        disabledReason={t('permission.adminRequired')}
+        onSave={handleSave}
+      />
     </div>
   )
 }

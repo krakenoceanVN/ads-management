@@ -3,6 +3,11 @@
     "brand": "广告管理",
     "brandShort": "广告"
   },
+  "common": {
+    "loading": "加载中...",
+    "loadError": "无法加载数据",
+    "noData": "暂无数据"
+  },
   "nav": {
     "dashboard": "报表",
     "input": "数据录入",
@@ -64,6 +69,8 @@
     "confirmAllFail": "全部确认失败",
     "dayTotal": "日合计",
     "saveN": "保存 {{n}} 行更改",
+    "changeCount_one": "{{count}} 项更改",
+    "changeCount_other": "{{count}} 项更改",
     "loadError": "无法加载数据",
     "noData": "该日期暂无数据",
     "saveSuccess": "保存成功",
@@ -230,6 +237,14 @@
     "downstreamPricePlaceholder": "请输入下游价格",
     "actionFailed": "操作失败"
   },
+  "layout": {
+    "resizeSidebar": "调整侧边栏宽度"
+  },
+  "permission": {
+    "inputRequired": "需要录入权限",
+    "adminRequired": "需要管理员权限",
+    "confirmRequired": "需要确认权限"
+  },
   "theme": {
     "light": "浅色",
     "dark": "深色",
@@ -313,10 +328,13 @@
   },
   "login": {
     "title": "登录",
+    "subtitle": "登录到您的账户",
     "username": "用户名",
     "enterUsername": "请输入用户名",
+    "usernamePlaceholder": "请输入用户名",
     "password": "密码",
     "enterPassword": "请输入密码",
+    "passwordPlaceholder": "请输入密码",
     "submit": "登录",
     "success": "登录成功",
     "fail": "用户名或密码错误"

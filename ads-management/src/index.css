@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import "tailwindcss";
 
 :root {
 	--primary-300: #93c5fd;
@@ -2083,6 +2082,25 @@ html[data-theme='contrast'] .status-badge.is-confirmed .status-badge-label {
 .app-data-table.ant-table-wrapper .ant-table-cell .ant-picker-input > input {
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain.ant-input-number,
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain.ant-input-number:hover,
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain.ant-input-number:focus-within,
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain.ant-input-number-focused {
+	border-color: transparent !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	padding-inline: 0 !important;
+}
+
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain .ant-input-number-input-wrap {
+	padding-inline: 0;
+}
+
+.app-data-table.ant-table-wrapper .ant-table-cell .app-table-number-input--plain .ant-input-number-input {
+	padding-inline: 0;
+	color: inherit;
 }
 
 .app-data-table.ant-table-wrapper .ant-table-header table,

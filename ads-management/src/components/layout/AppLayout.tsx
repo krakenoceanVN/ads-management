@@ -1,14 +1,19 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Layout, Menu, Button, Space, Tooltip } from 'antd'
 import {
+  ApartmentOutlined,
+  BarChartOutlined,
+  DashboardOutlined,
+  FormOutlined,
   LogoutOutlined,
-  UserOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  SunOutlined,
   MoonOutlined,
+  SettingOutlined,
+  SunOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import brandLogoLightImage from '../../assets/trang-khong-logo.png'
@@ -38,6 +43,12 @@ const AD_TYPE_MENU_KEY_MAP: Record<string, string> = {
   '/input/yiyi': 'input-yiyi',
 }
 
+function getCurrentMenuKey(pathname: string): string {
+  if (pathname.startsWith('/downstream')) return 'downstream-menu'
+  if (pathname.startsWith('/admin')) return 'admin'
+  return AD_TYPE_MENU_KEY_MAP[pathname] ?? 'input-sm'
+}
+
 export default function AppLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -57,12 +68,10 @@ export default function AppLayout() {
   const [isResizing, setIsResizing] = useState(false)
   const isContrastMode = mode === 'contrast-soft'
 
-  // Persist sidebar width
   useEffect(() => {
     localStorage.setItem('ads-sider-width', JSON.stringify(sidebarWidth))
   }, [sidebarWidth])
 
-  // Theme shortcut: Alt+Shift+T
   useEffect(() => {
     const handleThemeShortcut = (event: KeyboardEvent) => {
       if (event.altKey && event.shiftKey && event.key.toLowerCase() === 't') {
@@ -70,97 +79,88 @@ export default function AppLayout() {
         cycleMode()
       }
     }
+
     window.addEventListener('keydown', handleThemeShortcut)
     return () => window.removeEventListener('keydown', handleThemeShortcut)
   }, [cycleMode])
 
-  const currentAdType =
-    AD_TYPE_MENU_KEY_MAP[location.pathname] ??
-    (location.pathname.startsWith('/downstream')
-      ? 'downstream-menu'
-      : location.pathname.startsWith('/admin')
-        ? 'admin'
-        : location.pathname.startsWith('/upstream')
-          ? 'up-sm'
-          : 'input-sm')
-
-  const menuLabel = (emoji: string, label: string) => (
-    <span className="menu-item-label">
-      <span className="menu-item-emoji">{emoji}</span>
-      <span className="menu-item-text" title={label}>{label}</span>
-    </span>
-  )
-
   const menuText = (label: string) => (
-    <span className="menu-item-text" title={label}>{label}</span>
-  )
-
-  const rootIcon = (emoji: string) => (
-    <span className="menu-root-icon" aria-hidden>
-      {emoji}
+    <span className="menu-item-text" title={label}>
+      {label}
     </span>
   )
 
-  const dashboardItems: MenuProps['items'] = [
-    { key: 'dash-sm', label: menuLabel('•', t('adType.sm')), onClick: () => navigate('/dashboard/sm') },
-    { key: 'dash-360', label: menuLabel('•', t('adType.360')), onClick: () => navigate('/dashboard/360') },
-    { key: 'dash-baidu', label: menuLabel('•', t('adType.baidu')), onClick: () => navigate('/dashboard/baidu') },
-    { key: 'dash-other', label: menuLabel('•', t('adType.other')), onClick: () => navigate('/dashboard/other') },
+  const buildAdTypeItems = (
+    prefix: 'dash' | 'input' | 'up',
+    getPath: (segment: 'sm' | '360' | 'baidu' | 'other') => string,
+  ): NonNullable<MenuProps['items']> => [
+    {
+      key: `${prefix}-sm`,
+      label: menuText(t('adType.sm')),
+      onClick: () => navigate(getPath('sm')),
+    },
+    {
+      key: `${prefix}-360`,
+      label: menuText(t('adType.360')),
+      onClick: () => navigate(getPath('360')),
+    },
+    {
+      key: `${prefix}-baidu`,
+      label: menuText(t('adType.baidu')),
+      onClick: () => navigate(getPath('baidu')),
+    },
+    {
+      key: `${prefix}-other`,
+      label: menuText(t('adType.other')),
+      onClick: () => navigate(getPath('other')),
+    },
   ]
 
-  const inputItems: MenuProps['items'] = [
-    { key: 'input-sm', label: menuLabel('•', t('adType.sm')), onClick: () => navigate('/input/sm') },
-    { key: 'input-360', label: menuLabel('•', t('adType.360')), onClick: () => navigate('/input/360') },
-    { key: 'input-baidu', label: menuLabel('•', t('adType.baidu')), onClick: () => navigate('/input/baidu') },
-    { key: 'input-other', label: menuLabel('•', t('adType.other')), onClick: () => navigate('/input/other') },
-    { key: 'input-yiyi', label: menuLabel('•', t('adType.yiyi')), onClick: () => navigate('/input/yiyi') },
-  ]
-
-  const upstreamItems: MenuProps['items'] = [
-    { key: 'up-sm', label: menuLabel('•', t('adType.sm')), onClick: () => navigate('/upstream/sm') },
-    { key: 'up-360', label: menuLabel('•', t('adType.360')), onClick: () => navigate('/upstream/360') },
-    { key: 'up-baidu', label: menuLabel('•', t('adType.baidu')), onClick: () => navigate('/upstream/baidu') },
-    { key: 'up-other', label: menuLabel('•', t('adType.other')), onClick: () => navigate('/upstream/other') },
-  ]
+  const currentMenuKey = getCurrentMenuKey(location.pathname)
+  const themeButtonIcon = mode === 'light' ? <SunOutlined /> : <MoonOutlined />
+  const themeButtonLabel = mode === 'light' ? t('theme.light') : t('theme.dark')
 
   const menuItems: MenuProps['items'] = [
     ...(canViewDashboard()
-      ? [
-          {
-            key: 'dashboard',
-            icon: rootIcon('📊'),
-            label: menuText(t('nav.dashboard')),
-            children: dashboardItems,
-          },
-        ]
+      ? [{
+          key: 'dashboard',
+          icon: <DashboardOutlined />,
+          label: menuText(t('nav.dashboard')),
+          children: buildAdTypeItems('dash', (segment) => `/dashboard/${segment}`),
+        }]
       : []),
     {
       key: 'input',
-      icon: rootIcon('📝'),
+      icon: <FormOutlined />,
       label: menuText(t('nav.input')),
-      children: inputItems,
+      children: [
+        ...buildAdTypeItems('input', (segment) => `/input/${segment}`),
+        {
+          key: 'input-yiyi',
+          label: menuText(t('adType.yiyi')),
+          onClick: () => navigate('/input/yiyi'),
+        },
+      ],
     },
     {
       key: 'upstream',
-      icon: rootIcon('📈'),
+      icon: <BarChartOutlined />,
       label: menuText(t('nav.upstream')),
-      children: upstreamItems,
+      children: buildAdTypeItems('up', (segment) => `/upstream/${segment}`),
     },
     {
       key: 'downstream-menu',
-      icon: rootIcon('⬇️'),
+      icon: <ApartmentOutlined />,
       label: menuText(t('nav.downstream')),
       onClick: () => navigate('/downstream'),
     },
     ...(canAccessSiteList()
-      ? [
-          {
-            key: 'admin',
-            icon: rootIcon('⚙️'),
-            label: menuText(t('nav.siteList')),
-            onClick: () => navigate('/admin'),
-          },
-        ]
+      ? [{
+          key: 'admin',
+          icon: <SettingOutlined />,
+          label: menuText(t('nav.siteList')),
+          onClick: () => navigate('/admin'),
+        }]
       : []),
   ]
 
@@ -181,39 +181,43 @@ export default function AppLayout() {
 
   const adTypeTitle = getAdTypeTitle()
 
-  const pageTitle =
-    location.pathname.startsWith('/dashboard')
-      ? adTypeTitle
+  const pageTitle = (() => {
+    if (location.pathname.startsWith('/dashboard')) {
+      return adTypeTitle
         ? `${t('nav.dashboard')} - ${adTypeTitle}`
         : t('nav.dashboard')
-      : location.pathname.startsWith('/input')
-        ? adTypeTitle
-          ? `${t('nav.input')} - ${adTypeTitle}`
-          : t('nav.input')
-        : location.pathname.startsWith('/upstream')
-          ? adTypeTitle
-            ? `${t('nav.upstream')} - ${adTypeTitle}`
-            : t('nav.upstream')
-          : location.pathname.startsWith('/admin')
-            ? t('nav.siteList')
-            : location.pathname.startsWith('/downstream')
-              ? t('nav.downstream')
-              : t('app.brand')
+    }
 
-  const pageIcon =
-    location.pathname.startsWith('/dashboard')
-      ? '📊'
-      : location.pathname.startsWith('/input')
-        ? '📝'
-        : location.pathname.startsWith('/upstream')
-          ? '📈'
-          : location.pathname.startsWith('/admin')
-            ? '⚙️'
-            : location.pathname.startsWith('/downstream')
-              ? '⬇️'
-              : '✨'
+    if (location.pathname.startsWith('/input')) {
+      if (location.pathname === '/input/yiyi') {
+        return t('yiyi.title')
+      }
 
-  // Resizable sidebar logic
+      return adTypeTitle
+        ? `${t('nav.input')} - ${adTypeTitle}`
+        : t('nav.input')
+    }
+
+    if (location.pathname.startsWith('/upstream')) {
+      return adTypeTitle
+        ? `${t('nav.upstream')} - ${adTypeTitle}`
+        : t('nav.upstream')
+    }
+
+    if (location.pathname.startsWith('/admin')) return t('nav.siteList')
+    if (location.pathname.startsWith('/downstream')) return t('nav.downstream')
+    return t('app.brand')
+  })()
+
+  const pageIcon = (() => {
+    if (location.pathname.startsWith('/dashboard')) return <DashboardOutlined />
+    if (location.pathname.startsWith('/input')) return <FormOutlined />
+    if (location.pathname.startsWith('/upstream')) return <BarChartOutlined />
+    if (location.pathname.startsWith('/admin')) return <SettingOutlined />
+    if (location.pathname.startsWith('/downstream')) return <ApartmentOutlined />
+    return <DashboardOutlined />
+  })()
+
   const startResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     if (collapsed) setCollapsed(false)
@@ -244,9 +248,6 @@ export default function AppLayout() {
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  const themeButtonIcon = mode === 'light' ? <SunOutlined /> : <MoonOutlined />
-  const themeButtonLabel = mode === 'light' ? t('theme.light') : t('theme.dark')
-
   return (
     <Layout className="app-layout-shell">
       <Sider
@@ -262,15 +263,21 @@ export default function AppLayout() {
           <div className="sider-logo">
             <img src={brandLogoImage} alt={t('app.brand')} className="sider-logo-image" />
           </div>
-          {!collapsed && <span className="sider-brand-text" title={t('app.brand')}>{t('app.brand')}</span>}
+          {!collapsed ? (
+            <span className="sider-brand-text" title={t('app.brand')}>
+              {t('app.brand')}
+            </span>
+          ) : null}
         </div>
+
         <Menu
           theme={mode === 'light' ? 'light' : 'dark'}
           mode="inline"
-          selectedKeys={[currentAdType]}
+          selectedKeys={[currentMenuKey]}
           items={menuItems}
           className="app-menu"
         />
+
         <div className="sider-footer">
           <Button
             type="text"
@@ -279,12 +286,13 @@ export default function AppLayout() {
             onClick={() => setCollapsed((prev) => !prev)}
           />
         </div>
+
         <div
           className="sider-resizer"
           onMouseDown={startResize}
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize sidebar"
+          aria-label={t('layout.resizeSidebar')}
         />
       </Sider>
 
@@ -292,8 +300,11 @@ export default function AppLayout() {
         <Header className="app-topbar">
           <div className="app-topbar-left">
             <span className="app-page-icon">{pageIcon}</span>
-            <h2 className="app-page-title" title={pageTitle}>{pageTitle}</h2>
+            <h2 className="app-page-title" title={pageTitle}>
+              {pageTitle}
+            </h2>
           </div>
+
           <Space size={14} className="app-topbar-actions">
             <div className={`app-theme-switcher ${isContrastMode ? 'is-contrast' : ''}`}>
               <Tooltip
@@ -310,12 +321,20 @@ export default function AppLayout() {
                 />
               </Tooltip>
             </div>
+
             <LanguageSwitcher />
+
             <span className="app-user-pill" title={user?.username}>
               <UserOutlined />
               <span className="app-user-pill-text">{user?.username}</span>
             </span>
-            <Button type="text" icon={<LogoutOutlined />} className="app-logout-btn" onClick={handleLogout}>
+
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              className="app-logout-btn"
+              onClick={handleLogout}
+            >
               {t('nav.logout')}
             </Button>
           </Space>

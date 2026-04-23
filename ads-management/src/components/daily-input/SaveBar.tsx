@@ -4,11 +4,20 @@ import { Button } from 'antd'
 interface Props {
   dirtyCount: number
   loading: boolean
+  canSave?: boolean
+  disabledReason?: string
   onSave: () => void
 }
 
-export default function SaveBar({ dirtyCount, loading, onSave }: Props) {
+export default function SaveBar({
+  dirtyCount,
+  loading,
+  canSave = true,
+  disabledReason,
+  onSave,
+}: Props) {
   const { t } = useTranslation()
+  const isDisabled = !canSave || dirtyCount === 0
 
   return (
     <div className="save-bar" style={{ position: 'sticky', bottom: 0, zIndex: 99 }}>
@@ -20,7 +29,7 @@ export default function SaveBar({ dirtyCount, loading, onSave }: Props) {
               color: 'var(--color-text-secondary)',
             }}
           >
-            {dirtyCount} {dirtyCount === 1 ? 'change' : 'changes'}
+            {t('input.changeCount', { count: dirtyCount })}
           </span>
           <div
             style={{
@@ -38,9 +47,10 @@ export default function SaveBar({ dirtyCount, loading, onSave }: Props) {
         className="save-bar-btn"
         type="primary"
         size="large"
-        disabled={dirtyCount === 0}
+        disabled={isDisabled}
         loading={loading}
         onClick={onSave}
+        title={!canSave ? disabledReason : undefined}
         style={{
           height: 40,
           paddingLeft: 24,
@@ -48,7 +58,7 @@ export default function SaveBar({ dirtyCount, loading, onSave }: Props) {
           borderRadius: 'var(--radius-lg)',
           fontWeight: 'var(--font-weight-semibold)',
           fontSize: 'var(--font-size-md)',
-          boxShadow: dirtyCount > 0 ? 'var(--shadow-md)' : 'none',
+          boxShadow: dirtyCount > 0 && canSave ? 'var(--shadow-md)' : 'none',
         }}
       >
         {t('input.saveN', { n: dirtyCount })}

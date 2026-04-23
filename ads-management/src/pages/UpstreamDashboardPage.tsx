@@ -10,7 +10,7 @@ import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
-import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
+import { formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
 
 interface Props {
   adType?: AdTypeCode
@@ -32,12 +32,6 @@ interface LeDashboardRow {
 interface LeDashboardResponse {
   upstreamNames: string[]
   rows: LeDashboardRow[]
-}
-
-interface UpstreamDetailMetrics {
-  pv: number
-  unit_price: number
-  amount: number
 }
 
 const AD_TYPE_TABS: { key: string; adType: AdTypeCode; labelKey: string }[] = [
@@ -74,33 +68,6 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 }
 
 type FR = SummaryRow & { _isTotal?: boolean; ml_80?: number; le?: number }
-
-function emptyUpstreamDetailMetrics(): UpstreamDetailMetrics {
-  return { pv: 0, unit_price: 0, amount: 0 }
-}
-
-function buildTotalUpstreamDetailBreakdown(rows: FR[]): Record<string, UpstreamDetailMetrics> {
-  const aggregated: Record<string, UpstreamDetailMetrics> = {}
-
-  for (const row of rows) {
-    for (const [name, metrics] of Object.entries(row.upstream_detail_breakdown ?? {})) {
-      const current = aggregated[name] ?? emptyUpstreamDetailMetrics()
-      current.pv += metrics.pv ?? 0
-      current.amount += metrics.amount ?? 0
-      aggregated[name] = current
-    }
-  }
-
-  for (const metrics of Object.values(aggregated)) {
-    metrics.unit_price = metrics.pv > 0 ? (metrics.amount / metrics.pv) * 1000 : 0
-  }
-
-  return aggregated
-}
-
-function formatPv(value: number): string {
-  return formatIsoInteger(value)
-}
 
 function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
   if (adType === '360') {
@@ -207,11 +174,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
     }
     return acc
   }, {})
-  const totalUpstreamDetailBreakdown = buildTotalUpstreamDetailBreakdown(displayRows)
-  const upstreamDetailNames = adType === '360'
-    ? Array.from(new Set(displayRows.flatMap((row) => Object.keys(row.upstream_detail_breakdown ?? {}))))
-    : []
-  const upstreamLeafCount = adType === '360' ? upstreamDetailNames.length * 3 : upstreamCols.length
+  const upstreamLeafCount = upstreamCols.length
 
   const monthLabel = monthKey
 
@@ -281,37 +244,12 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       dataIndex: 'profit_rate',
       render: (v: number) => formatIsoPercent(v, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
     },
-    ...(adType === '360'
-      ? upstreamDetailNames.map((name) => ({
-          title: name,
-          key: `up_${name}`,
-          children: [
-            {
-              title: t('downstream.pv'),
-              key: `up_${name}_pv`,
-              width: 100,
-              render: (_: unknown, row: FR) => formatPv(row.upstream_detail_breakdown?.[name]?.pv ?? 0),
-            },
-            {
-              title: t('downstream.unitPrice'),
-              key: `up_${name}_unit_price`,
-              width: 110,
-              render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.unit_price ?? 0} />,
-            },
-            {
-              title: t('downstream.amount'),
-              key: `up_${name}_amount`,
-              width: 120,
-              render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_detail_breakdown?.[name]?.amount ?? 0} />,
-            },
-          ],
-        }))
-      : upstreamCols.map((name) => ({
-          title: name,
-          key: `up_${name}`,
-          width: 100,
-          render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_breakdown?.[name] ?? 0} />,
-        }))),
+    ...upstreamCols.map((name) => ({
+      title: name,
+      key: `up_${name}`,
+      width: 100,
+      render: (_: unknown, row: FR) => <MoneyCell value={row.upstream_breakdown?.[name] ?? 0} />,
+    })),
     ...downstreamCols.map(({ key, label }) => ({
       title: label,
       key: `ds_${key}`,
@@ -400,28 +338,11 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
                     )}
                   </Table.Summary.Cell>
 
-                  {adType === '360'
-                    ? upstreamDetailNames.flatMap((name, idx) => {
-                        const metrics = totalUpstreamDetailBreakdown[name] ?? emptyUpstreamDetailMetrics()
-                        const startIndex = 7 + idx * 3
-
-                        return [
-                          <Table.Summary.Cell key={`sum-up-${name}-pv`} index={startIndex} className="dashboard-total-cell">
-                            {renderTableText(formatPv(metrics.pv), { fontWeight: 'var(--font-weight-semibold)' })}
-                          </Table.Summary.Cell>,
-                          <Table.Summary.Cell key={`sum-up-${name}-unit`} index={startIndex + 1} className="dashboard-total-cell">
-                            <MoneyCell value={metrics.unit_price} />
-                          </Table.Summary.Cell>,
-                          <Table.Summary.Cell key={`sum-up-${name}-amount`} index={startIndex + 2} className="dashboard-total-cell">
-                            <MoneyCell value={metrics.amount} />
-                          </Table.Summary.Cell>,
-                        ]
-                      })
-                    : upstreamCols.map((name, idx) => (
-                        <Table.Summary.Cell key={`sum-up-${name}`} index={7 + idx} className="dashboard-total-cell">
-                          <MoneyCell value={totalUpstreamBreakdown[name] ?? 0} />
-                        </Table.Summary.Cell>
-                      ))}
+                  {upstreamCols.map((name, idx) => (
+                    <Table.Summary.Cell key={`sum-up-${name}`} index={7 + idx} className="dashboard-total-cell">
+                      <MoneyCell value={totalUpstreamBreakdown[name] ?? 0} />
+                    </Table.Summary.Cell>
+                  ))}
 
                   {downstreamCols.map(({ key }, idx) => {
                     const total = key === 'ml_80' ? totalML80 : key === 'le' ? totalLE : 0

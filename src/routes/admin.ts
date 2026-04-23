@@ -413,6 +413,8 @@ router.get(
         const formattedInput = {
           date: formatBusinessDate(input.recordDate),
           qty: input.qty,
+          unit_price_snapshot:
+            input.unitPriceSnapshot === null ? null : Number(input.unitPriceSnapshot),
           amount1: input.amount1 ? Number(input.amount1) : null,
           amount2: input.amount2 ? Number(input.amount2) : null,
           revenue: Number(input.revenue),
@@ -441,6 +443,8 @@ router.get(
         is_active: sd.adSite.isActive,
         upstream_name: sd.adSite.upstream.name,
         billing_method: sd.adSite.billingMethod,
+        current_unit_price:
+          sd.adSite.currentUnitPrice === null ? null : Number(sd.adSite.currentUnitPrice),
         custom_price: (sd as any).customPrice ? Number((sd as any).customPrice) : null,
         resolved_price:
           (sd as any).customPrice !== null

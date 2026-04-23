@@ -43,6 +43,7 @@ interface DownstreamRateRow {
 interface DownstreamInputValue {
   date: string
   qty: number | null
+  unit_price_snapshot?: number | null
   amount1: number | null
   amount2: number | null
   revenue: number
@@ -55,6 +56,7 @@ interface DownstreamInputRow {
   is_active?: boolean
   upstream_name: string
   billing_method: string
+  current_unit_price?: number | null
   custom_price: number | null
   resolved_price?: number | null
   input: DownstreamInputValue | null
@@ -96,6 +98,11 @@ function formatDisplayValue(value: number | string, formatter: (n: number) => st
 
 function calculateUnitPricePayout(quantity: number, unitPrice: number): number {
   return (quantity * unitPrice)
+}
+
+function normalizeMlSmInputPrice(unitPrice: number): number {
+  if (unitPrice <= 0) return 0
+  return unitPrice < 0.02 ? 0.016 : 0.023
 }
 
 function formatPdfPriceLabel(price: number): string {
@@ -172,6 +179,7 @@ export default function DownstreamSitesPage() {
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
   const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
+  const isMlNon360 = downstream?.downstream_type === 'ML' && !is360
   const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
   const basePayoutLabel = Number.isInteger(basePayoutRate)
     ? formatIsoNumber(basePayoutRate, { maximumFractionDigits: 0 })
@@ -511,8 +519,24 @@ export default function DownstreamSitesPage() {
   const adSiteIds = [...new Set(siteInputs.map((r) => r.id))]
   const adSiteNames = new Map(siteInputs.map((r) => [r.id, r.ad_site_name]))
   const adSiteActiveMap = new Map(siteInputs.map((r) => [r.id, r.is_active !== false]))
+  const siteInputPrices = new Map(
+    siteInputs.map((r) => {
+      const monthlyInputs = Array.isArray(r.inputs) ? r.inputs : []
+      const latestSnapshot = [...monthlyInputs]
+        .reverse()
+        .find((input) => input.unit_price_snapshot != null)
+        ?.unit_price_snapshot
+
+      return [r.id, latestSnapshot ?? r.current_unit_price ?? 0]
+    })
+  )
   const sitePrices = new Map(
-    siteInputs.map((r) => [r.id, r.resolved_price ?? r.custom_price ?? 0])
+    siteInputs.map((r) => [
+      r.id,
+      isMlNon360
+        ? normalizeMlSmInputPrice(siteInputPrices.get(r.id) ?? 0)
+        : (r.resolved_price ?? r.custom_price ?? 0),
+    ])
   )
   const pdfPriceGroups: PdfPriceGroup[] = !is360
     ? Array.from(
@@ -537,7 +561,7 @@ export default function DownstreamSitesPage() {
     : []
 
   // Map date -> siteId -> input metrics for the selected month
-  const dateMap = new Map<string, Map<number, { qty: number; revenue: number }>>()
+  const dateMap = new Map<string, Map<number, { qty: number; revenue: number; unitPriceSnapshot: number | null }>>()
   for (const row of siteInputs) {
     const inputs = getRowInputs(row)
     for (const input of inputs) {
@@ -549,6 +573,7 @@ export default function DownstreamSitesPage() {
       dateMap.get(date)!.set(row.id, {
         qty: Number(input.qty ?? 0),
         revenue: Number(input.revenue ?? 0),
+        unitPriceSnapshot: input.unit_price_snapshot ?? null,
       })
     }
   }
@@ -575,6 +600,13 @@ export default function DownstreamSitesPage() {
         totalUV += adjustedUV
         if (isMl360) {
           totalML += amount
+        } else if (isMlNon360) {
+          const inputUnitPrice = normalizeMlSmInputPrice(
+            input.unitPriceSnapshot ?? siteInputPrices.get(siteId) ?? 0
+          )
+          if (inputUnitPrice > 0) {
+            totalML += calculateUnitPricePayout(adjustedUV, inputUnitPrice)
+          }
         } else if (sitePrices.get(siteId)) {
           totalML += calculateUnitPricePayout(adjustedUV, sitePrices.get(siteId) ?? 0)
         }

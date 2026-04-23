@@ -319,6 +319,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             const formattedInput = {
                 date: (0, date_js_1.formatBusinessDate)(input.recordDate),
                 qty: input.qty,
+                unit_price_snapshot: input.unitPriceSnapshot === null ? null : Number(input.unitPriceSnapshot),
                 amount1: input.amount1 ? Number(input.amount1) : null,
                 amount2: input.amount2 ? Number(input.amount2) : null,
                 revenue: Number(input.revenue),
@@ -343,6 +344,7 @@ router.get("/admin/downstream-sites/:downstreamId/inputs", auth_js_1.requireAuth
             is_active: sd.adSite.isActive,
             upstream_name: sd.adSite.upstream.name,
             billing_method: sd.adSite.billingMethod,
+            current_unit_price: sd.adSite.currentUnitPrice === null ? null : Number(sd.adSite.currentUnitPrice),
             custom_price: sd.customPrice ? Number(sd.customPrice) : null,
             resolved_price: sd.customPrice !== null
                 ? Number(sd.customPrice)

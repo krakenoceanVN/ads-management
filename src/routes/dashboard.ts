@@ -25,11 +25,13 @@ const router = Router()
 
 interface DailyInputWithUpstream {
   recordDate: Date
-  revenue: unknown
+  revenue?: unknown
   qty: number
-  adSiteId: number
+  adSiteId?: number
+  unitPriceSnapshot?: unknown
   adSite: {
-    upstream: {
+    currentUnitPrice?: unknown
+    upstream?: {
       name: string
     }
     downstreams?: Array<{
@@ -190,6 +192,11 @@ function calculateDownstreamSiteValue(quantity: number, unitPrice: number): numb
   return quantity * unitPrice
 }
 
+function normalizeMlSmInputPrice(unitPrice: number): number {
+  if (unitPrice <= 0) return 0
+  return unitPrice < 0.02 ? 0.016 : 0.023
+}
+
 const handleValidation = (req: Request, res: Response, next: Function) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
@@ -345,7 +352,7 @@ router.get(
         let totalUV = 0
 
         for (const row of dayInputs) {
-          const upstreamName = row.adSite.upstream.name
+          const upstreamName = row.adSite.upstream?.name ?? "Unknown"
           const amount = Number(row.revenue ?? 0)
           const qty = Number(row.qty ?? 0)
 
@@ -461,8 +468,10 @@ router.get(
         select: {
           recordDate: true,
           qty: true,
+          unitPriceSnapshot: true,
           adSite: {
             select: {
+              currentUnitPrice: true,
               downstreams: {
                 where: {
                   downstream: {
@@ -562,11 +571,18 @@ router.get(
               cachedPeriod.pctHal * 100
 
             const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100))
-            const mlValue = calculateDownstreamSiteValue(adjustedUV, price)
+            const inputUnitPrice = Number(input.unitPriceSnapshot ?? input.adSite.currentUnitPrice ?? 0)
 
             if (ds.downstreamType === "ML") {
+              const mlValue = calculateDownstreamSiteValue(
+                adjustedUV,
+                adTypeCode === "360"
+                  ? price
+                  : (normalizeMlSmInputPrice(inputUnitPrice) || price)
+              )
               totalML += mlValue
             } else {
+              const mlValue = calculateDownstreamSiteValue(adjustedUV, price)
               totalLE += mlValue
             }
           }

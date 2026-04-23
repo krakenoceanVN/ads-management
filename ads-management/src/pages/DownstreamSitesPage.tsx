@@ -68,6 +68,12 @@ type PivotRow = {
   [adSiteId: string]: number | string
 }
 
+type PdfPriceGroup = {
+  key: string
+  price: number
+  siteIds: number[]
+}
+
 const EMPTY_DOWNSTREAM_ROWS: DownstreamRow[] = []
 const EMPTY_INPUT_ROWS: DownstreamInputRow[] = []
 const EMPTY_PERIOD_ROWS: DownstreamPeriodRow[] = []
@@ -89,6 +95,10 @@ function formatDisplayValue(value: number | string, formatter: (n: number) => st
 
 function calculateUnitPricePayout(quantity: number, unitPrice: number): number {
   return (quantity * unitPrice)
+}
+
+function formatPdfPriceLabel(price: number): string {
+  return price < 1 ? formatIsoFixed(price, 4) : formatIsoMoney(price)
 }
 
 function getRowInputs(row: DownstreamInputRow): DownstreamInputValue[] {
@@ -232,18 +242,19 @@ export default function DownstreamSitesPage() {
     if (pivotRows.length === 0) return
     const pageMargin = 6
     const dateColWidth = 96
-    const totalUvColWidth = 110
     const totalMlColWidth = 120
     const payoutColWidth = 120
-    const adjustedColWidth = 170
+    const groupedTotalUvColWidth = 110
     const siteColWidth = 96
     const siteMetricColWidth = 96
     const tableWidthPx = dateColWidth
-      + totalUvColWidth
       + totalMlColWidth
       + payoutColWidth
-      + adjustedColWidth
-      + (adSiteIds.length * (is360 ? siteMetricColWidth * 3 : siteColWidth))
+      + (
+        is360
+          ? (adSiteIds.length * (siteMetricColWidth * 3))
+          : pdfPriceGroups.reduce((sum, group) => sum + groupedTotalUvColWidth + (group.siteIds.length * siteColWidth), 0)
+      )
     const pageWidthPx = tableWidthPx + (pageMargin * 2) + 24
     const pageHeightPx = Math.max(1200, 220 + ((pivotRows.length + 2) * 28))
     const opt = {
@@ -267,64 +278,59 @@ export default function DownstreamSitesPage() {
       },
     }
 
-    const totalQty = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_uv || 0), 0)
     const totalML = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_ml || 0), 0)
     const totalBasePayout = totalML * (basePayoutRate / 100)
-    const totalAdjustedPayout = pivotRows.reduce((sum: number, row: PivotRow, index: number) => {
-      const effectiveRate = getEffectiveRate(index, allDays, explicitRates, getDefaultRateForDate)
-      return sum + (row.total_ml * (effectiveRate / 100))
-    }, 0)
-    const weightedAdjustedRate = totalML > 0 ? (totalAdjustedPayout / totalML) * 100 : getDefaultRateForDate(allDays[0] ?? `${year}-${String(month).padStart(2, '0')}-01`)
     const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
 
     const renderTable = (siteIds: number[]) => `
       <table class="ml-report-table">
         <thead>
           <tr style="background: #d9d9d9;">
-            <th class="col-date" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.date')}</th>
-            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
-            <th class="col-total" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
-            <th class="col-payout" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${downstream?.downstream_type || ''}${basePayoutLabel}%</th>
-            <th class="col-adjusted" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.adjustedRate')}</th>
+            <th class="col-date" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.date')}</th>
+            <th class="col-total" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
+            <th class="col-payout" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">ML</th>
             ${is360
               ? siteIds.map((siteId) => `
-                  <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 6px 4px; text-align: center; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
+                  <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
                 `).join('')
-              : siteIds.map((siteId) => `
-                  <th class="col-site" style="border: 1px solid #999; padding: 6px 4px; text-align: right; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
+              : pdfPriceGroups.map((group) => `
+                  <th class="col-site-group" colspan="${group.siteIds.length + 1}" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.unitPrice')} ${formatPdfPriceLabel(group.price)}</th>
                 `).join('')}
           </tr>
           ${is360 ? `
             <tr style="background: #ececec;">
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
-              <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-payout" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
-              <th class="col-adjusted" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               ${siteIds.map(() => `
                 <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.pv')}</th>
                 <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.unitPrice')}</th>
                 <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.amount')}</th>
               `).join('')}
             </tr>
-          ` : ''}
+          ` : `
+            <tr style="background: #ececec;">
+              <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
+              <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
+              <th class="col-payout" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
+              ${pdfPriceGroups.map((group) => `
+                <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
+                ${group.siteIds.map((siteId) => `
+                  <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
+                `).join('')}
+              `).join('')}
+            </tr>
+          `}
         </thead>
         <tbody>
           ${pivotRows.map((r: PivotRow, idx: number) => {
-            const effectiveRate = getEffectiveRate(idx, allDays, explicitRates, getDefaultRateForDate)
             const basePayout = r.total_ml * (basePayoutRate / 100)
-            const adjustedPayout = r.total_ml * (effectiveRate / 100)
-            const adjustedDisplay = r.total_ml > 0
-              ? `${formatIsoNumber(effectiveRate, { maximumFractionDigits: 0 })}% | ${formatIsoMoney(adjustedPayout)}`
-              : ''
 
             return `
             <tr style="background: ${idx % 2 === 0 ? '#fff' : '#f5f5f5'};">
               <td class="col-date" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; font-weight: 600;">${r.date}</td>
-              <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right;">${r.total_uv > 0 ? formatIsoInteger(r.total_uv) : ''}</td>
               <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(r.total_ml) : ''}</td>
               <td class="col-payout" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #15803d; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(basePayout) : ''}</td>
-              <td class="col-adjusted" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; color: #7c3aed; font-weight: 600;">${adjustedDisplay}</td>
               ${is360
                 ? siteIds.map((siteId) => {
                     const pv = r[`${siteId}_pv`]
@@ -336,19 +342,27 @@ export default function DownstreamSitesPage() {
                       <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${amount === '' || amount === null || amount === undefined ? '' : formatIsoMoney(Number(amount))}</td>
                     `
                   }).join('')
-                : siteIds.map((siteId) => {
-                    const value = r[String(siteId)]
-                    return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
+                : pdfPriceGroups.map((group) => {
+                    const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
+                      const value = r[String(siteId)]
+                      return sum + (typeof value === 'number' ? value : 0)
+                    }, 0)
+
+                    return `
+                      <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; font-weight: 600; color: #1f2937;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                      ${group.siteIds.map((siteId) => {
+                        const value = r[String(siteId)]
+                        return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #555;">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
+                      }).join('')}
+                    `
                   }).join('')}
             </tr>
           `
           }).join('')}
           <tr style="background: #e8f4e8; font-weight: bold;">
             <td class="col-date" style="border: 1px solid #999; padding: 7px 4px; text-align: center;">${t('downstream.grandTotal')}</td>
-            <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${formatIsoInteger(totalQty)}</td>
             <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${formatIsoMoney(totalML)}</td>
             <td class="col-payout" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #15803d;">${formatIsoMoney(totalBasePayout)}</td>
-            <td class="col-adjusted" style="border: 1px solid #999; padding: 7px 4px; text-align: center; color: #7c3aed;">${totalML > 0 ? `${formatIsoFixed(weightedAdjustedRate, 2)}% | ${formatIsoMoney(totalAdjustedPayout)}` : ''}</td>
             ${is360
               ? siteIds.map((siteId) => {
                   const totalPv = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_pv`] === 'number' ? Number(r[`${siteId}_pv`]) : 0), 0)
@@ -360,12 +374,25 @@ export default function DownstreamSitesPage() {
                     <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${totalAmount > 0 ? formatIsoMoney(totalAmount) : ''}</td>
                   `
                 }).join('')
-              : siteIds.map((siteId) => {
-                  const colTotal = pivotRows.reduce((s: number, r: PivotRow) => {
-                    const v = r[String(siteId)]
-                    return s + (typeof v === 'number' ? v : 0)
+              : pdfPriceGroups.map((group) => {
+                  const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
+                    const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
+                      const value = r[String(siteId)]
+                      return siteSum + (typeof value === 'number' ? value : 0)
+                    }, 0)
+                    return sum + colTotal
                   }, 0)
-                  return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
+
+                  return `
+                    <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
+                    ${group.siteIds.map((siteId) => {
+                      const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
+                        const value = r[String(siteId)]
+                        return siteSum + (typeof value === 'number' ? value : 0)
+                      }, 0)
+                      return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
+                    }).join('')}
+                  `
                 }).join('')}
           </tr>
         </tbody>
@@ -388,11 +415,20 @@ export default function DownstreamSitesPage() {
           .ml-report-table td {
             vertical-align: middle;
             white-space: nowrap;
+            line-height: 1.35;
+            overflow: visible;
+            box-sizing: border-box;
+          }
+          .ml-report-table thead th > span,
+          .ml-report-table thead th {
+            overflow: visible;
           }
           .ml-report-table th.col-site-group {
             white-space: normal;
             word-break: break-word;
-            line-height: 1.2;
+            line-height: 1.35;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
           }
           .ml-report-table th.col-date,
           .ml-report-table td.col-date {
@@ -400,19 +436,21 @@ export default function DownstreamSitesPage() {
           }
           .ml-report-table th.col-total,
           .ml-report-table td.col-total {
-            width: ${totalUvColWidth}px;
+            width: ${groupedTotalUvColWidth}px;
           }
           .ml-report-table th.col-payout,
           .ml-report-table td.col-payout {
             width: ${payoutColWidth}px;
           }
-          .ml-report-table th.col-adjusted,
-          .ml-report-table td.col-adjusted {
-            width: ${adjustedColWidth}px;
-          }
           .ml-report-table th.col-site,
           .ml-report-table td.col-site {
             width: ${is360 ? siteMetricColWidth : siteColWidth}px;
+          }
+          .ml-report-table thead th {
+            height: auto;
+            min-height: 40px;
+            padding-top: 8px;
+            padding-bottom: 8px;
           }
         </style>
         <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 16px; color: #222;">
@@ -456,6 +494,27 @@ export default function DownstreamSitesPage() {
   const sitePrices = new Map(
     siteInputs.map((r) => [r.id, r.resolved_price ?? r.custom_price ?? 0])
   )
+  const pdfPriceGroups: PdfPriceGroup[] = !is360
+    ? Array.from(
+        adSiteIds.reduce<Map<string, PdfPriceGroup>>((groups, siteId) => {
+          const price = Number(sitePrices.get(siteId) ?? 0)
+          const key = price.toFixed(6)
+          const current = groups.get(key) ?? { key, price, siteIds: [] }
+          current.siteIds.push(siteId)
+          groups.set(key, current)
+          return groups
+        }, new Map()).values()
+      )
+        .sort((a, b) => a.price - b.price)
+        .map((group) => ({
+          ...group,
+          siteIds: group.siteIds.sort((left: number, right: number) => {
+            const leftName = adSiteNames.get(left) ?? String(left)
+            const rightName = adSiteNames.get(right) ?? String(right)
+            return leftName.localeCompare(rightName)
+          }),
+        }))
+    : []
 
   // Map date -> siteId -> input metrics for the selected month
   const dateMap = new Map<string, Map<number, { qty: number; revenue: number }>>()

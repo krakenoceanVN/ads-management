@@ -279,7 +279,6 @@ export default function DownstreamSitesPage() {
     }
 
     const totalML = pivotRows.reduce((s: number, r: PivotRow) => s + (r.total_ml || 0), 0)
-    const totalBasePayout = totalML * (basePayoutRate / 100)
     const reportNote = isOfficialView ? t('downstream.officialReportNote') : t('downstream.draftReportNote')
 
     const renderTable = (siteIds: number[]) => `
@@ -288,7 +287,6 @@ export default function DownstreamSitesPage() {
           <tr style="background: #d9d9d9;">
             <th class="col-date" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.date')}</th>
             <th class="col-total" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
-            <th class="col-payout" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">ML</th>
             ${is360
               ? siteIds.map((siteId) => `
                   <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${adSiteNames.get(siteId) ?? String(siteId)}</th>
@@ -301,7 +299,6 @@ export default function DownstreamSitesPage() {
             <tr style="background: #ececec;">
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
-              <th class="col-payout" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               ${siteIds.map(() => `
                 <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.pv')}</th>
                 <th class="col-site" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.unitPrice')}</th>
@@ -312,7 +309,6 @@ export default function DownstreamSitesPage() {
             <tr style="background: #ececec;">
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
-              <th class="col-payout" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               ${pdfPriceGroups.map((group) => `
                 <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalUv')}</th>
                 ${group.siteIds.map((siteId) => `
@@ -324,13 +320,10 @@ export default function DownstreamSitesPage() {
         </thead>
         <tbody>
           ${pivotRows.map((r: PivotRow, idx: number) => {
-            const basePayout = r.total_ml * (basePayoutRate / 100)
-
             return `
             <tr style="background: ${idx % 2 === 0 ? '#fff' : '#f5f5f5'};">
               <td class="col-date" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; font-weight: 600;">${r.date}</td>
               <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(r.total_ml) : ''}</td>
-              <td class="col-payout" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #15803d; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(basePayout) : ''}</td>
               ${is360
                 ? siteIds.map((siteId) => {
                     const pv = r[`${siteId}_pv`]
@@ -362,7 +355,6 @@ export default function DownstreamSitesPage() {
           <tr style="background: #e8f4e8; font-weight: bold;">
             <td class="col-date" style="border: 1px solid #999; padding: 7px 4px; text-align: center;">${t('downstream.grandTotal')}</td>
             <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${formatIsoMoney(totalML)}</td>
-            <td class="col-payout" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #15803d;">${formatIsoMoney(totalBasePayout)}</td>
             ${is360
               ? siteIds.map((siteId) => {
                   const totalPv = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_pv`] === 'number' ? Number(r[`${siteId}_pv`]) : 0), 0)
@@ -436,11 +428,7 @@ export default function DownstreamSitesPage() {
           }
           .ml-report-table th.col-total,
           .ml-report-table td.col-total {
-            width: ${groupedTotalUvColWidth}px;
-          }
-          .ml-report-table th.col-payout,
-          .ml-report-table td.col-payout {
-            width: ${payoutColWidth}px;
+            width: ${totalMlColWidth}px;
           }
           .ml-report-table th.col-site,
           .ml-report-table td.col-site {

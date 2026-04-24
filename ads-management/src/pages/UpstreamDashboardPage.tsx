@@ -166,7 +166,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const upstreamCols = UPSTREAM_COLUMNS[adType]
   const downstreamCols = DOWNSTREAM_COLUMNS[adType]
 
-  const totalGrossProfit = adType === 'SM' ? totalNetProfit : (totalRevenue - totalCost)
+  const totalGrossProfit = totalRevenue - totalCost
   const totalProfitRate = totalRevenue > 0 ? totalNetProfit / totalRevenue : 0
   const totalUpstreamBreakdown = displayRows.reduce<Record<string, number>>((acc, row) => {
     for (const [name, value] of Object.entries(row.upstream_breakdown ?? {})) {
@@ -220,7 +220,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
       key: 'profit',
       width: 110,
       render: (_: unknown, row: FR) => (
-        <MoneyCell value={adType === 'SM' ? row.profit : (row.revenue - row.cost)} colorize />
+        <MoneyCell value={row.revenue - row.cost} colorize />
       ),
     },
     {

@@ -576,9 +576,9 @@ router.get(
             if (ds.downstreamType === "ML") {
               const mlValue = calculateDownstreamSiteValue(
                 adjustedUV,
-                adTypeCode === "360"
-                  ? price
-                  : (normalizeMlSmInputPrice(inputUnitPrice) || price)
+                adTypeCode === "SM"
+                  ? (normalizeMlSmInputPrice(inputUnitPrice) || price)
+                  : price
               )
               totalML += mlValue
             } else {

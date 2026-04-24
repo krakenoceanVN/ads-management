@@ -454,9 +454,9 @@ router.get("/downstream-monthly", auth_js_1.requireAuth, [
                     const adjustedUV = Math.trunc((input.qty ?? 0) * (effectiveRate / 100));
                     const inputUnitPrice = Number(input.unitPriceSnapshot ?? input.adSite.currentUnitPrice ?? 0);
                     if (ds.downstreamType === "ML") {
-                        const mlValue = calculateDownstreamSiteValue(adjustedUV, adTypeCode === "360"
-                            ? price
-                            : (normalizeMlSmInputPrice(inputUnitPrice) || price));
+                        const mlValue = calculateDownstreamSiteValue(adjustedUV, adTypeCode === "SM"
+                            ? (normalizeMlSmInputPrice(inputUnitPrice) || price)
+                            : price);
                         totalML += mlValue;
                     }
                     else {

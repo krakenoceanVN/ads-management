@@ -179,7 +179,7 @@ export default function DownstreamSitesPage() {
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
   const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
-  const isMlNon360 = downstream?.downstream_type === 'ML' && !is360
+  const isMlSm = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === 'SM'
   const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
   const basePayoutLabel = Number.isInteger(basePayoutRate)
     ? formatIsoNumber(basePayoutRate, { maximumFractionDigits: 0 })
@@ -533,7 +533,7 @@ export default function DownstreamSitesPage() {
   const sitePrices = new Map(
     siteInputs.map((r) => [
       r.id,
-      isMlNon360
+      isMlSm
         ? normalizeMlSmInputPrice(siteInputPrices.get(r.id) ?? 0)
         : (r.resolved_price ?? r.custom_price ?? 0),
     ])
@@ -600,7 +600,7 @@ export default function DownstreamSitesPage() {
         totalUV += adjustedUV
         if (isMl360) {
           totalML += amount
-        } else if (isMlNon360) {
+        } else if (isMlSm) {
           const inputUnitPrice = normalizeMlSmInputPrice(
             input.unitPriceSnapshot ?? siteInputPrices.get(siteId) ?? 0
           )
@@ -686,15 +686,23 @@ export default function DownstreamSitesPage() {
               value={effectiveRate}
               onChange={(val) => {
                 const nextValue = val ?? getDefaultRateForDate(row.date)
+                const affectedDays = allDays.slice(_index)
+                const nextRates = affectedDays.reduce<Record<string, number>>((acc, date) => {
+                  acc[date] = nextValue
+                  return acc
+                }, {})
+
                 setRateOverrides((prev) => ({
                   scopeKey,
                   values: {
                     ...(prev.scopeKey === scopeKey ? prev.values : {}),
-                    [row.date]: nextValue,
+                    ...nextRates,
                   },
                 }))
                 if (downstream?.id && nextValue !== undefined && nextValue !== null) {
-                  saveRateMutation.mutate({ date: row.date, effectiveRate: nextValue, downstreamId: downstream!.id })
+                  for (const date of affectedDays) {
+                    saveRateMutation.mutate({ date, effectiveRate: nextValue, downstreamId: downstream.id })
+                  }
                 }
               }}
               style={{ width: 70, backgroundColor: isExplicit ? '#fffbe6' : undefined }}

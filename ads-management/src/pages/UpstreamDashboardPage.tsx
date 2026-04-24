@@ -150,8 +150,17 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
         }
       }
 
+      // 360, BAIDU_JS, OTHER
+      const cost = calculateSmSummaryCost(le, ml80)
+      const tax = calculateSmSummaryTax(r.revenue, cost)
+      const netProfit = calculateSmSummaryNetProfit(r.revenue, cost, tax)
+
       return {
         ...r,
+        cost,
+        tax,
+        profit: netProfit,
+        profit_rate: calculateSmSummaryProfitRate(r.revenue, netProfit),
         ml_80: ml80,
         le,
       }

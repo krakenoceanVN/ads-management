@@ -1725,6 +1725,10 @@ html[data-theme='contrast'] .dashboard-sticky-total-table.ant-table-wrapper .ant
 	justify-content: flex-end;
 }
 
+.save-bar .save-bar-btn.ant-btn {
+	transform: translateY(3px);
+}
+
 .save-bar .save-bar-btn.ant-btn-primary,
 .save-bar .save-bar-btn.ant-btn-primary:hover,
 .save-bar .save-bar-btn.ant-btn-primary:focus,
@@ -2542,6 +2546,18 @@ html[data-theme='contrast'] .dashboard-date-link {
 	margin-bottom: 12px;
 }
 
+.daily-input-inline-toolbar {
+	width: 100%;
+	margin-bottom: 12px;
+}
+
+.daily-input-toolbar-action {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	margin-left: auto;
+}
+
 .daily-input-confirm-all-btn.ant-btn {
 	height: 36px;
 	padding-inline: 18px;
@@ -3101,6 +3117,12 @@ html[data-theme='contrast'][data-contrast-tone='strong'] .dashboard-total-table.
 
 	.page-toolbar {
 		align-items: stretch;
+	}
+
+	.daily-input-toolbar-action {
+		width: 100%;
+		margin-left: 0;
+		justify-content: flex-start;
 	}
 
 	.yiyi-input-row {

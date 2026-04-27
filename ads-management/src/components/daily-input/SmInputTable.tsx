@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, message, Spin, Empty, Alert } from 'antd'
@@ -17,6 +17,7 @@ import { calculateActualRevenue, calculateCpmRevenue, calculateRebateAmount } fr
 interface Props {
   date: string
   search?: string
+  toolbar?: ReactNode
 }
 
 type DraftSMItem = {
@@ -31,7 +32,7 @@ type DraftSM = Record<number, DraftSMItem>
 
 const ERR_HIGHLIGHT_MS = 3000
 
-export default function SmInputTable({ date, search = '' }: Props) {
+export default function SmInputTable({ date, search = '', toolbar }: Props) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState<DraftSM>({})
@@ -473,20 +474,28 @@ export default function SmInputTable({ date, search = '' }: Props) {
   const secondMiddleColumns = columns.slice(baseRevenueColumnIndex + 1, rebateColumnIndex)
   const thirdMiddleColumns = columns.slice(rebateColumnIndex + 1, actualRevenueColumnIndex)
   const trailingColumns = columns.slice(actualRevenueColumnIndex + 1)
+  const confirmAllButton = (
+    <ConfirmAllButton
+      disabled={unconfirmedIds.length === 0}
+      loading={confirmAllMutation.isPending}
+      onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
+    />
+  )
 
   return (
     <div>
+      {toolbar && (
+        <div className="page-toolbar daily-input-inline-toolbar">
+          {toolbar}
+          <div className="daily-input-toolbar-action">{confirmAllButton}</div>
+        </div>
+      )}
+
       {isError && (
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      <div className="daily-input-table-actions">
-        <ConfirmAllButton
-          disabled={unconfirmedIds.length === 0}
-          loading={confirmAllMutation.isPending}
-          onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
-        />
-      </div>
+      {!toolbar && <div className="daily-input-table-actions">{confirmAllButton}</div>}
 
       <div style={{ position: 'relative' }}>
         {isLoading && (
@@ -510,7 +519,7 @@ export default function SmInputTable({ date, search = '' }: Props) {
             }}
             size="small"
             bordered
-            scroll={{ x: 'max-content', y: 'calc(100vh - 320px)' }}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 272px)' }}
             sticky={{ offsetHeader: 64, offsetScroll: 52 }}
             loading={isLoading}
             rowClassName={rowClassName}

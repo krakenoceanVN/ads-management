@@ -37,36 +37,38 @@ export default function DailyInputPage({ adType }: Props) {
     OTHER: t('adType.other'),
   }
 
-  return (
-    <div className="page-shell">
-      <div className="page-toolbar">
-        <DatePicker
-          value={dayjs(date)}
-          format="YYYY-MM-DD"
-          onChange={handleDateChange}
-          disabledDate={disabledDate}
-          allowClear={false}
-        />
-        <Input
-          placeholder={t('input.search')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ width: 220 }}
-          allowClear
-        />
-        <span
-          className="page-subtitle"
-          style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}
-          title={t('input.title', { type: adTypeLabels[adType] })}
-        >
-          {t('input.title', { type: adTypeLabels[adType] })}
-        </span>
-      </div>
+  const toolbar = (
+    <>
+      <DatePicker
+        value={dayjs(date)}
+        format="YYYY-MM-DD"
+        onChange={handleDateChange}
+        disabledDate={disabledDate}
+        allowClear={false}
+      />
+      <Input
+        placeholder={t('input.search')}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ width: 220 }}
+        allowClear
+      />
+      <span
+        className="page-subtitle"
+        style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}
+        title={t('input.title', { type: adTypeLabels[adType] })}
+      >
+        {t('input.title', { type: adTypeLabels[adType] })}
+      </span>
+    </>
+  )
 
-      {adType === 'SM' && <SmInputTable date={date} search={search} />}
-      {adType === '360' && <S360InputTable date={date} search={search} />}
-      {adType === 'BAIDU_JS' && <BaiduInputTable date={date} search={search} />}
-      {adType === 'OTHER' && <OtherInputTable date={date} search={search} />}
+  return (
+    <div className="page-shell daily-input-page-shell">
+      {adType === 'SM' && <SmInputTable date={date} search={search} toolbar={toolbar} />}
+      {adType === '360' && <S360InputTable date={date} search={search} toolbar={toolbar} />}
+      {adType === 'BAIDU_JS' && <BaiduInputTable date={date} search={search} toolbar={toolbar} />}
+      {adType === 'OTHER' && <OtherInputTable date={date} search={search} toolbar={toolbar} />}
     </div>
   )
 }

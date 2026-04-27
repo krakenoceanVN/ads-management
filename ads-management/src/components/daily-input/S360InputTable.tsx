@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Table, Button, message, Spin, Empty, Alert } from 'antd'
@@ -16,11 +16,12 @@ import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/
 interface Props {
   date: string
   search?: string
+  toolbar?: ReactNode
 }
 
 type Draft360 = Record<number, { amount1?: number; amount2?: number; ratio_override?: number; qty?: number }>
 
-export default function S360InputTable({ date, search = '' }: Props) {
+export default function S360InputTable({ date, search = '', toolbar }: Props) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState<Draft360>({})
@@ -369,20 +370,28 @@ export default function S360InputTable({ date, search = '' }: Props) {
   const trailingColumns = columns.slice(revenueColumnIndex + 1)
   const qtyColumnIndex = Math.max(columns.findIndex((column) => column.key === 'qty'), 0)
   const middleColumns = columns.slice(qtyColumnIndex + 1, revenueColumnIndex)
+  const confirmAllButton = (
+    <ConfirmAllButton
+      disabled={unconfirmedIds.length === 0}
+      loading={confirmAllMutation.isPending}
+      onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
+    />
+  )
 
   return (
     <div>
+      {toolbar && (
+        <div className="page-toolbar daily-input-inline-toolbar">
+          {toolbar}
+          <div className="daily-input-toolbar-action">{confirmAllButton}</div>
+        </div>
+      )}
+
       {isError && (
         <Alert type="error" message={t('input.loadError')} style={{ marginBottom: 12 }} />
       )}
 
-      <div className="daily-input-table-actions">
-        <ConfirmAllButton
-          disabled={unconfirmedIds.length === 0}
-          loading={confirmAllMutation.isPending}
-          onConfirm={() => confirmAllMutation.mutateAsync(unconfirmedIds)}
-        />
-      </div>
+      {!toolbar && <div className="daily-input-table-actions">{confirmAllButton}</div>}
 
       <div style={{ position: 'relative' }}>
         {isLoading && (

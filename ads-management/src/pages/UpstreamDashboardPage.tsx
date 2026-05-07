@@ -70,7 +70,7 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 type FR = SummaryRow & { _isTotal?: boolean; ml_80?: number; le?: number }
 
 function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
-  if (adType === '360') {
+  if (adType === '360' || adType === 'BAIDU_JS') {
     return revenue * 0.8
   }
 
@@ -281,7 +281,7 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
           if (card.key === 'profit') { typeClass = 'profit'; icon = '📊' }
           if (card.key === 'ml80') { typeClass = 'revenue'; icon = '💎' }
           if (card.key === 'le') { typeClass = 'profit'; icon = '🌟' }
-          
+
           return (
             <div key={card.key} className={`kpi-card ${typeClass}`}>
               <div className={`kpi-icon ${typeClass}`}>{icon}</div>

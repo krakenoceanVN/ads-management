@@ -178,7 +178,10 @@ export default function DownstreamSitesPage() {
   const downstream = downstreams.find((d) => d.id === Number(id))
   const isLE = downstream?.downstream_type === 'LE'
   const is360 = downstream?.ad_type_code === '360'
+  const isBAIDU = downstream?.ad_type_code === 'BAIDU_JS'
+  const is360orBAIDU = is360 || isBAIDU
   const isMl360 = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === '360'
+  const isMlBaidu = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === 'BAIDU_JS'
   const isMlSm = downstream?.downstream_type === 'ML' && downstream?.ad_type_code === 'SM'
   const basePayoutRate = (isMl360 ? 0.8 : Number(downstream?.payout_rate ?? 0.8)) * 100
   const basePayoutLabel = Number.isInteger(basePayoutRate)
@@ -263,7 +266,7 @@ export default function DownstreamSitesPage() {
     const tableWidthPx = dateColWidth
       + totalMlColWidth
       + (
-        is360
+        is360orBAIDU
           ? (adSiteIds.length * (siteMetricColWidth * 3))
           : pdfPriceGroups.reduce((sum, group) => sum + groupedTotalUvColWidth + groupedTotalAmountColWidth + (group.siteIds.length * siteColWidth), 0)
       )
@@ -311,15 +314,15 @@ export default function DownstreamSitesPage() {
           <tr style="background: #d9d9d9;">
             <th class="col-date" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.date')}</th>
             <th class="col-total" style="border: 1px solid #999; padding: 8px 4px; text-align: right; font-weight: bold; color: #333;">${t('downstream.totalValue', { type: downstream?.downstream_type || '' })}</th>
-            ${is360
-              ? siteIds.map((siteId) => `
+            ${is360orBAIDU
+        ? siteIds.map((siteId) => `
                   <th class="col-site-group" colspan="3" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; ${getPausedHeaderStyle(siteId)}">${formatPdfSiteLabel(adSiteNames.get(siteId) ?? String(siteId), adSiteActiveMap.get(siteId), pausedSiteTag)}</th>
                 `).join('')
-              : pdfPriceGroups.map((group) => `
+        : pdfPriceGroups.map((group) => `
                   <th class="col-site-group" colspan="${group.siteIds.length + 2}" style="border: 1px solid #999; padding: 8px 4px; text-align: center; font-weight: bold; color: #333;">${t('downstream.unitPrice')} ${formatPdfPriceLabel(group.price)}</th>
                 `).join('')}
           </tr>
-          ${is360 ? `
+          ${is360orBAIDU ? `
             <tr style="background: #ececec;">
               <th class="col-date" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
               <th class="col-total" style="border: 1px solid #999; padding: 4px; text-align: center;"></th>
@@ -345,76 +348,76 @@ export default function DownstreamSitesPage() {
         </thead>
         <tbody>
           ${pivotRows.map((r: PivotRow, idx: number) => {
-            return `
+          return `
             <tr style="background: ${idx % 2 === 0 ? '#fff' : '#f5f5f5'};">
               <td class="col-date" style="border: 1px solid #ccc; padding: 5px 4px; text-align: center; font-weight: 600;">${r.date}</td>
               <td class="col-total" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${r.total_ml > 0 ? formatIsoMoney(r.total_ml) : ''}</td>
-              ${is360
-                ? siteIds.map((siteId) => {
-                    const pv = r[`${siteId}_pv`]
-                    const unitPrice = r[`${siteId}_unit_price`]
-                    const amount = r[`${siteId}_amount`]
-                    return `
+              ${is360orBAIDU
+              ? siteIds.map((siteId) => {
+                const pv = r[`${siteId}_pv`]
+                const unitPrice = r[`${siteId}_unit_price`]
+                const amount = r[`${siteId}_amount`]
+                return `
                       <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${pv === '' || pv === null || pv === undefined ? '' : formatIsoInteger(Number(pv))}</td>
                       <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${unitPrice === '' || unitPrice === null || unitPrice === undefined ? '' : formatIsoMoney(Number(unitPrice))}</td>
                       <td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${amount === '' || amount === null || amount === undefined ? '' : formatIsoMoney(Number(amount))}</td>
                     `
-                  }).join('')
-                : pdfPriceGroups.map((group) => {
-                    const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
-                      const value = r[String(siteId)]
-                      return sum + (typeof value === 'number' ? value : 0)
-                    }, 0)
-                    const groupTotalAmount = groupTotalUv * group.price
+              }).join('')
+              : pdfPriceGroups.map((group) => {
+                const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
+                  const value = r[String(siteId)]
+                  return sum + (typeof value === 'number' ? value : 0)
+                }, 0)
+                const groupTotalAmount = groupTotalUv * group.price
 
-                    return `
+                return `
                       <td class="col-group-uv" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; font-weight: 600; color: #1f2937;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
                       <td class="col-group-amount" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; color: #2563eb; font-weight: 600;">${groupTotalAmount > 0 ? formatIsoMoney(groupTotalAmount) : ''}</td>
                       ${group.siteIds.map((siteId) => {
-                        const value = r[String(siteId)]
-                        return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
-                      }).join('')}
+                  const value = r[String(siteId)]
+                  return `<td class="col-site" style="border: 1px solid #ccc; padding: 5px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${value === '' || value === null || value === undefined ? '' : formatIsoInteger(Number(value))}</td>`
+                }).join('')}
                     `
-                  }).join('')}
+              }).join('')}
             </tr>
           `
-          }).join('')}
+        }).join('')}
           <tr style="background: #e8f4e8; font-weight: bold;">
             <td class="col-date" style="border: 1px solid #999; padding: 7px 4px; text-align: center;">${t('downstream.grandTotal')}</td>
             <td class="col-total" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${formatIsoMoney(totalML)}</td>
-            ${is360
-              ? siteIds.map((siteId) => {
-                  const totalPv = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_pv`] === 'number' ? Number(r[`${siteId}_pv`]) : 0), 0)
-                  const totalAmount = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_amount`] === 'number' ? Number(r[`${siteId}_amount`]) : 0), 0)
-                  const totalUnitPrice = totalPv > 0 ? (totalAmount / totalPv) * 1000 : 0
-                  return `
+            ${is360orBAIDU
+        ? siteIds.map((siteId) => {
+          const totalPv = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_pv`] === 'number' ? Number(r[`${siteId}_pv`]) : 0), 0)
+          const totalAmount = pivotRows.reduce((s: number, r: PivotRow) => s + (typeof r[`${siteId}_amount`] === 'number' ? Number(r[`${siteId}_amount`]) : 0), 0)
+          const totalUnitPrice = totalPv > 0 ? (totalAmount / totalPv) * 1000 : 0
+          return `
                     <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalPv > 0 ? formatIsoInteger(totalPv) : ''}</td>
                     <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalUnitPrice > 0 ? formatIsoMoney(totalUnitPrice) : ''}</td>
                     <td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${totalAmount > 0 ? formatIsoMoney(totalAmount) : ''}</td>
                   `
-                }).join('')
-              : pdfPriceGroups.map((group) => {
-                  const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
-                    const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
-                      const value = r[String(siteId)]
-                      return siteSum + (typeof value === 'number' ? value : 0)
-                    }, 0)
-                    return sum + colTotal
-                  }, 0)
-                  const groupTotalAmount = groupTotalUv * group.price
+        }).join('')
+        : pdfPriceGroups.map((group) => {
+          const groupTotalUv = group.siteIds.reduce((sum, siteId) => {
+            const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
+              const value = r[String(siteId)]
+              return siteSum + (typeof value === 'number' ? value : 0)
+            }, 0)
+            return sum + colTotal
+          }, 0)
+          const groupTotalAmount = groupTotalUv * group.price
 
-                  return `
+          return `
                     <td class="col-group-uv" style="border: 1px solid #999; padding: 7px 4px; text-align: right;">${groupTotalUv > 0 ? formatIsoInteger(groupTotalUv) : ''}</td>
                     <td class="col-group-amount" style="border: 1px solid #999; padding: 7px 4px; text-align: right; color: #2563eb;">${groupTotalAmount > 0 ? formatIsoMoney(groupTotalAmount) : ''}</td>
                     ${group.siteIds.map((siteId) => {
-                      const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
-                        const value = r[String(siteId)]
-                        return siteSum + (typeof value === 'number' ? value : 0)
-                      }, 0)
-                      return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
-                    }).join('')}
+            const colTotal = pivotRows.reduce((siteSum: number, r: PivotRow) => {
+              const value = r[String(siteId)]
+              return siteSum + (typeof value === 'number' ? value : 0)
+            }, 0)
+            return `<td class="col-site" style="border: 1px solid #999; padding: 7px 4px; text-align: right; ${getPausedCellStyle(siteId)}">${colTotal > 0 ? formatIsoInteger(colTotal) : ''}</td>`
+          }).join('')}
                   `
-                }).join('')}
+        }).join('')}
           </tr>
         </tbody>
       </table>
@@ -469,7 +472,7 @@ export default function DownstreamSitesPage() {
           }
           .ml-report-table th.col-site,
           .ml-report-table td.col-site {
-            width: ${is360 ? siteMetricColWidth : siteColWidth}px;
+            width: ${is360orBAIDU ? siteMetricColWidth : siteColWidth}px;
           }
           .ml-report-table thead th {
             height: auto;
@@ -480,10 +483,10 @@ export default function DownstreamSitesPage() {
         </style>
         <h2 style="text-align: center; margin: 0 0 4px 0; font-size: 16px; color: #222;">
           ${t('downstream.reportTitle', {
-            type: downstream?.downstream_type || '',
-            adType: downstream?.ad_type_code || '',
-            month: selectedMonth,
-          })}
+      type: downstream?.downstream_type || '',
+      adType: downstream?.ad_type_code || '',
+      month: selectedMonth,
+    })}
         </h2>
         <p style="text-align: center; margin: 0 0 10px 0; color: ${isOfficialView ? '#0f766e' : '#b45309'}; font-size: 11px; font-weight: 600;">
           ${reportNote}
@@ -496,8 +499,8 @@ export default function DownstreamSitesPage() {
         ${renderTable(adSiteIds)}
         <p style="margin-top: 10px; font-size: 10px; color: #aaa; text-align: right;">
           ${t('downstream.reportFooter', {
-            date: new Intl.DateTimeFormat(intlLocale).format(new Date()),
-          })}
+      date: new Intl.DateTimeFormat(intlLocale).format(new Date()),
+    })}
         </p>
       </div>
     `
@@ -538,26 +541,26 @@ export default function DownstreamSitesPage() {
         : (r.resolved_price ?? r.custom_price ?? 0),
     ])
   )
-  const pdfPriceGroups: PdfPriceGroup[] = !is360
+  const pdfPriceGroups: PdfPriceGroup[] = !is360orBAIDU
     ? Array.from(
-        adSiteIds.reduce<Map<string, PdfPriceGroup>>((groups, siteId) => {
-          const price = Number(sitePrices.get(siteId) ?? 0)
-          const key = price.toFixed(6)
-          const current = groups.get(key) ?? { key, price, siteIds: [] }
-          current.siteIds.push(siteId)
-          groups.set(key, current)
-          return groups
-        }, new Map()).values()
-      )
-        .sort((a, b) => a.price - b.price)
-        .map((group) => ({
-          ...group,
-          siteIds: group.siteIds.sort((left: number, right: number) => {
-            const leftName = adSiteNames.get(left) ?? String(left)
-            const rightName = adSiteNames.get(right) ?? String(right)
-            return leftName.localeCompare(rightName)
-          }),
-        }))
+      adSiteIds.reduce<Map<string, PdfPriceGroup>>((groups, siteId) => {
+        const price = Number(sitePrices.get(siteId) ?? 0)
+        const key = price.toFixed(6)
+        const current = groups.get(key) ?? { key, price, siteIds: [] }
+        current.siteIds.push(siteId)
+        groups.set(key, current)
+        return groups
+      }, new Map()).values()
+    )
+      .sort((a, b) => a.price - b.price)
+      .map((group) => ({
+        ...group,
+        siteIds: group.siteIds.sort((left: number, right: number) => {
+          const leftName = adSiteNames.get(left) ?? String(left)
+          const rightName = adSiteNames.get(right) ?? String(right)
+          return leftName.localeCompare(rightName)
+        }),
+      }))
     : []
 
   // Map date -> siteId -> input metrics for the selected month
@@ -589,7 +592,7 @@ export default function DownstreamSitesPage() {
         const pvValue = input.qty
         const adjustedUV = Math.trunc(pvValue * (effectiveRate / 100))
         const amount = input.revenue
-        if (is360) {
+        if (is360orBAIDU) {
           const unitPrice = pvValue > 0 ? (amount / pvValue) * 1000 : ''
           row[`${siteId}_pv`] = pvValue
           row[`${siteId}_unit_price`] = unitPrice
@@ -598,7 +601,7 @@ export default function DownstreamSitesPage() {
           row[String(siteId)] = adjustedUV
         }
         totalUV += adjustedUV
-        if (isMl360) {
+        if (isMl360 || isMlBaidu) {
           totalML += amount
         } else if (isMlSm) {
           const inputUnitPrice = normalizeMlSmInputPrice(
@@ -611,7 +614,7 @@ export default function DownstreamSitesPage() {
           totalML += calculateUnitPricePayout(adjustedUV, sitePrices.get(siteId) ?? 0)
         }
       } else {
-        if (is360) {
+        if (is360orBAIDU) {
           row[`${siteId}_pv`] = ''
           row[`${siteId}_unit_price`] = ''
           row[`${siteId}_amount`] = ''
@@ -716,41 +719,41 @@ export default function DownstreamSitesPage() {
       },
     },
     ...adSiteIds.map((siteId) =>
-      is360
+      is360orBAIDU
         ? {
-            title: adSiteNames.get(siteId) ?? String(siteId),
-            key: String(siteId),
-            children: [
-              {
-                title: t('downstream.pv'),
-                dataIndex: `${siteId}_pv`,
-                key: `${siteId}_pv`,
-                width: 90,
-                render: (v: number | string) => formatDisplayValue(v, formatIsoInteger),
-              },
-              {
-                title: t('downstream.unitPrice'),
-                dataIndex: `${siteId}_unit_price`,
-                key: `${siteId}_unit_price`,
-                width: 110,
-                render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
-              },
-              {
-                title: t('downstream.amount'),
-                dataIndex: `${siteId}_amount`,
-                key: `${siteId}_amount`,
-                width: 120,
-                render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
-              },
-            ],
-          }
+          title: adSiteNames.get(siteId) ?? String(siteId),
+          key: String(siteId),
+          children: [
+            {
+              title: t('downstream.pv'),
+              dataIndex: `${siteId}_pv`,
+              key: `${siteId}_pv`,
+              width: 90,
+              render: (v: number | string) => formatDisplayValue(v, formatIsoInteger),
+            },
+            {
+              title: t('downstream.unitPrice'),
+              dataIndex: `${siteId}_unit_price`,
+              key: `${siteId}_unit_price`,
+              width: 110,
+              render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
+            },
+            {
+              title: t('downstream.amount'),
+              dataIndex: `${siteId}_amount`,
+              key: `${siteId}_amount`,
+              width: 120,
+              render: (v: number | string) => formatDisplayValue(v, formatIsoMoney),
+            },
+          ],
+        }
         : {
-            title: adSiteNames.get(siteId) ?? String(siteId),
-            dataIndex: String(siteId),
-            key: String(siteId),
-            width: 80,
-            render: (v: number | string) => (v === '' ? '-' : formatDisplayValue(v, formatIsoInteger)),
-          }
+          title: adSiteNames.get(siteId) ?? String(siteId),
+          dataIndex: String(siteId),
+          key: String(siteId),
+          width: 80,
+          render: (v: number | string) => (v === '' ? '-' : formatDisplayValue(v, formatIsoInteger)),
+        }
     ),
   ])
   const tableWatchKey = [
@@ -758,7 +761,7 @@ export default function DownstreamSitesPage() {
     selectedMonth,
     downstream?.downstream_type ?? '',
     downstream?.ad_type_code ?? '',
-    is360 ? '360' : 'std',
+    is360orBAIDU ? '360' : 'std',
     adSiteIds.join('|'),
     pivotRows.length,
   ].join(':')
@@ -772,10 +775,10 @@ export default function DownstreamSitesPage() {
       <h2 className="page-heading" style={{ marginBottom: 8 }}>
         {downstream
           ? t('downstream.adSitesOf', {
-              type: downstream.downstream_type,
-              adType: downstream.ad_type_code,
-              count: adSiteIds.length,
-            })
+            type: downstream.downstream_type,
+            adType: downstream.ad_type_code,
+            count: adSiteIds.length,
+          })
           : t('downstream.pageTitle')}
       </h2>
 

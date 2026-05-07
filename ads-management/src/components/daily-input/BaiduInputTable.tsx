@@ -11,14 +11,14 @@ import SaveBar from './SaveBar'
 import ConfirmAllButton from './ConfirmAllButton'
 import UnlockRecordButton from './UnlockRecordButton'
 import { renderTableText, withTableEllipsis } from '../../utils/tableEllipsis'
-import { formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
+import { formatIsoInteger, formatIsoMoney, formatIsoPercent } from '../../utils/numberFormat'
 
 interface Props {
   date: string
   search?: string
 }
 
-type DraftBaidu = Record<number, { amount1?: number; amount2?: number; ratio_override?: number }>
+type DraftBaidu = Record<number, { amount1?: number; amount2?: number; ratio_override?: number; qty?: number }>
 
 export default function BaiduInputTable({ date, search = '' }: Props) {
   const { t } = useTranslation()
@@ -38,6 +38,11 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
   })
 
   const getRevenue = (row: DailyInputRow) => {
+    if (row.billing_method === 'CPM') {
+      const qty = drafts[row.id]?.qty ?? row.existing_record?.qty ?? 0
+      const unitPrice = row.current_unit_price ?? 0
+      return qty * unitPrice
+    }
     const a1 = drafts[row.id]?.amount1 ?? row.existing_record?.amount1 ?? 0
     const a2 = drafts[row.id]?.amount2 ?? row.existing_record?.amount2 ?? 0
     const ratio = drafts[row.id]?.ratio_override ?? row.existing_record?.ratio_snapshot ?? row.current_ratio ?? 1
@@ -51,7 +56,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
   )
 
   const mutation = useMutation({
-    mutationFn: (records: { ad_site_id: number; amount1?: number; amount2?: number; ratio_override?: number }[]) =>
+    mutationFn: (records: { ad_site_id: number; amount1?: number; amount2?: number; ratio_override?: number; qty?: number }[]) =>
       api.post('/api/daily-input/batch', { date, ad_type: 'BAIDU_JS', records }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['daily-input', 'BAIDU_JS', date] })
@@ -102,6 +107,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
         amount1: (d as DraftBaidu[number]).amount1,
         amount2: (d as DraftBaidu[number]).amount2,
         ratio_override: (d as DraftBaidu[number]).ratio_override,
+        qty: (d as DraftBaidu[number]).qty,
       }))
     )
   }, [drafts, mutation])
@@ -167,6 +173,35 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
       },
     },
     {
+      title: t('input.qty'),
+      dataIndex: 'qty',
+      key: 'qty',
+      width: 130,
+      render: (_: unknown, record: FlatRow) => {
+        if ('_isGroupHeader' in record && record._isGroupHeader) return null
+        const row = getData(record)
+        if (isConfirmed(row)) return <span>{formatIsoInteger(row.existing_record?.qty ?? 0)}</span>
+        return (
+          <TableNumberInput
+            ref={(el) => { inputRefs.current[`${row.id}-qty`] = el as HTMLInputElement | null }}
+            size="small"
+            precision={0}
+            controls={false}
+            value={drafts[row.id]?.qty ?? row.existing_record?.qty}
+            onChange={(v) =>
+              setDrafts((prev) => ({ ...prev, [row.id]: { ...prev[row.id], qty: v ?? undefined } }))
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'Tab') {
+                inputRefs.current[`${row.id}-a1`]?.focus()
+              }
+            }}
+            style={{ width: '100%' }}
+          />
+        )
+      },
+    },
+    {
       title: t('input.amount1'),
       dataIndex: 'amount1',
       key: 'amount1',
@@ -217,7 +252,7 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === 'Tab') {
                 const nextRow = rows.find((r) => r.id > row.id)
-                if (nextRow) inputRefs.current[`${nextRow.id}-a1`]?.focus()
+                if (nextRow) inputRefs.current[`${nextRow.id}-qty`]?.focus()
               }
             }}
             style={{ width: '100%' }}
@@ -335,8 +370,10 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
   }
 
   const totalRevenue = rows.reduce((s: number, r: DailyInputRow) => s + getRevenue(r), 0)
+  const qtyColumnIndex = Math.max(columns.findIndex((column) => column.key === 'qty'), 0)
   const revenueColumnIndex = Math.max(columns.findIndex((column) => column.key === 'revenue'), 0)
   const trailingColumns = columns.slice(revenueColumnIndex + 1)
+  const middleColumns = columns.slice(qtyColumnIndex + 1, revenueColumnIndex)
 
   return (
     <div>
@@ -383,9 +420,21 @@ export default function BaiduInputTable({ date, search = '' }: Props) {
             summary={() => (
               <Table.Summary fixed="bottom">
                 <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={revenueColumnIndex}>
+                  <Table.Summary.Cell index={0} colSpan={qtyColumnIndex}>
                     {renderTableText(t('input.dayTotal'), { fontWeight: 'var(--font-weight-semibold)' })}
                   </Table.Summary.Cell>
+                  <Table.Summary.Cell index={qtyColumnIndex}>
+                    {renderTableText(
+                      formatIsoInteger(rows.reduce((s: number, r: DailyInputRow) => s + (drafts[r.id]?.qty ?? r.existing_record?.qty ?? 0), 0)),
+                      { fontWeight: 'var(--font-weight-semibold)' }
+                    )}
+                  </Table.Summary.Cell>
+                  {middleColumns.map((column, offset) => (
+                    <Table.Summary.Cell
+                      key={`middle-${String(column.key ?? qtyColumnIndex + offset + 1)}`}
+                      index={qtyColumnIndex + offset + 1}
+                    />
+                  ))}
                   <Table.Summary.Cell index={revenueColumnIndex}>
                     {renderTableText(formatIsoMoney(totalRevenue), {
                       color: 'var(--color-primary)',

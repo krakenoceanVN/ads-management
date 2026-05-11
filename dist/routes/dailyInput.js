@@ -74,7 +74,7 @@ async function unconfirmDailyInputRecord(req, res) {
 // ============================================================
 router.get("/", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("date").notEmpty().withMessage("date is required").isISO8601(),
-    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required"),
     (0, express_validator_1.query)("search").optional().isString(),
     (0, express_validator_1.query)("status").optional().isIn(["confirmed", "unconfirmed"]),
 ], handleValidation, async (req, res) => {
@@ -204,7 +204,7 @@ router.get("/", auth_js_1.requireAuth, [
 // ============================================================
 router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_data_input"), [
     (0, express_validator_1.body)("date").notEmpty().withMessage("date is required").isISO8601(),
-    (0, express_validator_1.body)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    (0, express_validator_1.body)("ad_type").notEmpty().withMessage("ad_type is required"),
     (0, express_validator_1.body)("records").isArray({ min: 1 }).withMessage("records must be a non-empty array"),
 ], handleValidation, async (req, res) => {
     try {

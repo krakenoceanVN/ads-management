@@ -4,7 +4,7 @@ import { SummaryRow, AdTypeCode } from "../types/index.js"
 import prisma from "../prisma.js"
 import { requireAuth } from "../middleware/auth.js"
 import { formatBusinessDate, getBusinessMonthRange } from "../utils/date.js"
-import { AD_TYPE_ID_MAP, DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
+import { DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import {
   DEFAULT_LE_PAYOUT_RATE,
   DEFAULT_LE_UNIT_PRICE,
@@ -216,29 +216,42 @@ router.get(
   [
     query("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     query("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
-    query("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    query("ad_type").notEmpty().withMessage("ad_type is required"),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
       const year = Number(req.query.year)
       const month = Number(req.query.month)
-      const adTypeCode = req.query.ad_type as AdTypeCode
-      const adTypeId = AD_TYPE_ID_MAP[adTypeCode]
+      const adTypeCode = req.query.ad_type as string
+
+      // Look up AdType ID from database instead of hardcoded map
+      const adType = await prisma.adType.findUnique({
+        where: { code: adTypeCode },
+        select: { id: true }
+      })
+      if (!adType) {
+        return res.status(400).json({ success: false, error: "Invalid ad_type" })
+      }
+      const adTypeId = adType.id
+
       const days = getDaysInMonth(year, month)
       const { gte: startOfMonth, lt: endOfMonth } = getBusinessMonthRange(year, month)
 
+      interface UpstreamName { name: string }
+      interface YiyiDataRow { recordDate: Date; qty: number }
+      interface YiyiPricingRow { recordDate: Date; unitPrice: unknown }
+
       const [activeUpstreams, monthlyInputs, mlPeriods, lePeriods, yiyiData, yiyiPricing] = await Promise.all([
-        adTypeCode === "360"
-          ? prisma.upstream.findMany({
-              where: {
-                adTypeId,
-                status: "active",
-              },
-              select: { name: true },
-              orderBy: { name: "asc" },
-            })
-          : Promise.resolve([]),
+        // Always query upstreams - needed for all ad types (especially 360 which needs upstream detail)
+        prisma.upstream.findMany({
+          where: {
+            adTypeId,
+            status: "active",
+          },
+          select: { name: true },
+          orderBy: { name: "asc" },
+        }) as Promise<UpstreamName[]>,
         prisma.dailyInput.findMany({
           where: {
             recordDate: { gte: startOfMonth, lt: endOfMonth },
@@ -265,6 +278,7 @@ router.get(
             },
           },
         }) as Promise<DailyInputWithUpstream[]>,
+        // Always query ML downstream periods - needed for payout calculation
         prisma.downstreamPeriod.findMany({
           where: {
             downstream: {
@@ -281,46 +295,46 @@ router.get(
             },
           },
         }) as Promise<PeriodWithDownstream[]>,
-        adTypeCode === "SM"
-          ? (prisma.downstreamPeriod.findMany({
-              where: {
-                downstream: {
-                  adTypeId: AD_TYPE_ID_MAP.SM,
-                  downstreamType: "LE",
-                  status: "active",
-                },
-                startDate: { lte: endOfMonth },
-                OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
-              },
-              include: {
-                downstream: {
-                  select: { payoutRate: true },
-                },
-              },
-            }) as Promise<PeriodWithDownstream[]>)
-          : Promise.resolve([]),
+        // Always query LE downstream periods - query will return empty if none exist for this adType
+        prisma.downstreamPeriod.findMany({
+          where: {
+            downstream: {
+              adTypeId: adTypeId,
+              downstreamType: "LE",
+              status: "active",
+            },
+            startDate: { lte: endOfMonth },
+            OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+          },
+          include: {
+            downstream: {
+              select: { payoutRate: true },
+            },
+          },
+        }) as Promise<PeriodWithDownstream[]>,
+        // yiyi data is SM-specific - only query for SM, but don't fail for other types
         adTypeCode === "SM"
           ? prisma.yiyiDailyData.findMany({
-              where: {
-                recordDate: { gte: startOfMonth, lt: endOfMonth },
-              },
-              select: {
-                recordDate: true,
-                qty: true,
-              },
-            })
-          : Promise.resolve([]),
+            where: {
+              recordDate: { gte: startOfMonth, lt: endOfMonth },
+            },
+            select: {
+              recordDate: true,
+              qty: true,
+            },
+          }) as Promise<YiyiDataRow[]>
+          : Promise.resolve([] as YiyiDataRow[]),
         adTypeCode === "SM"
           ? prisma.yiyiDailyPricing.findMany({
-              where: {
-                recordDate: { gte: startOfMonth, lt: endOfMonth },
-              },
-              select: {
-                recordDate: true,
-                unitPrice: true,
-              },
-            })
-          : Promise.resolve([]),
+            where: {
+              recordDate: { gte: startOfMonth, lt: endOfMonth },
+            },
+            select: {
+              recordDate: true,
+              unitPrice: true,
+            },
+          }) as Promise<YiyiPricingRow[]>
+          : Promise.resolve([] as YiyiPricingRow[]),
       ])
 
       const activeUpstreamNames = activeUpstreams.map((upstream) => upstream.name)
@@ -341,11 +355,11 @@ router.get(
         const upstreamDetailBreakdown: Record<string, { pv: number; unit_price: number; amount: number }> =
           adTypeCode === "360"
             ? Object.fromEntries(
-                activeUpstreamNames.map((name) => [
-                  name,
-                  { pv: 0, unit_price: 0, amount: 0 },
-                ])
-              )
+              activeUpstreamNames.map((name) => [
+                name,
+                { pv: 0, unit_price: 0, amount: 0 },
+              ])
+            )
             : {}
 
         let totalRevenue = 0
@@ -436,15 +450,25 @@ router.get(
   [
     query("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     query("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
-    query("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    query("ad_type").notEmpty().withMessage("ad_type is required"),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
       const year = Number(req.query.year)
       const month = Number(req.query.month)
-      const adTypeCode = req.query.ad_type as AdTypeCode
-      const adTypeId = AD_TYPE_ID_MAP[adTypeCode]
+      const adTypeCode = req.query.ad_type as string
+
+      // Look up AdType ID from database instead of hardcoded map
+      const adType = await prisma.adType.findUnique({
+        where: { code: adTypeCode },
+        select: { id: true }
+      })
+      if (!adType) {
+        return res.status(400).json({ success: false, error: "Invalid ad_type" })
+      }
+      const adTypeId = adType.id
+
       const days = getDaysInMonth(year, month)
       const { gte: startOfMonth, lt: endOfMonth } = getBusinessMonthRange(year, month)
 
@@ -501,30 +525,30 @@ router.get(
       const [periods, dailyRates] = await Promise.all([
         downstreamIds.length > 0
           ? (prisma.downstreamPeriod.findMany({
-              where: {
-                downstreamId: { in: downstreamIds },
-                startDate: { lte: endOfMonth },
-                OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+            where: {
+              downstreamId: { in: downstreamIds },
+              startDate: { lte: endOfMonth },
+              OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+            },
+            include: {
+              downstream: {
+                select: { payoutRate: true },
               },
-              include: {
-                downstream: {
-                  select: { payoutRate: true },
-                },
-              },
-            }) as Promise<PeriodWithDownstream[]>)
+            },
+          }) as Promise<PeriodWithDownstream[]>)
           : Promise.resolve([]),
         downstreamIds.length > 0
           ? prisma.dailyDownstreamRate.findMany({
-              where: {
-                downstreamId: { in: downstreamIds },
-                date: { gte: startOfMonth, lt: endOfMonth },
-              },
-              select: {
-                downstreamId: true,
-                date: true,
-                effectiveRate: true,
-              },
-            })
+            where: {
+              downstreamId: { in: downstreamIds },
+              date: { gte: startOfMonth, lt: endOfMonth },
+            },
+            select: {
+              downstreamId: true,
+              date: true,
+              effectiveRate: true,
+            },
+          })
           : Promise.resolve([]),
       ])
 

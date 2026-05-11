@@ -705,10 +705,107 @@ router.post("/admin/ad-sites/:id/rebates/recalculate", auth_js_1.requireAuth, au
 router.get("/admin/ad-types", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), handleValidation, async (_req, res) => {
     try {
         const adTypes = await prisma_js_1.default.adType.findMany({ orderBy: { code: "asc" } });
-        res.json({ success: true, data: adTypes });
+        // Add slug to each adType (slug = code in lowercase, with special handling for mixed-case codes)
+        const adTypesWithSlug = adTypes.map((at) => {
+            let slug = at.code.toLowerCase();
+            if (at.code === 'BAIDU_JS')
+                slug = 'baidu'; // Keep backwards compatible with existing URLs
+            return { ...at, slug };
+        });
+        res.json({ success: true, data: adTypesWithSlug });
     }
     catch (err) {
         console.error("GET /api/admin/ad-types error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// CRUD: AdTypes
+// ============================================================
+router.post("/admin/ad-types", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.body)("code").notEmpty().withMessage("code required").isLength({ min: 2, max: 20 }),
+    (0, express_validator_1.body)("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
+], handleValidation, async (req, res) => {
+    try {
+        const { code, name } = req.body;
+        // Check if code already exists
+        const existing = await prisma_js_1.default.adType.findUnique({ where: { code } });
+        if (existing) {
+            res.status(400).json({ success: false, error: "AdType code already exists" });
+            return;
+        }
+        // Get max id to determine next id
+        const maxIdRow = await prisma_js_1.default.adType.findFirst({ orderBy: { id: "desc" } });
+        const nextId = (maxIdRow?.id ?? 0) + 1;
+        const adType = await prisma_js_1.default.adType.create({
+            data: { id: nextId, code, name },
+        });
+        res.json({ success: true, data: adType });
+    }
+    catch (err) {
+        console.error("POST /api/admin/ad-types error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.put("/admin/ad-types/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+    (0, express_validator_1.body)("code").optional().isLength({ min: 2, max: 20 }),
+    (0, express_validator_1.body)("name").optional().isLength({ max: 200 }),
+], handleValidation, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { code, name } = req.body;
+        const existing = await prisma_js_1.default.adType.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "AdType not found" });
+            return;
+        }
+        // Check if new code conflicts with another AdType
+        if (code && code !== existing.code) {
+            const conflict = await prisma_js_1.default.adType.findFirst({
+                where: { code, id: { not: id } },
+            });
+            if (conflict) {
+                res.status(400).json({ success: false, error: "AdType code already exists" });
+                return;
+            }
+        }
+        const adType = await prisma_js_1.default.adType.update({
+            where: { id },
+            data: {
+                code: code ?? existing.code,
+                name: name ?? existing.name,
+            },
+        });
+        res.json({ success: true, data: adType });
+    }
+    catch (err) {
+        console.error("PUT /api/admin/ad-types/:id error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+router.delete("/admin/ad-types/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const existing = await prisma_js_1.default.adType.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ success: false, error: "AdType not found" });
+            return;
+        }
+        // Check if AdType has associated upstreams or downstreams
+        const upstreams = await prisma_js_1.default.upstream.findMany({ where: { adTypeId: id } });
+        const downstreams = await prisma_js_1.default.downstream.findMany({ where: { adTypeId: id } });
+        if (upstreams.length > 0 || downstreams.length > 0) {
+            res.status(400).json({
+                success: false,
+                error: "Cannot delete AdType with associated upstreams or downstreams",
+            });
+            return;
+        }
+        await prisma_js_1.default.adType.delete({ where: { id } });
+        res.json({ success: true, message: "AdType deleted" });
+    }
+    catch (err) {
+        console.error("DELETE /api/admin/ad-types/:id error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });

@@ -902,9 +902,136 @@ router.get(
   async (_req: Request, res: Response) => {
     try {
       const adTypes = await prisma.adType.findMany({ orderBy: { code: "asc" } })
-      res.json({ success: true, data: adTypes })
+      // Add slug to each adType (slug = code in lowercase, with special handling for mixed-case codes)
+      const adTypesWithSlug = adTypes.map((at) => {
+        let slug = at.code.toLowerCase()
+        if (at.code === 'BAIDU_JS') slug = 'baidu' // Keep backwards compatible with existing URLs
+        return { ...at, slug }
+      })
+      res.json({ success: true, data: adTypesWithSlug })
     } catch (err: any) {
       console.error("GET /api/admin/ad-types error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// CRUD: AdTypes
+// ============================================================
+router.post(
+  "/admin/ad-types",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    body("code").notEmpty().withMessage("code required").isLength({ min: 2, max: 20 }),
+    body("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const { code, name } = req.body
+
+      // Check if code already exists
+      const existing = await prisma.adType.findUnique({ where: { code } })
+      if (existing) {
+        res.status(400).json({ success: false, error: "AdType code already exists" })
+        return
+      }
+
+      // Get max id to determine next id
+      const maxIdRow = await prisma.adType.findFirst({ orderBy: { id: "desc" } })
+      const nextId = (maxIdRow?.id ?? 0) + 1
+
+      const adType = await prisma.adType.create({
+        data: { id: nextId, code, name },
+      })
+      res.json({ success: true, data: adType })
+    } catch (err: any) {
+      console.error("POST /api/admin/ad-types error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.put(
+  "/admin/ad-types/:id",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  [
+    body("code").optional().isLength({ min: 2, max: 20 }),
+    body("name").optional().isLength({ max: 200 }),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string)
+      const { code, name } = req.body
+
+      const existing = await prisma.adType.findUnique({ where: { id } })
+      if (!existing) {
+        res.status(404).json({ success: false, error: "AdType not found" })
+        return
+      }
+
+      // Check if new code conflicts with another AdType
+      if (code && code !== existing.code) {
+        const conflict = await prisma.adType.findFirst({
+          where: { code, id: { not: id } },
+        })
+        if (conflict) {
+          res.status(400).json({ success: false, error: "AdType code already exists" })
+          return
+        }
+      }
+
+      const adType = await prisma.adType.update({
+        where: { id },
+        data: {
+          code: code ?? existing.code,
+          name: name ?? existing.name,
+        },
+      })
+      res.json({ success: true, data: adType })
+    } catch (err: any) {
+      console.error("PUT /api/admin/ad-types/:id error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+router.delete(
+  "/admin/ad-types/:id",
+  requireAuth,
+  requireWriteAccess,
+  requirePermission("perm_admin"),
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string)
+
+      const existing = await prisma.adType.findUnique({ where: { id } })
+      if (!existing) {
+        res.status(404).json({ success: false, error: "AdType not found" })
+        return
+      }
+
+      // Check if AdType has associated upstreams or downstreams
+      const upstreams = await prisma.upstream.findMany({ where: { adTypeId: id } })
+      const downstreams = await prisma.downstream.findMany({ where: { adTypeId: id } })
+      if (upstreams.length > 0 || downstreams.length > 0) {
+        res.status(400).json({
+          success: false,
+          error: "Cannot delete AdType with associated upstreams or downstreams",
+        })
+        return
+      }
+
+      await prisma.adType.delete({ where: { id } })
+      res.json({ success: true, message: "AdType deleted" })
+    } catch (err: any) {
+      console.error("DELETE /api/admin/ad-types/:id error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }
@@ -1872,7 +1999,7 @@ router.post(
     body("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
     body("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
   ],
-    handleValidation,
+  handleValidation,
   async (req: Request, res: Response) => {
     try {
       const { username, password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body

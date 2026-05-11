@@ -1,4 +1,4 @@
-export type AdTypeCode = "SM" | "360" | "BAIDU_JS" | "OTHER"
+export type AdTypeCode = string
 export type BillingMethod = "CPM" | "RATIO"
 export type InputStatus = "unconfirmed" | "confirmed"
 export type DownstreamType = "ML" | "LE" | "YIYI"

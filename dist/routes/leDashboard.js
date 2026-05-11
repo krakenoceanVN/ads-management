@@ -42,10 +42,16 @@ router.get("/le", auth_js_1.requireAuth, [
         const [year, month] = monthStr.split("-").map(Number);
         const days = getDaysInMonth(year, month);
         const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
+        // Look up SM AdType ID from database instead of hardcoded 1
+        const smAdType = await prisma_js_1.default.adType.findUnique({
+            where: { code: "SM" },
+            select: { id: true }
+        });
+        const smAdTypeId = smAdType?.id ?? 1;
         const leDownstream = await prisma_js_1.default.downstream.findFirst({
             where: {
                 downstreamType: "LE",
-                adTypeId: 1, // SM
+                adTypeId: smAdTypeId, // SM
                 status: "active",
             },
             include: {
@@ -87,7 +93,7 @@ router.get("/le", auth_js_1.requireAuth, [
                 adSite: {
                     isArchived: false,
                     upstream: {
-                        adTypeId: 1, // SM
+                        adTypeId: smAdTypeId, // SM
                         status: "active",
                     },
                 },

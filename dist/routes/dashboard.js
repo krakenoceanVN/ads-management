@@ -144,26 +144,33 @@ const handleValidation = (req, res, next) => {
 router.get("/monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
-    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required"),
 ], handleValidation, async (req, res) => {
     try {
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
+        // Look up AdType ID from database instead of hardcoded map
+        const adType = await prisma_js_1.default.adType.findUnique({
+            where: { code: adTypeCode },
+            select: { id: true }
+        });
+        if (!adType) {
+            return res.status(400).json({ success: false, error: "Invalid ad_type" });
+        }
+        const adTypeId = adType.id;
         const days = getDaysInMonth(year, month);
         const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
         const [activeUpstreams, monthlyInputs, mlPeriods, lePeriods, yiyiData, yiyiPricing] = await Promise.all([
-            adTypeCode === "360"
-                ? prisma_js_1.default.upstream.findMany({
-                    where: {
-                        adTypeId,
-                        status: "active",
-                    },
-                    select: { name: true },
-                    orderBy: { name: "asc" },
-                })
-                : Promise.resolve([]),
+            // Always query upstreams - needed for all ad types (especially 360 which needs upstream detail)
+            prisma_js_1.default.upstream.findMany({
+                where: {
+                    adTypeId,
+                    status: "active",
+                },
+                select: { name: true },
+                orderBy: { name: "asc" },
+            }),
             prisma_js_1.default.dailyInput.findMany({
                 where: {
                     recordDate: { gte: startOfMonth, lt: endOfMonth },
@@ -190,6 +197,7 @@ router.get("/monthly", auth_js_1.requireAuth, [
                     },
                 },
             }),
+            // Always query ML downstream periods - needed for payout calculation
             prisma_js_1.default.downstreamPeriod.findMany({
                 where: {
                     downstream: {
@@ -206,24 +214,24 @@ router.get("/monthly", auth_js_1.requireAuth, [
                     },
                 },
             }),
-            adTypeCode === "SM"
-                ? prisma_js_1.default.downstreamPeriod.findMany({
-                    where: {
-                        downstream: {
-                            adTypeId: constants_js_1.AD_TYPE_ID_MAP.SM,
-                            downstreamType: "LE",
-                            status: "active",
-                        },
-                        startDate: { lte: endOfMonth },
-                        OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+            // Always query LE downstream periods - query will return empty if none exist for this adType
+            prisma_js_1.default.downstreamPeriod.findMany({
+                where: {
+                    downstream: {
+                        adTypeId: adTypeId,
+                        downstreamType: "LE",
+                        status: "active",
                     },
-                    include: {
-                        downstream: {
-                            select: { payoutRate: true },
-                        },
+                    startDate: { lte: endOfMonth },
+                    OR: [{ endDate: null }, { endDate: { gte: startOfMonth } }],
+                },
+                include: {
+                    downstream: {
+                        select: { payoutRate: true },
                     },
-                })
-                : Promise.resolve([]),
+                },
+            }),
+            // yiyi data is SM-specific - only query for SM, but don't fail for other types
             adTypeCode === "SM"
                 ? prisma_js_1.default.yiyiDailyData.findMany({
                     where: {
@@ -333,13 +341,21 @@ router.get("/monthly", auth_js_1.requireAuth, [
 router.get("/downstream-monthly", auth_js_1.requireAuth, [
     (0, express_validator_1.query)("year").notEmpty().withMessage("year is required").isInt({ min: 2020, max: 2100 }).toInt(),
     (0, express_validator_1.query)("month").notEmpty().withMessage("month is required").isInt({ min: 1, max: 12 }).toInt(),
-    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    (0, express_validator_1.query)("ad_type").notEmpty().withMessage("ad_type is required"),
 ], handleValidation, async (req, res) => {
     try {
         const year = Number(req.query.year);
         const month = Number(req.query.month);
         const adTypeCode = req.query.ad_type;
-        const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
+        // Look up AdType ID from database instead of hardcoded map
+        const adType = await prisma_js_1.default.adType.findUnique({
+            where: { code: adTypeCode },
+            select: { id: true }
+        });
+        if (!adType) {
+            return res.status(400).json({ success: false, error: "Invalid ad_type" });
+        }
+        const adTypeId = adType.id;
         const days = getDaysInMonth(year, month);
         const { gte: startOfMonth, lt: endOfMonth } = (0, date_js_1.getBusinessMonthRange)(year, month);
         const inputs = (await prisma_js_1.default.dailyInput.findMany({

@@ -84,7 +84,7 @@ router.get(
   requireAuth,
   [
     query("date").notEmpty().withMessage("date is required").isISO8601(),
-    query("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    query("ad_type").notEmpty().withMessage("ad_type is required"),
     query("search").optional().isString(),
     query("status").optional().isIn(["confirmed", "unconfirmed"]),
   ],
@@ -230,7 +230,7 @@ router.post(
   requirePermission("perm_data_input"),
   [
     body("date").notEmpty().withMessage("date is required").isISO8601(),
-    body("ad_type").notEmpty().withMessage("ad_type is required").isIn(["SM", "360", "BAIDU_JS", "OTHER"]),
+    body("ad_type").notEmpty().withMessage("ad_type is required"),
     body("records").isArray({ min: 1 }).withMessage("records must be a non-empty array"),
   ],
   handleValidation,

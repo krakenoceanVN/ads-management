@@ -1,37 +1,38 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { DatePicker, Table } from 'antd'
+import { DatePicker, Table, Spin, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/axios'
-import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
+import type { SummaryRow, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoMoney } from '../utils/numberFormat'
+import { useAdTypes, findAdTypeBySlug } from '../hooks/useAdTypes'
 
 interface Props {
-  adType: AdTypeCode
+  adType?: string
 }
 
-const AD_TYPE_LABEL: Record<AdTypeCode, string> = {
+const AD_TYPE_LABEL: Record<string, string> = {
   SM: 'SM',
   '360': '360',
   BAIDU_JS: 'Baidu JS',
   OTHER: 'Other',
 }
 
-const AD_TYPE_URL_MAP: Record<AdTypeCode, string> = {
+const AD_TYPE_URL_MAP: Record<string, string> = {
   SM: 'sm',
   '360': '360',
   BAIDU_JS: 'baidu',
   OTHER: 'other',
 }
 
-const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> = {
+const DOWNSTREAM_COLUMNS: Record<string, { key: string; label: string }[]> = {
   SM: [],
   '360': [],
   BAIDU_JS: [],
@@ -40,7 +41,7 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
 
 type FR = SummaryRow & { _isTotal?: boolean }
 
-export default function DashboardRoutePage({ adType }: Props) {
+export default function DashboardRoutePage({ adType: adTypeProp }: Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const today = dayjs()
@@ -48,13 +49,40 @@ export default function DashboardRoutePage({ adType }: Props) {
   const [year, setYear] = useState(today.year())
   const [month, setMonth] = useState(today.month() + 1)
 
+  // Get adType from URL param for dynamic routes, fallback to prop for hardcoded routes
+  const params = useParams()
+  const urlAdType = params.adType // For routes like /dashboard/:adType
+
+  // Fetch adTypes to find the actual code from slug
+  const { data: adTypes = [], isLoading: isAdTypesLoading } = useAdTypes()
+
+  // Priority: adTypeProp (hardcoded routes) > URL param (dynamic routes)
+  const adTypeInput = adTypeProp || urlAdType
+
+  // Convert URL slug to AdType code using dynamic lookup
+  const adTypeRecord = adTypeInput ? findAdTypeBySlug(adTypes, adTypeInput) : undefined
+  const adType = adTypeRecord?.code ?? ''
+
+  // NOTE: All hooks MUST be called before any early returns
+  // Dashboard query - called only when adType is valid (non-empty and not still loading)
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['dashboard', adType, year, month],
     queryFn: () =>
       api.get<ApiResponse<SummaryRow[]>>('/api/dashboard/monthly', {
         params: { year, month, ad_type: adType },
       }).then((r) => r.data.data ?? []),
+    enabled: !!adType, // Only run when adType is resolved
   })
+
+  // Handle loading state - after all hooks
+  if (isAdTypesLoading) {
+    return <Spin tip="Đang tải dữ liệu..." />
+  }
+
+  // Handle invalid slug - after all hooks
+  if (adTypeProp && !adTypeRecord && adTypes.length > 0) {
+    return <Alert message={`Không tìm thấy Loại QC "${adTypeProp}" hoặc sai URL`} type="error" showIcon />
+  }
 
   const displayRows = rows.filter((r) => r.date !== 'TOTAL')
   const totalRow = rows.find((r) => r.date === 'TOTAL') ?? rows[rows.length - 1]
@@ -66,7 +94,7 @@ export default function DashboardRoutePage({ adType }: Props) {
     })
     return Array.from(names)
   }, [rows])
-  const downstreamCols = DOWNSTREAM_COLUMNS[adType]
+  const downstreamCols = DOWNSTREAM_COLUMNS[adType] ?? []
 
   const monthLabel = `${year}-${String(month).padStart(2, '0')}`
 

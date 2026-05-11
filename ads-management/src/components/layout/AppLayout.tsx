@@ -1,7 +1,7 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Layout, Menu, Button, Space, Tooltip } from 'antd'
+import { Layout, Menu, Button, Space, Tooltip, Spin } from 'antd'
 import {
   ApartmentOutlined,
   BarChartOutlined,
@@ -16,9 +16,11 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import brandLogoLightImage from '../../assets/trang-khong-logo.png'
 import brandLogoDarkImage from '../../assets/den-khong-logo.png'
-import { canAccessSiteList, canViewDashboard, getUser } from '../../api/axios'
+import api, { canAccessSiteList, canViewDashboard, getUser } from '../../api/axios'
+import type { ApiResponse } from '../../types'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useThemeMode } from '../../theme/themeModeContext'
 
@@ -90,31 +92,58 @@ export default function AppLayout() {
     </span>
   )
 
+  // Fetch adTypes dynamically (now includes slug from backend)
+  const { data: adTypesData = [], isLoading: isAdTypesLoading } = useQuery({
+    queryKey: ['adTypes'],
+    queryFn: () => api.get<ApiResponse<{ id: number; code: string; name: string; slug: string }[]>>('/api/admin/ad-types').then((r) => r.data.data ?? []),
+  })
+
+  // Show loading state while fetching adTypes (prevents crash)
+  if (isAdTypesLoading) {
+    return (
+      <Layout style={{ minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
+        <Spin tip="Đang tải..." />
+      </Layout>
+    )
+  }
+
   const buildAdTypeItems = (
     prefix: 'dash' | 'input' | 'up',
-    getPath: (segment: 'sm' | '360' | 'baidu' | 'other') => string,
-  ): NonNullable<MenuProps['items']> => [
-    {
-      key: `${prefix}-sm`,
-      label: menuText(t('adType.sm')),
-      onClick: () => navigate(getPath('sm')),
-    },
-    {
-      key: `${prefix}-360`,
-      label: menuText(t('adType.360')),
-      onClick: () => navigate(getPath('360')),
-    },
-    {
-      key: `${prefix}-baidu`,
-      label: menuText(t('adType.baidu')),
-      onClick: () => navigate(getPath('baidu')),
-    },
-    {
-      key: `${prefix}-other`,
-      label: menuText(t('adType.other')),
-      onClick: () => navigate(getPath('other')),
-    },
-  ]
+    getPath: (segment: string) => string,
+  ): NonNullable<MenuProps['items']> => {
+    if (adTypesData.length > 0) {
+      return adTypesData.map((at) => {
+        // Use slug directly from backend response (no more hardcoded mapping)
+        return {
+          key: `${prefix}-${at.slug}`,
+          label: menuText(t(`adType.${at.slug}`, { defaultValue: at.name })),
+          onClick: () => navigate(getPath(at.slug)),
+        }
+      })
+    }
+    return [
+      {
+        key: `${prefix}-sm`,
+        label: menuText(t('adType.sm')),
+        onClick: () => navigate(getPath('sm')),
+      },
+      {
+        key: `${prefix}-360`,
+        label: menuText(t('adType.360')),
+        onClick: () => navigate(getPath('360')),
+      },
+      {
+        key: `${prefix}-baidu`,
+        label: menuText(t('adType.baidu')),
+        onClick: () => navigate(getPath('baidu')),
+      },
+      {
+        key: `${prefix}-other`,
+        label: menuText(t('adType.other')),
+        onClick: () => navigate(getPath('other')),
+      },
+    ]
+  }
 
   const currentMenuKey = getCurrentMenuKey(location.pathname)
   const themeButtonIcon = mode === 'light' ? <SunOutlined /> : <MoonOutlined />
@@ -123,11 +152,11 @@ export default function AppLayout() {
   const menuItems: MenuProps['items'] = [
     ...(canViewDashboard()
       ? [{
-          key: 'dashboard',
-          icon: <DashboardOutlined />,
-          label: menuText(t('nav.dashboard')),
-          children: buildAdTypeItems('dash', (segment) => `/dashboard/${segment}`),
-        }]
+        key: 'dashboard',
+        icon: <DashboardOutlined />,
+        label: menuText(t('nav.dashboard')),
+        children: buildAdTypeItems('dash', (segment) => `/dashboard/${segment}`),
+      }]
       : []),
     {
       key: 'input',
@@ -156,11 +185,11 @@ export default function AppLayout() {
     },
     ...(canAccessSiteList()
       ? [{
-          key: 'admin',
-          icon: <SettingOutlined />,
-          label: menuText(t('nav.siteList')),
-          onClick: () => navigate('/admin'),
-        }]
+        key: 'admin',
+        icon: <SettingOutlined />,
+        label: menuText(t('nav.siteList')),
+        onClick: () => navigate('/admin'),
+      }]
       : []),
   ]
 

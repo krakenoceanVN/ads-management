@@ -66,6 +66,9 @@ function App() {
             <Route path="input/baidu" element={<DailyInputPage adType="BAIDU_JS" />} />
             <Route path="input/other" element={<DailyInputPage adType="OTHER" />} />
             <Route path="input/yiyi" element={<YiyiInputPage />} />
+            {/* Catch-all routes MUST be after specific routes */}
+            <Route path="dashboard/:adType" element={<DashboardRoute><DashboardRoutePage /></DashboardRoute>} />
+            <Route path="input/:adType" element={<DailyInputPage />} />
             <Route path="admin" element={<SiteListRoute><AdminPage /></SiteListRoute>} />
             <Route path="downstream" element={<DownstreamPage />} />
             <Route path="downstream/:id" element={<DownstreamSitesPage />} />
@@ -75,6 +78,7 @@ function App() {
             <Route path="upstream/360" element={<SummaryDashboardPage adType="360" />} />
             <Route path="upstream/baidu" element={<SummaryDashboardPage adType="BAIDU_JS" />} />
             <Route path="upstream/other" element={<SummaryDashboardPage adType="OTHER" />} />
+            <Route path="upstream/:adType" element={<SummaryDashboardPage />} />
           </Route>
         </Routes>
       </ErrorBoundary>

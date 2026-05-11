@@ -123,6 +123,17 @@ interface AdSiteEventModalValues {
   note?: string
 }
 
+interface AdTypeRow {
+  id: number
+  code: string
+  name: string
+}
+
+interface AdTypeFormValues {
+  code: string
+  name: string
+}
+
 function matchesAdminSearch(search: string, values: unknown[]): boolean {
   const keyword = search.trim().toLowerCase()
 
@@ -168,7 +179,7 @@ function AdSitesTab() {
     queryKey: ['admin', 'upstreams'],
     enabled: isAdminUser,
     queryFn: () =>
-      api.get<ApiResponse<UpstreamRow[]> >('/api/admin/upstreams').then((r) => r.data.data ?? []),
+      api.get<ApiResponse<UpstreamRow[]>>('/api/admin/upstreams').then((r) => r.data.data ?? []),
   })
 
   const { data: downstreams = [] } = useQuery({
@@ -1105,7 +1116,135 @@ function DownstreamPeriodsTab() {
 }
 
 // ============================================================
-// Tab 5: Users
+// Tab 5: AdTypes
+// ============================================================
+function AdTypesTab() {
+  const { t } = useTranslation()
+  const [search, setSearch] = useState('')
+  const [modal, setModal] = useState<Partial<AdTypeFormValues> & { id?: number } | null>(null)
+  const [form] = Form.useForm()
+  const qc = useQueryClient()
+
+  const { data: adTypes = [], isLoading } = useQuery({
+    queryKey: ['admin', 'ad-types'],
+    queryFn: () => api.get<ApiResponse<AdTypeRow[]>>('/api/admin/ad-types').then((r) => r.data.data ?? []),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (payload: AdTypeFormValues) => api.post('/api/admin/ad-types', payload),
+    onSuccess: () => {
+      message.success(t('admin.created'));
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-types'] })
+      qc.invalidateQueries({ queryKey: ['adTypes'] }) // Also invalidate useAdTypes cache
+      closeModal()
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<AdTypeFormValues> }) =>
+      api.put(`/api/admin/ad-types/${id}`, payload),
+    onSuccess: () => {
+      message.success(t('admin.updated'));
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-types'] })
+      qc.invalidateQueries({ queryKey: ['adTypes'] }) // Also invalidate useAdTypes cache
+      closeModal()
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/api/admin/ad-types/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'ad-types'] })
+      qc.invalidateQueries({ queryKey: ['adTypes'] }) // Also invalidate useAdTypes cache
+      message.success(t('admin.deleted'))
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      message.error(err.response?.data?.error ?? t('admin.actionFailed'))
+    },
+  })
+
+  const openCreate = () => { setModal({}); form.resetFields() }
+  const openEdit = (row: AdTypeRow) => {
+    setModal({ ...row, id: row.id })
+    form.resetFields()
+    form.setFieldsValue({ code: row.code, name: row.name })
+  }
+  const closeModal = () => { setModal(null); form.resetFields() }
+
+  const handleSubmit = () => {
+    form.validateFields().then((values) => {
+      if (modal && 'id' in modal && modal.id) {
+        updateMutation.mutate({ id: modal.id, payload: values })
+      } else {
+        createMutation.mutate(values as AdTypeFormValues)
+      }
+    })
+  }
+
+  const columns: ColumnsType<AdTypeRow> = withTableEllipsis([
+    { title: t('admin.adTypeCode'), dataIndex: 'code', key: 'code', width: 120 },
+    { title: t('admin.adTypeName'), dataIndex: 'name', key: 'name', ellipsis: true },
+    {
+      title: t('input.action'), key: 'action', width: 120,
+      render: (_: unknown, row: AdTypeRow) => (
+        <Space size="small" className="app-table-action-group">
+          <Button size="small" onClick={() => openEdit(row)}>{t('admin.edit')}</Button>
+          <Popconfirm title={t('admin.deleteAdTypeConfirm')} onConfirm={() => deleteMutation.mutate(row.id)} okText={t('admin.delete')} cancelText={t('admin.cancel')}>
+            <Button size="small" danger>{t('admin.delete')}</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ])
+
+  const filteredAdTypes = adTypes.filter((row) =>
+    matchesAdminSearch(search, [row.code, row.name])
+  )
+
+  const isEdit = modal && 'id' in modal
+
+  return (
+    <>
+      <div className="admin-table-toolbar">
+        <Input
+          className="admin-table-search"
+          allowClear
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('admin.searchPlaceholder', { label: t('admin.adTypes') })}
+        />
+        <Button type="primary" onClick={openCreate}>{t('admin.createAdType')}</Button>
+      </div>
+      <Table className="app-data-table" columns={columns} dataSource={filteredAdTypes} rowKey="id" size="small" bordered loading={isLoading} tableLayout="fixed" />
+
+      <Modal
+        title={isEdit ? t('admin.editAdType') : t('admin.createAdType')}
+        open={!!modal}
+        onCancel={closeModal}
+        onOk={handleSubmit}
+        confirmLoading={createMutation.isPending || updateMutation.isPending}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item name="code" label={t('admin.adTypeCode')} rules={[{ required: true, message: t('admin.enterCode') }]}>
+            <Input disabled={!!isEdit} />
+          </Form.Item>
+          <Form.Item name="name" label={t('admin.adTypeName')} rules={[{ required: true, message: t('admin.enterName') }]}>
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  )
+}
+
+// ============================================================
+// Tab 6: Users
 // ============================================================
 function UsersTab() {
   const { t } = useTranslation()
@@ -1326,15 +1465,16 @@ export default function AdminPage() {
         defaultActiveKey="adsites"
         items={isAdminUser
           ? [
-              { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
-              { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
-              { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
-              { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
-              { key: 'users', label: t('admin.users'), children: <UsersTab /> },
-            ]
+            { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+            { key: 'upstreams', label: t('admin.upstreams'), children: <UpstreamsTab /> },
+            { key: 'downstreams', label: t('admin.downstreams'), children: <DownstreamsTab /> },
+            { key: 'periods', label: t('admin.periodTab'), children: <DownstreamPeriodsTab /> },
+            { key: 'adtypes', label: t('admin.adTypes'), children: <AdTypesTab /> },
+            { key: 'users', label: t('admin.users'), children: <UsersTab /> },
+          ]
           : [
-              { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
-            ]}
+            { key: 'adsites', label: t('admin.adSites'), children: <AdSitesTab /> },
+          ]}
       />
     </div>
   )

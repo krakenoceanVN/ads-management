@@ -551,3 +551,131 @@ Nguyên tắc khi sửa tiếp:
 - không nhầm giữa `/dashboard/*` và `/upstream/*`
 - không tự ý mở rộng rebate sang `360 / Baidu / Other`
 - luôn verify bằng build + runtime check trước khi kết luận
+
+---
+
+## 14. AdType Dynamic (2025-05-09)
+
+### Mục tiêu
+
+Cho phép thêm AdType mới từ UI mà không cần Dev can thiệp code (thêm backend endpoint CRUD đã có sẵn từ trước).
+
+### Thay đổi Backend
+
+#### `src/routes/admin.ts` - Thêm slug vào response AdTypes
+```typescript
+const adTypesWithSlug = adTypes.map((at) => {
+  let slug = at.code.toLowerCase()
+  if (at.code === 'BAIDU_JS') slug = 'baidu' // Keep backwards compatible
+  return { ...at, slug }
+})
+res.json({ success: true, data: adTypesWithSlug })
+```
+
+#### `src/routes/dashboard.ts` - Dynamic adType lookup thay hardcoded
+```typescript
+// Thay vì hardcoded AD_TYPE_ID_MAP
+const adType = await prisma.adType.findUnique({
+  where: { code: adTypeCode },
+  select: { id: true }
+})
+const adTypeId = adType.id
+```
+
+#### `src/routes/leDashboard.ts` - Dynamic SM adType lookup
+```typescript
+const smAdType = await prisma.adType.findUnique({
+  where: { code: "SM" },
+  select: { id: true }
+})
+const smAdTypeId = smAdType?.id ?? 1
+```
+
+### Thay đổi Frontend
+
+#### `ads-management/src/hooks/useAdTypes.ts` - Custom hook mới
+```typescript
+export interface AdTypeWithSlug {
+  id: number
+  code: string
+  name: string
+  slug: string
+  createdAt: string
+  updatedAt: string
+}
+
+export function useAdTypes() {
+  return useQuery<AdTypeWithSlug[]>({
+    queryKey: ['adTypes'],
+    queryFn: async () => {
+      const response = await api.get('/api/admin/ad-types')
+      return response.data.data
+    },
+    staleTime: 0,
+  })
+}
+
+// Tìm theo slug (dynamic routes) HOẶC code (hardcoded routes)
+export function findAdTypeBySlug(adTypes: AdTypeWithSlug[], slugOrCode: string): AdTypeWithSlug | undefined {
+  const bySlug = adTypes.find((at) => at.slug === slugOrCode)
+  if (bySlug) return bySlug
+  return adTypes.find((at) => at.code === slugOrCode)
+}
+```
+
+#### `ads-management/src/components/layout/AppLayout.tsx` - Dynamic menu
+- Xóa hardcoded `AD_TYPE_CODE_TO_SLUG` map
+- Dùng `slug` trực tiếp từ API response
+- Thêm loading state `Spin` để tránh crash khi đang fetch
+
+#### `ads-management/src/pages/DailyInputPage.tsx` - Dynamic AdType
+- Xóa `URL_SLUG_TO_CODE` map
+- Dùng `findAdTypeBySlug()` để convert slug → code
+- Hooks gọi TRƯỚC any early returns (React hooks rules)
+
+#### `ads-management/src/pages/DashboardPage.tsx` - Dynamic AdType
+- Tương tự DailyInputPage
+- Dashboard query dùng `adType` từ dynamic lookup
+
+#### `ads-management/src/pages/UpstreamDashboardPage.tsx` - Dynamic AdType
+- Tương tự DailyInputPage
+- Xóa `URL_SLUG_TO_CODE` map
+
+### Các lỗi đã fix trong quá trình implement
+
+1. **"Rendered more hooks than during previous render"**
+   - Nguyên nhân: hooks gọi sau early returns vi phạm React rules
+   - Fix: di chuyển tất cả hooks TRƯỚC any `if (...) return`
+
+2. **White screen crash**
+   - Nguyên nhân: AppLayout dùng `useQuery` không có loading state
+   - Fix: thêm `if (isAdTypesLoading) return <Spin.../>` trước menu render
+
+3. **API URL path sai**
+   - Nguyên nhân: `useAdTypes.ts` gọi `/admin/ad-types` thay vì `/api/admin/ad-types`
+   - Fix: thêm prefix `/api`
+
+4. **Tìm không ra AdType cho route cố định**
+   - Nguyên nhân: `findAdTypeBySlug` chỉ tìm theo `slug`, nhưng route cố định truyền `code` (SM, BAIDU_JS, OTHER)
+   - Fix: tìm cả theo `slug` và fallback theo `code`
+
+### Route mapping hiện tại
+
+```typescript
+// Route cố định (truyền code trực tiếp)
+<Route path="dashboard/sm" element={<DashboardRoutePage adType="SM" />} />
+<Route path="input/sm" element={<DailyInputPage adType="SM" />} />
+
+// Route dynamic (dùng :adType param, slug từ URL)
+<Route path="dashboard/:adType" element={<DashboardRoutePage />} />
+<Route path="input/:adType" element={<DailyInputPage />} />
+```
+
+### AdTypes trong database
+
+| Code | Name | Slug |
+|------|------|------|
+| SM | GS-SM | sm |
+| 360 | 360 | 360 |
+| BAIDU_JS | Baidu JS | baidu |
+| OTHER | Other | other |

@@ -1,19 +1,21 @@
 import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { DatePicker, Table, Tabs } from 'antd'
+import { DatePicker, Table, Tabs, Spin, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { useParams } from 'react-router-dom'
 import api from '../api/axios'
-import type { SummaryRow, AdTypeCode, ApiResponse } from '../types'
+import type { SummaryRow, ApiResponse } from '../types'
 import MoneyCell from '../components/dashboard/MoneyCell'
 import DashboardBottomScrollbar from '../components/dashboard/DashboardBottomScrollbar'
 import KpiValueText from '../components/dashboard/KpiValueText'
 import { renderTableText, withTableEllipsis } from '../utils/tableEllipsis'
 import { formatIsoMoney, formatIsoPercent } from '../utils/numberFormat'
+import { useAdTypes, findAdTypeBySlug } from '../hooks/useAdTypes'
 
 interface Props {
-  adType?: AdTypeCode
+  adType?: string
 }
 
 interface DownstreamRow {
@@ -34,21 +36,23 @@ interface LeDashboardResponse {
   rows: LeDashboardRow[]
 }
 
-const AD_TYPE_TABS: { key: string; adType: AdTypeCode; labelKey: string }[] = [
+const AD_TYPE_TABS: { key: string; adType: string; labelKey: string }[] = [
   { key: 'tab-sm', adType: 'SM', labelKey: 'adType.gsSm' },
   { key: 'tab-360', adType: '360', labelKey: 'adType.360' },
   { key: 'tab-baidu', adType: 'BAIDU_JS', labelKey: 'adType.baidu' },
   { key: 'tab-other', adType: 'OTHER', labelKey: 'adType.other' },
 ]
 
-const UPSTREAM_COLUMNS: Record<AdTypeCode, string[]> = {
+const UPSTREAM_COLUMNS: Record<string, string[]> = {
   SM: [],
   '360': [],
   BAIDU_JS: [],
   OTHER: [],
+  iQiyi: [],
+  YIYI: [],
 }
 
-const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> = {
+const DOWNSTREAM_COLUMNS: Record<string, { key: string; label: string }[]> = {
   SM: [
     { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
@@ -65,11 +69,19 @@ const DOWNSTREAM_COLUMNS: Record<AdTypeCode, { key: string; label: string }[]> =
     { key: 'ml_80', label: 'ML' },
     { key: 'le', label: 'LE' },
   ],
+  iQiyi: [
+    { key: 'ml_80', label: 'ML' },
+    { key: 'le', label: 'LE' },
+  ],
+  YIYI: [
+    { key: 'ml_80', label: 'ML' },
+    { key: 'le', label: 'LE' },
+  ],
 }
 
 type FR = SummaryRow & { _isTotal?: boolean; ml_80?: number; le?: number }
 
-function calculateMl80(adType: AdTypeCode, revenue: number, downstreamMl80 = 0): number {
+function calculateMl80(adType: string, revenue: number, downstreamMl80 = 0): number {
   if (adType === '360' || adType === 'BAIDU_JS') {
     return revenue * 0.8
   }
@@ -93,7 +105,7 @@ function calculateSmSummaryProfitRate(revenue: number, netProfit: number): numbe
   return revenue > 0 ? netProfit / revenue : 0
 }
 
-function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: number; month: number }) {
+function AdTypeDashboard({ adType, year, month }: { adType: string; year: number; month: number }) {
   const { t } = useTranslation()
   const tableHostRef = useRef<HTMLDivElement | null>(null)
   const monthKey = `${year}-${String(month).padStart(2, '0')}`
@@ -163,8 +175,8 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   const totalCost = displayRows.reduce((sum, row) => sum + row.cost, 0)
   const totalTax = displayRows.reduce((sum, row) => sum + row.tax, 0)
   const totalNetProfit = displayRows.reduce((sum, row) => sum + row.profit, 0)
-  const upstreamCols = UPSTREAM_COLUMNS[adType]
-  const downstreamCols = DOWNSTREAM_COLUMNS[adType]
+  const upstreamCols = UPSTREAM_COLUMNS[adType] ?? []
+  const downstreamCols = DOWNSTREAM_COLUMNS[adType] ?? []
 
   const totalGrossProfit = totalRevenue - totalCost
   const totalProfitRate = totalRevenue > 0 ? totalNetProfit / totalRevenue : 0
@@ -364,16 +376,50 @@ function AdTypeDashboard({ adType, year, month }: { adType: AdTypeCode; year: nu
   )
 }
 
-export default function SummaryDashboardPage({ adType }: Props) {
+export default function SummaryDashboardPage({ adType: adTypeProp }: Props) {
   const { t } = useTranslation()
   const today = dayjs()
   const [year, setYear] = useState(today.year())
   const [month, setMonth] = useState(today.month() + 1)
   const [activeTab, setActiveTab] = useState('tab-sm')
 
+  // Get adType from URL param for dynamic routes, fallback to prop for hardcoded routes
+  const params = useParams()
+  const urlAdType = params.adType // For routes like /upstream/:adType
+
+  // Fetch adTypes to find the actual code from slug
+  const { data: adTypes = [], isLoading } = useAdTypes()
+
+  // Priority: adTypeProp (hardcoded routes) > URL param (dynamic routes)
+  const adTypeInput = adTypeProp || urlAdType
+
+  // Convert URL slug to AdType code using dynamic lookup
+  const adTypeRecord = adTypeInput ? findAdTypeBySlug(adTypes, adTypeInput) : undefined
+  const adType = adTypeRecord?.code ?? undefined
+
+  // Build dynamic tabs from API data (now includes slug from backend)
+  const dynamicAdTypeTabs = adTypes.map((at) => ({
+    key: `tab-${at.slug}`,
+    adType: at.code as string,
+    label: t(`adType.${at.slug}`, { defaultValue: at.name }),
+  }))
+
+  // Fallback to hardcoded tabs if API fails or no data
+  const effectiveTabs = dynamicAdTypeTabs.length > 0 ? dynamicAdTypeTabs : AD_TYPE_TABS
+
   // If adType is provided (route /upstream/sm etc), show single dashboard
   // Otherwise show tabs (route /upstream)
   const showTabs = !adType
+
+  // Handle loading state - after all hooks
+  if (isLoading) {
+    return <Spin tip="Đang tải dữ liệu..." />
+  }
+
+  // Handle invalid slug - after all hooks
+  if (adTypeInput && !adTypeRecord && adTypes.length > 0) {
+    return <Alert message={`Không tìm thấy Loại QC "${adTypeInput}" hoặc sai URL`} type="error" showIcon />
+  }
 
   return (
     <div className="page-shell">
@@ -395,14 +441,14 @@ export default function SummaryDashboardPage({ adType }: Props) {
         <Tabs
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k)}
-          items={AD_TYPE_TABS.map(({ key, adType: at, labelKey }) => ({
-            key,
-            label: t(labelKey),
-            children: <AdTypeDashboard key={`${key}-${year}-${month}`} adType={at} year={year} month={month} />,
+          items={effectiveTabs.map((tab) => ({
+            key: tab.key,
+            label: 'labelKey' in tab ? t(tab.labelKey) : tab.label,
+            children: <AdTypeDashboard key={`${tab.key}-${year}-${month}`} adType={tab.adType} year={year} month={month} />,
           }))}
         />
       ) : (
-        <AdTypeDashboard key={`${adType}-${year}-${month}`} adType={adType} year={year} month={month} />
+        <AdTypeDashboard key={`${adType}-${year}-${month}`} adType={adType as string} year={year} month={month} />
       )}
     </div>
   )

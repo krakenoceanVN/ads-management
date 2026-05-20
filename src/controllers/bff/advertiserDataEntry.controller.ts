@@ -178,7 +178,7 @@ router.post(
                 module: "DataEntry",
                 targetType: "DailyInput",
                 targetId: null,
-                detail: `${date} ${adTypeCode} ${records.length} records`,
+                detail: `Saved advertiser data entry batch: date=${date}, adTypeCode=${adTypeCode}, count=${records.length}`,
             });
 
             res.json(result);
@@ -222,7 +222,7 @@ router.post(
                 module: "DataEntry",
                 targetType: "DailyInput",
                 targetId: null,
-                detail: `advertiser ${ids.length} records`,
+                detail: `Confirmed advertiser data entries: count=${result.count}`,
             });
 
             res.json({ success: true, updated: result.count });
@@ -267,7 +267,7 @@ router.put(
                 module: "DataEntry",
                 targetType: "DailyInput",
                 targetId: String(id),
-                detail: null,
+                detail: `Unconfirmed advertiser data entry id=${id}`,
             });
 
             res.json({ success: true, message: "Unconfirmed" });

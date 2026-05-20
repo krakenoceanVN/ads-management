@@ -81,6 +81,7 @@ export default function App() {
   const handleLogin = (nextToken: string) => {
     window.localStorage.setItem(BFF_AUTH_TOKEN_STORAGE_KEY, nextToken);
     setToken(nextToken);
+    window.dispatchEvent(new Event(BFF_AUTH_TOKEN_CHANGED_EVENT));
   };
 
   if (!token) return <LoginPage onLogin={handleLogin} />;

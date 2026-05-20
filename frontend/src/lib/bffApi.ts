@@ -40,6 +40,7 @@ import type {
 
 export const BFF_AUTH_TOKEN_STORAGE_KEY = 'token';
 export const BFF_AUTH_TOKEN_INVALID_EVENT = 'bff-auth-token-invalid';
+export const BFF_AUTH_TOKEN_CHANGED_EVENT = 'bff-auth-token-changed';
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -73,6 +74,17 @@ export function clearAuthToken() {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(BFF_AUTH_TOKEN_STORAGE_KEY);
   window.dispatchEvent(new Event(BFF_AUTH_TOKEN_INVALID_EVENT));
+}
+
+export function getUsernameFromToken(): string {
+  try {
+    const token = getAuthToken();
+    if (!token) return "Admin";
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.username || "Admin";
+  } catch {
+    return "Admin";
+  }
 }
 
 function normalizeQueryValue(value: QueryValue) {

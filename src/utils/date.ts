@@ -48,3 +48,14 @@ export function getBusinessMonthRange(year: number, month: number): { gte: Date;
     lt: getBusinessDayStart(nextMonthDate),
   }
 }
+
+export function getDaysInMonth(year: number, month: number): string[] {
+  const days: string[] = []
+  const date = new Date(Date.UTC(year, month - 1, 1))
+  while (date.getUTCMonth() === month - 1) {
+    const dayStr = String(date.getUTCDate()).padStart(2, "0")
+    days.push(`${year}-${String(month).padStart(2, "0")}-${dayStr}`)
+    date.setUTCDate(date.getUTCDate() + 1)
+  }
+  return days
+}

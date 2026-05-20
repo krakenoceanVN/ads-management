@@ -10,6 +10,7 @@ import { getRequiredEnv } from "../utils/env.js"
 import { DEFAULT_DOWNSTREAM_PRICES } from "../utils/constants.js"
 import { createMemoryRateLimiter } from "../utils/rateLimit.js"
 import { calculateActualRevenue, calculateCpmRevenue, calculateRebateAmount } from "../utils/calculations.js"
+import { createOperationLog } from "../services/operationLog.service.js"
 
 const router = Router()
 const JWT_EXPIRES_IN = "8h"
@@ -2129,12 +2130,30 @@ router.post(
 
       const user = await prisma.user.findUnique({ where: { username } })
       if (!user || user.status === "inactive") {
+        createOperationLog({
+          userId: null,
+          username: username ?? null,
+          action: "LOGIN_FAILED",
+          module: "Auth",
+          targetType: "User",
+          targetId: null,
+          detail: "Invalid credentials",
+        });
         res.status(401).json({ success: false, error: "Invalid credentials" })
         return
       }
 
       const valid = await bcrypt.compare(password, user.passwordHash)
       if (!valid) {
+        createOperationLog({
+          userId: null,
+          username: username ?? null,
+          action: "LOGIN_FAILED",
+          module: "Auth",
+          targetType: "User",
+          targetId: null,
+          detail: "Invalid credentials",
+        });
         res.status(401).json({ success: false, error: "Invalid credentials" })
         return
       }
@@ -2160,6 +2179,16 @@ router.post(
       }
 
       const token = jwt.sign(payload, getRequiredEnv("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN })
+
+      createOperationLog({
+        userId: user.id,
+        username: user.username,
+        action: "LOGIN_SUCCESS",
+        module: "Auth",
+        targetType: "User",
+        targetId: String(user.id),
+        detail: null,
+      });
 
       res.json({ success: true, token, user: payload })
     } catch (err: any) {

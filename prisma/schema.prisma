@@ -247,3 +247,23 @@ model LEDailyCost {
   costAmount Decimal  @default(0)
   updatedAt  DateTime @updatedAt
 }
+
+// ============================================================
+// TABLE 10: operation_log
+// ============================================================
+model OperationLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  username   String?
+  action     String
+  module     String
+  targetType String?
+  targetId   String?
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([module])
+  @@index([action])
+  @@index([userId])
+}

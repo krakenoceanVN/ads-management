@@ -7,6 +7,7 @@ import dashboardRouter from './routes/dashboard.js'
 import adminRouter from './routes/admin.js'
 import yiyiDataRouter from './routes/yiyiData.js'
 import leDashboardRouter from './routes/leDashboard.js'
+import bffRouter from './routes/bff/index.js'
 
 config()
 
@@ -38,6 +39,7 @@ app.use('/api/dashboard', dashboardRouter)
 app.use('/api/dashboard', leDashboardRouter)
 app.use('/api', adminRouter)
 app.use('/api', yiyiDataRouter)
+app.use('/api/bff', bffRouter)
 
 // Health check
 app.get('/api/health', (_req, res) => {

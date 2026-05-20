@@ -5,6 +5,7 @@ import { AdSite, DailyInputRow, DailyInputRecord, BatchInputItem, AdTypeCode, In
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart } from "../utils/date.js"
 import { calculateActualRevenue, calculateCpmRevenue, calculateRatioRevenue, calculateRebateAmount } from "../utils/calculations.js"
+import { saveDailyInputBatch } from "../workflows/dailyInputBatch.workflow.js"
 
 const router = Router()
 
@@ -97,15 +98,15 @@ router.get(
       const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr)
       const searchFilter = search
         ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" as const } },
-              {
-                upstream: {
-                  name: { contains: search, mode: "insensitive" as const },
-                },
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            {
+              upstream: {
+                name: { contains: search, mode: "insensitive" as const },
               },
-            ],
-          }
+            },
+          ],
+        }
         : undefined
 
       // 1. Site đang chạy + site đã có record lịch sử trong ngày đó
@@ -243,177 +244,14 @@ router.post(
       }
       const userId = req.user!.id
 
-      // Validate: date <= today
-      const inputDate = getBusinessDayStart(date)
-      const todayDate = getBusinessDayStart(formatBusinessDate(new Date()))
-      if (inputDate.getTime() > todayDate.getTime()) {
-        res.status(400).json({ success: false, error: "Cannot input future date" })
-        return
-      }
+      const result = await saveDailyInputBatch({
+        date,
+        adTypeCode: ad_type,
+        records,
+        userId,
+      })
 
-      const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(date)
-
-      // Fetch all involved ad_sites
-      const siteIds = records.map((r) => r.ad_site_id)
-      const [adSites, existingRecords] = await Promise.all([
-        prisma.adSite.findMany({
-          where: {
-            id: { in: siteIds },
-            isArchived: false,
-            status: "active",
-            upstream: {
-              status: "active",
-            },
-          },
-          include: { upstream: { include: { adType: true } } },
-        }),
-        prisma.dailyInput.findMany({
-          where: {
-            recordDate: { gte: startOfDay, lt: endOfDay },
-            adSiteId: { in: siteIds },
-          },
-          select: {
-            adSiteId: true,
-          },
-        }),
-      ])
-      const siteMap = new Map(adSites.map((s) => [s.id, s]))
-      const existingRecordSiteIds = new Set(existingRecords.map((record) => record.adSiteId))
-      const activeRebateRateMap =
-        ad_type === "SM"
-          ? await getActiveAdSiteRebateRateMap(siteIds, inputDate)
-          : new Map<number, number>()
-
-      const errors: { ad_site_id: number; message: string }[] = []
-      let saved = 0
-
-      for (const item of records) {
-        const site = siteMap.get(item.ad_site_id)
-        if (!site) {
-          errors.push({ ad_site_id: item.ad_site_id, message: "Ad site not found" })
-          continue
-        }
-        if (!site.isActive && !existingRecordSiteIds.has(item.ad_site_id)) {
-          errors.push({ ad_site_id: item.ad_site_id, message: "Ad site is paused" })
-          continue
-        }
-        if (site.upstream.adType.code !== ad_type) {
-          errors.push({ ad_site_id: item.ad_site_id, message: `Site does not belong to ${ad_type}` })
-          continue
-        }
-
-        // Check existing record
-        const existing = await prisma.dailyInput.findUnique({
-          where: {
-            recordDate_adSiteId: {
-              recordDate: inputDate,
-              adSiteId: item.ad_site_id,
-            },
-          },
-        })
-
-        if (existing && existing.status === "confirmed") {
-          errors.push({ ad_site_id: item.ad_site_id, message: "Record confirmed — cannot edit" })
-          continue
-        }
-
-        let revenue: number
-        let rebateAmount = 0
-        let rebateRateSnapshot = 0
-
-        if (site.billingMethod === "CPM") {
-          // CPM: use stored snapshot price (or override) for revenue calculation
-          const basePrice = existing?.unitPriceSnapshot ?? site.currentUnitPrice ?? 0
-          const unitPrice = item.unit_price_override ?? Number(basePrice)
-          const qty = item.qty ?? existing?.qty ?? 0
-          const baseRevenue = calculateCpmRevenue(qty, unitPrice)
-
-          if (ad_type === "SM") {
-            rebateRateSnapshot = activeRebateRateMap.get(site.id) ?? 0
-
-            if (item.actual_revenue !== undefined) {
-              revenue = toNumber(item.actual_revenue)
-              rebateAmount = baseRevenue - revenue
-            } else if (item.rebate_amount !== undefined) {
-              rebateAmount = toNumber(item.rebate_amount)
-              revenue = calculateActualRevenue(baseRevenue, rebateAmount)
-            } else if (
-              existing &&
-              item.qty === undefined &&
-              item.unit_price_override === undefined
-            ) {
-              rebateAmount = Number(existing.rebateAmount)
-              revenue = Number(existing.revenue)
-              rebateRateSnapshot = Number(existing.rebateRateSnapshot)
-            } else {
-              rebateAmount = calculateRebateAmount(qty, rebateRateSnapshot)
-              revenue = calculateActualRevenue(baseRevenue, rebateAmount)
-            }
-          } else {
-            revenue = baseRevenue
-          }
-        } else {
-          // RATIO: ratio_override from frontend > existing snapshot > current ratio
-          const baseRatio = item.ratio_override ?? existing?.ratioSnapshot ?? site.currentRatio ?? 1
-          const ratio = item.ratio_override !== undefined
-            ? Number(item.ratio_override)
-            : (item.amount1 !== undefined || item.amount2 !== undefined
-              ? Number(baseRatio)
-              : Number(site.currentRatio ?? 1))
-          revenue = calculateRatioRevenue(item.amount1 ?? 0, item.amount2 ?? 0, ratio)
-        }
-
-        if (existing) {
-          // UPDATE unconfirmed record
-          const updateData: Record<string, unknown> = {
-            amount1: item.amount1,
-            amount2: item.amount2,
-            ratioSnapshot: site.billingMethod === "RATIO"
-              ? (item.ratio_override ?? existing.ratioSnapshot ?? site.currentRatio)
-              : undefined,
-            rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : existing.rebateAmount,
-            rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : existing.rebateRateSnapshot,
-            revenue,
-            updatedAt: new Date(),
-          }
-          // Only touch qty if explicitly provided (don't overwrite existing qty for RATIO records)
-          if (item.qty !== undefined) {
-            updateData.qty = item.qty
-          }
-          if (site.billingMethod === "CPM") {
-            updateData.unitPriceSnapshot = item.unit_price_override ?? existing.unitPriceSnapshot ?? site.currentUnitPrice
-          }
-          await prisma.dailyInput.update({
-            where: { id: existing.id },
-            data: updateData,
-          })
-        } else {
-          // INSERT
-          await prisma.dailyInput.create({
-            data: {
-              recordDate: inputDate,
-              adSiteId: item.ad_site_id,
-              qty: item.qty ?? 0,
-              unitPriceSnapshot: site.billingMethod === "CPM"
-                ? (item.unit_price_override ?? site.currentUnitPrice)
-                : undefined,
-              amount1: item.amount1 ?? 0,
-              amount2: item.amount2 ?? 0,
-              ratioSnapshot: site.billingMethod === "RATIO"
-                ? (item.ratio_override ?? site.currentRatio)
-                : undefined,
-              rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : 0,
-              rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : 0,
-              revenue,
-              status: "unconfirmed",
-              createdBy: userId,
-            },
-          })
-        }
-        saved++
-      }
-
-      res.json({ success: true, saved, errors })
+      res.json(result)
     } catch (err: any) {
       console.error("POST /api/daily-input/batch error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })

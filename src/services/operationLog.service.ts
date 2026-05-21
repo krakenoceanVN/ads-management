@@ -32,20 +32,24 @@ interface CreateLogParams {
  * Silently ignores all errors so it never breaks the main business action.
  */
 export function createOperationLog(params: CreateLogParams): void {
-  // Fire-and-forget — we deliberately do not await or check errors
-  prisma.operationLog
-    .create({
-      data: {
-        userId: params.userId ?? null,
-        username: params.username ?? null,
-        action: params.action,
-        module: params.module,
-        targetType: params.targetType ?? null,
-        targetId: params.targetId ?? null,
-        detail: params.detail ?? null,
-      },
-    })
-    .catch(() => {
-      // Swallow error — logging must never affect business operations
-    });
+  try {
+    if (!prisma.operationLog) return;
+    prisma.operationLog
+      .create({
+        data: {
+          userId: params.userId ?? null,
+          username: params.username ?? null,
+          action: params.action,
+          module: params.module,
+          targetType: params.targetType ?? null,
+          targetId: params.targetId ?? null,
+          detail: params.detail ?? null,
+        },
+      })
+      .catch(() => {
+        // Swallow error — logging must never affect business operations
+      });
+  } catch {
+    // Swallow sync errors too, e.g. prisma.operationLog is undefined before generate
+  }
 }

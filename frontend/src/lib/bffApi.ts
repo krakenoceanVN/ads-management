@@ -37,6 +37,7 @@ import type {
   UpdateAdvertiserInput,
   UpdateMediaInput,
 } from './bffTypes';
+import { uiTypeToApiType, apiTypeToUiType, type EntryType } from './bffTypes';
 
 export const BFF_AUTH_TOKEN_STORAGE_KEY = 'token';
 export const BFF_AUTH_TOKEN_INVALID_EVENT = 'bff-auth-token-invalid';
@@ -224,13 +225,18 @@ export async function getMediaId(id: number) {
 }
 
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
-  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/data-entry/advertisers', { params }));
+  const data = await unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/data-entry/advertisers', { params }));
+  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
 }
 
 export async function saveAdvertiserEntryBatch(payload: SaveAdvertiserEntryBatchPayload) {
+  const apiPayload = {
+    ...payload,
+    records: payload.records.map(r => ({ ...r, type: uiTypeToApiType(r.type) })),
+  };
   return request<SaveEntryBatchResult>('/api/bff/data-entry/advertisers/batch', {
     method: 'POST',
-    body: payload,
+    body: apiPayload,
   });
 }
 
@@ -248,13 +254,18 @@ export async function unconfirmAdvertiserEntry(id: number) {
 }
 
 export async function listMediaEntries(params: ListMediaEntriesParams) {
-  return unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/data-entry/media', { params }));
+  const data = await unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/data-entry/media', { params }));
+  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
 }
 
 export async function saveMediaEntryBatch(payload: SaveMediaEntryBatchPayload) {
+  const apiPayload = {
+    ...payload,
+    records: payload.records.map(r => ({ ...r, type: uiTypeToApiType(r.type) })),
+  };
   return request<SaveEntryBatchResult>('/api/bff/data-entry/media/batch', {
     method: 'POST',
-    body: payload,
+    body: apiPayload,
   });
 }
 
@@ -272,11 +283,13 @@ export async function unconfirmMediaEntry(id: number) {
 }
 
 export async function getAdvertiserReport(params: AdvertiserReportParams) {
-  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertisers', { params }));
+  const data = await unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertisers', { params }));
+  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
 }
 
 export async function getMediaReport(params: MediaReportParams) {
-  return unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/reports/media', { params }));
+  const data = await unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/reports/media', { params }));
+  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
 }
 
 export async function getTotalProfitReport(params: TotalProfitReportParams) {

@@ -12,13 +12,15 @@ export interface BFFMedia {
     notes: string | null;
     status: 'active' | 'inactive';
     upstreamId?: number;
-    billingMethod?: 'CPM' | 'RATIO';
+    billingMethod?: 'CPM' | 'RATIO' | 'CPA';
+    currentUnitPrice?: number;
+    currentRatio?: number;
 }
 
 export interface CreateMediaRequest {
     name: string;
     upstreamId: number; // REQUIRED - no default
-    billingMethod: 'CPM' | 'RATIO'; // REQUIRED - no default
+    billingMethod: 'CPM' | 'RATIO' | 'CPA'; // REQUIRED - no default
     status?: 'active' | 'inactive';
     currentUnitPrice?: number; // For CPM billing
     currentRatio?: number; // For RATIO billing
@@ -27,7 +29,7 @@ export interface CreateMediaRequest {
 export interface UpdateMediaRequest {
     name?: string;
     upstreamId?: number;
-    billingMethod?: 'CPM' | 'RATIO';
+    billingMethod?: 'CPM' | 'RATIO' | 'CPA';
     status?: 'active' | 'inactive';
     currentUnitPrice?: number; // For CPM billing
     currentRatio?: number; // For RATIO billing
@@ -63,7 +65,9 @@ export function mapAdSiteToMedia(adSite: AdSiteRaw): BFFMedia {
         notes: null,
         status: adSite.status as 'active' | 'inactive',
         upstreamId: adSite.upstreamId,
-        billingMethod: adSite.billingMethod as 'CPM' | 'RATIO',
+        billingMethod: adSite.billingMethod as 'CPM' | 'RATIO' | 'CPA',
+        currentUnitPrice: adSite.currentUnitPrice != null ? Number(adSite.currentUnitPrice) : undefined,
+        currentRatio: adSite.currentRatio != null ? Number(adSite.currentRatio) : undefined,
     };
 }
 
@@ -81,7 +85,7 @@ export function mapAdSitesToMedia(adSites: AdSiteRaw[]): BFFMedia[] {
 export function mapCreateRequestToAdSiteCreate(data: CreateMediaRequest): {
     name: string;
     upstreamId: number;
-    billingMethod: 'CPM' | 'RATIO';
+    billingMethod: 'CPM' | 'RATIO' | 'CPA';
     currentUnitPrice?: number;
     currentRatio?: number;
     status: string;
@@ -97,8 +101,8 @@ export function mapCreateRequestToAdSiteCreate(data: CreateMediaRequest): {
     if (!data.billingMethod) {
         throw new Error('billingMethod is required (no default)');
     }
-    if (data.billingMethod !== 'CPM' && data.billingMethod !== 'RATIO') {
-        throw new Error('billingMethod must be CPM or RATIO');
+    if (data.billingMethod !== 'CPM' && data.billingMethod !== 'RATIO' && data.billingMethod !== 'CPA') {
+        throw new Error('billingMethod must be CPM, RATIO, or CPA');
     }
 
     return {
@@ -140,12 +144,16 @@ export function mapUpdateRequestToAdSiteUpdate(data: UpdateMediaRequest): {
         update.upstreamId = data.upstreamId;
     }
     if (data.billingMethod !== undefined) {
-        if (data.billingMethod !== 'CPM' && data.billingMethod !== 'RATIO') {
-            throw new Error('billingMethod must be CPM or RATIO');
+        if (data.billingMethod !== 'CPM' && data.billingMethod !== 'RATIO' && data.billingMethod !== 'CPA') {
+            throw new Error('billingMethod must be CPM, RATIO, or CPA');
         }
         update.billingMethod = data.billingMethod;
         update.currentUnitPrice = data.billingMethod === 'CPM' ? 0 : undefined;
         update.currentRatio = data.billingMethod === 'RATIO' ? 1 : undefined;
+        if (data.billingMethod === 'CPA') {
+            update.currentUnitPrice = undefined;
+            update.currentRatio = undefined;
+        }
     }
     if (data.status !== undefined) {
         update.status = data.status;

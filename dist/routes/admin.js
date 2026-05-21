@@ -14,6 +14,7 @@ const env_js_1 = require("../utils/env.js");
 const constants_js_1 = require("../utils/constants.js");
 const rateLimit_js_1 = require("../utils/rateLimit.js");
 const calculations_js_1 = require("../utils/calculations.js");
+const operationLog_service_js_1 = require("../services/operationLog.service.js");
 const router = (0, express_1.Router)();
 const JWT_EXPIRES_IN = "8h";
 const handleValidation = (req, res, next) => {
@@ -1689,11 +1690,29 @@ router.post("/auth/login", [
         const { username, password } = req.body;
         const user = await prisma_js_1.default.user.findUnique({ where: { username } });
         if (!user || user.status === "inactive") {
+            (0, operationLog_service_js_1.createOperationLog)({
+                userId: null,
+                username: username ?? null,
+                action: "LOGIN_FAILED",
+                module: "Auth",
+                targetType: "User",
+                targetId: null,
+                detail: "Invalid credentials",
+            });
             res.status(401).json({ success: false, error: "Invalid credentials" });
             return;
         }
         const valid = await bcrypt_1.default.compare(password, user.passwordHash);
         if (!valid) {
+            (0, operationLog_service_js_1.createOperationLog)({
+                userId: null,
+                username: username ?? null,
+                action: "LOGIN_FAILED",
+                module: "Auth",
+                targetType: "User",
+                targetId: null,
+                detail: "Invalid credentials",
+            });
             res.status(401).json({ success: false, error: "Invalid credentials" });
             return;
         }
@@ -1715,6 +1734,15 @@ router.post("/auth/login", [
             created_at: user.createdAt,
         };
         const token = jsonwebtoken_1.default.sign(payload, (0, env_js_1.getRequiredEnv)("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN });
+        (0, operationLog_service_js_1.createOperationLog)({
+            userId: user.id,
+            username: user.username,
+            action: "LOGIN_SUCCESS",
+            module: "Auth",
+            targetType: "User",
+            targetId: String(user.id),
+            detail: null,
+        });
         res.json({ success: true, token, user: payload });
     }
     catch (err) {

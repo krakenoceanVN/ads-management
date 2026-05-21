@@ -6,7 +6,7 @@ export const YIYI_DEFAULT_UNIT_PRICE = 2
 export const YIYI_DEFAULT_PROFIT_UNIT_PRICE = 1
 
 export function calculateCpmRevenue(quantity: number, unitPrice: number): number {
-  return quantity * unitPrice
+  return (quantity * unitPrice) / 1000
 }
 
 export function calculateRebateAmount(quantity: number, rebateRate: number): number {
@@ -19,6 +19,10 @@ export function calculateActualRevenue(baseRevenue: number, rebateAmount: number
 
 export function calculateRatioRevenue(amount1: number, amount2: number, ratio: number): number {
   return (amount1 + amount2) * ratio
+}
+
+export function calculateCpaRevenue(rate: number, settlement: number): number {
+  return rate * settlement
 }
 
 export function calculateMlPayoutAmount(

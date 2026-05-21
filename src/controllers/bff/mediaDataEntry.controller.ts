@@ -141,13 +141,13 @@ router.post(
                 records: MediaBatchItem[];
             };
 
-            // Validate types - reject CPA/CPS
+            // Validate types — reject unsupported
             for (const item of records) {
                 const billingMethod = mapTypeToBillingMethod(item.type);
                 if (billingMethod === "UNSUPPORTED") {
                     res.status(400).json({
                         success: false,
-                        error: `Unsupported type '${item.type}'. Only CPM and RATIO are supported.`,
+                        error: `Unsupported type '${item.type}'. Only CPM, RATIO, and CPA are supported.`,
                     });
                     return;
                 }

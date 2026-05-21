@@ -29,11 +29,13 @@ export function validateDataCoefficient(value: unknown): string | null {
 
 /**
  * Maps frontend type to billingMethod
- * CPA/CPS → 400 error
+ * CPA: rate × settlement (direct multiplier)
+ * RATIO: (amount1 + amount2) × ratio — user-facing label is CPS in UI
  */
-export function mapTypeToBillingMethod(type: string): "CPM" | "RATIO" | "UNSUPPORTED" {
+export function mapTypeToBillingMethod(type: string): "CPM" | "RATIO" | "CPA" | "UNSUPPORTED" {
     if (type === "CPM") return "CPM";
     if (type === "RATIO") return "RATIO";
+    if (type === "CPA") return "CPA";
     return "UNSUPPORTED";
 }
 

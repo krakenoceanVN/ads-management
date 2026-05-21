@@ -8,7 +8,7 @@ const express_validator_1 = require("express-validator");
 const auth_js_1 = require("../middleware/auth.js");
 const prisma_js_1 = __importDefault(require("../prisma.js"));
 const date_js_1 = require("../utils/date.js");
-const calculations_js_1 = require("../utils/calculations.js");
+const dailyInputBatch_workflow_js_1 = require("../workflows/dailyInputBatch.workflow.js");
 const router = (0, express_1.Router)();
 // ============================================================
 // Validation helpers
@@ -210,168 +210,13 @@ router.post("/batch", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
     try {
         const { date, ad_type, records } = req.body;
         const userId = req.user.id;
-        // Validate: date <= today
-        const inputDate = (0, date_js_1.getBusinessDayStart)(date);
-        const todayDate = (0, date_js_1.getBusinessDayStart)((0, date_js_1.formatBusinessDate)(new Date()));
-        if (inputDate.getTime() > todayDate.getTime()) {
-            res.status(400).json({ success: false, error: "Cannot input future date" });
-            return;
-        }
-        const { gte: startOfDay, lt: endOfDay } = (0, date_js_1.getBusinessDayRange)(date);
-        // Fetch all involved ad_sites
-        const siteIds = records.map((r) => r.ad_site_id);
-        const [adSites, existingRecords] = await Promise.all([
-            prisma_js_1.default.adSite.findMany({
-                where: {
-                    id: { in: siteIds },
-                    isArchived: false,
-                    status: "active",
-                    upstream: {
-                        status: "active",
-                    },
-                },
-                include: { upstream: { include: { adType: true } } },
-            }),
-            prisma_js_1.default.dailyInput.findMany({
-                where: {
-                    recordDate: { gte: startOfDay, lt: endOfDay },
-                    adSiteId: { in: siteIds },
-                },
-                select: {
-                    adSiteId: true,
-                },
-            }),
-        ]);
-        const siteMap = new Map(adSites.map((s) => [s.id, s]));
-        const existingRecordSiteIds = new Set(existingRecords.map((record) => record.adSiteId));
-        const activeRebateRateMap = ad_type === "SM"
-            ? await getActiveAdSiteRebateRateMap(siteIds, inputDate)
-            : new Map();
-        const errors = [];
-        let saved = 0;
-        for (const item of records) {
-            const site = siteMap.get(item.ad_site_id);
-            if (!site) {
-                errors.push({ ad_site_id: item.ad_site_id, message: "Ad site not found" });
-                continue;
-            }
-            if (!site.isActive && !existingRecordSiteIds.has(item.ad_site_id)) {
-                errors.push({ ad_site_id: item.ad_site_id, message: "Ad site is paused" });
-                continue;
-            }
-            if (site.upstream.adType.code !== ad_type) {
-                errors.push({ ad_site_id: item.ad_site_id, message: `Site does not belong to ${ad_type}` });
-                continue;
-            }
-            // Check existing record
-            const existing = await prisma_js_1.default.dailyInput.findUnique({
-                where: {
-                    recordDate_adSiteId: {
-                        recordDate: inputDate,
-                        adSiteId: item.ad_site_id,
-                    },
-                },
-            });
-            if (existing && existing.status === "confirmed") {
-                errors.push({ ad_site_id: item.ad_site_id, message: "Record confirmed — cannot edit" });
-                continue;
-            }
-            let revenue;
-            let rebateAmount = 0;
-            let rebateRateSnapshot = 0;
-            if (site.billingMethod === "CPM") {
-                // CPM: use stored snapshot price (or override) for revenue calculation
-                const basePrice = existing?.unitPriceSnapshot ?? site.currentUnitPrice ?? 0;
-                const unitPrice = item.unit_price_override ?? Number(basePrice);
-                const qty = item.qty ?? existing?.qty ?? 0;
-                const baseRevenue = (0, calculations_js_1.calculateCpmRevenue)(qty, unitPrice);
-                if (ad_type === "SM") {
-                    rebateRateSnapshot = activeRebateRateMap.get(site.id) ?? 0;
-                    if (item.actual_revenue !== undefined) {
-                        revenue = toNumber(item.actual_revenue);
-                        rebateAmount = baseRevenue - revenue;
-                    }
-                    else if (item.rebate_amount !== undefined) {
-                        rebateAmount = toNumber(item.rebate_amount);
-                        revenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
-                    }
-                    else if (existing &&
-                        item.qty === undefined &&
-                        item.unit_price_override === undefined) {
-                        rebateAmount = Number(existing.rebateAmount);
-                        revenue = Number(existing.revenue);
-                        rebateRateSnapshot = Number(existing.rebateRateSnapshot);
-                    }
-                    else {
-                        rebateAmount = (0, calculations_js_1.calculateRebateAmount)(qty, rebateRateSnapshot);
-                        revenue = (0, calculations_js_1.calculateActualRevenue)(baseRevenue, rebateAmount);
-                    }
-                }
-                else {
-                    revenue = baseRevenue;
-                }
-            }
-            else {
-                // RATIO: ratio_override from frontend > existing snapshot > current ratio
-                const baseRatio = item.ratio_override ?? existing?.ratioSnapshot ?? site.currentRatio ?? 1;
-                const ratio = item.ratio_override !== undefined
-                    ? Number(item.ratio_override)
-                    : (item.amount1 !== undefined || item.amount2 !== undefined
-                        ? Number(baseRatio)
-                        : Number(site.currentRatio ?? 1));
-                revenue = (0, calculations_js_1.calculateRatioRevenue)(item.amount1 ?? 0, item.amount2 ?? 0, ratio);
-            }
-            if (existing) {
-                // UPDATE unconfirmed record
-                const updateData = {
-                    amount1: item.amount1,
-                    amount2: item.amount2,
-                    ratioSnapshot: site.billingMethod === "RATIO"
-                        ? (item.ratio_override ?? existing.ratioSnapshot ?? site.currentRatio)
-                        : undefined,
-                    rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : existing.rebateAmount,
-                    rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : existing.rebateRateSnapshot,
-                    revenue,
-                    updatedAt: new Date(),
-                };
-                // Only touch qty if explicitly provided (don't overwrite existing qty for RATIO records)
-                if (item.qty !== undefined) {
-                    updateData.qty = item.qty;
-                }
-                if (site.billingMethod === "CPM") {
-                    updateData.unitPriceSnapshot = item.unit_price_override ?? existing.unitPriceSnapshot ?? site.currentUnitPrice;
-                }
-                await prisma_js_1.default.dailyInput.update({
-                    where: { id: existing.id },
-                    data: updateData,
-                });
-            }
-            else {
-                // INSERT
-                await prisma_js_1.default.dailyInput.create({
-                    data: {
-                        recordDate: inputDate,
-                        adSiteId: item.ad_site_id,
-                        qty: item.qty ?? 0,
-                        unitPriceSnapshot: site.billingMethod === "CPM"
-                            ? (item.unit_price_override ?? site.currentUnitPrice)
-                            : undefined,
-                        amount1: item.amount1 ?? 0,
-                        amount2: item.amount2 ?? 0,
-                        ratioSnapshot: site.billingMethod === "RATIO"
-                            ? (item.ratio_override ?? site.currentRatio)
-                            : undefined,
-                        rebateAmount: site.billingMethod === "CPM" && ad_type === "SM" ? rebateAmount : 0,
-                        rebateRateSnapshot: site.billingMethod === "CPM" && ad_type === "SM" ? rebateRateSnapshot : 0,
-                        revenue,
-                        status: "unconfirmed",
-                        createdBy: userId,
-                    },
-                });
-            }
-            saved++;
-        }
-        res.json({ success: true, saved, errors });
+        const result = await (0, dailyInputBatch_workflow_js_1.saveDailyInputBatch)({
+            date,
+            adTypeCode: ad_type,
+            records,
+            userId,
+        });
+        res.json(result);
     }
     catch (err) {
         console.error("POST /api/daily-input/batch error:", err);

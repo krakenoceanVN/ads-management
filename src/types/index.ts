@@ -1,5 +1,5 @@
 export type AdTypeCode = string
-export type BillingMethod = "CPM" | "RATIO"
+export type BillingMethod = "CPM" | "RATIO" | "CPA"
 export type InputStatus = "unconfirmed" | "confirmed"
 export type DownstreamType = "ML" | "LE" | "YIYI"
 export type UserStatus = "active" | "inactive"

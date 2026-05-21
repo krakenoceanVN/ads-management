@@ -114,7 +114,7 @@ router.post(
     [
         body("name").notEmpty().withMessage("name is required").isLength({ max: 200 }),
         body("upstreamId").isInt().toInt().withMessage("upstreamId is required (no default)"),
-        body("billingMethod").isIn(["CPM", "RATIO"]).withMessage("billingMethod must be CPM or RATIO (no default)"),
+        body("billingMethod").isIn(["CPM", "RATIO", "CPA"]).withMessage("billingMethod must be CPM, RATIO, or CPA (no default)"),
         body("status").optional().isIn(["active", "inactive"]),
         body("currentUnitPrice").optional().isFloat().toFloat(),
         body("currentRatio").optional().isFloat().toFloat(),
@@ -155,8 +155,10 @@ router.post(
 
             if (billingMethod === "CPM") {
                 createData.currentUnitPrice = currentUnitPrice ?? 0;
-            } else {
+            } else if (billingMethod === "RATIO") {
                 createData.currentRatio = currentRatio ?? 1;
+            } else {
+                // CPA: no default price/ratio
             }
 
             const adSite = await prisma.$transaction(async (tx) => {
@@ -207,7 +209,7 @@ router.put(
         param("id").isInt().toInt(),
         body("name").optional().isLength({ max: 200 }),
         body("upstreamId").optional().isInt().toInt(),
-        body("billingMethod").optional().isIn(["CPM", "RATIO"]),
+        body("billingMethod").optional().isIn(["CPM", "RATIO", "CPA"]),
         body("status").optional().isIn(["active", "inactive"]),
         body("currentUnitPrice").optional().isFloat().toFloat(),
         body("currentRatio").optional().isFloat().toFloat(),
@@ -248,10 +250,10 @@ router.put(
             }
 
             if (billingMethod !== undefined) {
-                if (billingMethod !== "CPM" && billingMethod !== "RATIO") {
+                if (billingMethod !== "CPM" && billingMethod !== "RATIO" && billingMethod !== "CPA") {
                     res.status(400).json({
                         success: false,
-                        error: "billingMethod must be CPM or RATIO",
+                        error: "billingMethod must be CPM, RATIO, or CPA",
                     });
                     return;
                 }
@@ -259,9 +261,13 @@ router.put(
                 if (billingMethod === "CPM") {
                     updateData.currentUnitPrice = currentUnitPrice ?? existing.currentUnitPrice ?? 0;
                     updateData.currentRatio = null;
-                } else {
+                } else if (billingMethod === "RATIO") {
                     updateData.currentRatio = currentRatio ?? existing.currentRatio ?? 1;
                     updateData.currentUnitPrice = null;
+                } else {
+                    // CPA: no currentUnitPrice/currentRatio needed
+                    updateData.currentUnitPrice = null;
+                    updateData.currentRatio = null;
                 }
             }
 

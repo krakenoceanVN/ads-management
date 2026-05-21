@@ -6,6 +6,7 @@ exports.getBusinessDayStart = getBusinessDayStart;
 exports.getBusinessDateAtHour = getBusinessDateAtHour;
 exports.getBusinessDayRange = getBusinessDayRange;
 exports.getBusinessMonthRange = getBusinessMonthRange;
+exports.getDaysInMonth = getDaysInMonth;
 exports.BUSINESS_TIME_ZONE = "Asia/Bangkok";
 const BUSINESS_UTC_OFFSET_HOURS = 7;
 function parseDateParts(dateStr) {
@@ -48,4 +49,14 @@ function getBusinessMonthRange(year, month) {
         gte: getBusinessDayStart(startDate),
         lt: getBusinessDayStart(nextMonthDate),
     };
+}
+function getDaysInMonth(year, month) {
+    const days = [];
+    const date = new Date(Date.UTC(year, month - 1, 1));
+    while (date.getUTCMonth() === month - 1) {
+        const dayStr = String(date.getUTCDate()).padStart(2, "0");
+        days.push(`${year}-${String(month).padStart(2, "0")}-${dayStr}`);
+        date.setUTCDate(date.getUTCDate() + 1);
+    }
+    return days;
 }

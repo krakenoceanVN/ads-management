@@ -100,6 +100,7 @@ function advertiserFormFromRecord(record: Advertiser, fallbackAdTypeCode = ''): 
 
 export function AdvertiserList() {
   const [search, setSearch] = React.useState('');
+  const [advFilter, setAdvFilter] = React.useState('');
   const [rows, setRows] = React.useState<Advertiser[]>([]);
   const [adOrders, setAdOrders] = React.useState<AdOrder[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -129,6 +130,36 @@ export function AdvertiserList() {
     return Array.from(byCode.values());
   }, [adOrders]);
 
+  // Cascade filter: reload AdOrders when advertiser filter changes
+  const loadAdOrders = React.useCallback(async (advertiserId?: number) => {
+    try {
+      // Backend maps AdType→AdOrder; advId param only sets passthrough field, doesn't filter by advertiser
+      // For cascade, we load all AdOrders and filter client-side
+      const orders = await listAdOrders();
+      setAdOrders(orders);
+    } catch (err) {
+      // Non-critical: keep existing orders on filter change
+    }
+  }, []);
+
+  // When advFilter changes → load orders for cascade
+  React.useEffect(() => {
+    void loadAdOrders(advFilter ? Number(advFilter) : undefined);
+  }, [advFilter, loadAdOrders]);
+
+  // When advertiser changes: reset adTypeCode in form if no longer valid
+  React.useEffect(() => {
+    if (!advFilter) {
+      // cleared — no reset needed
+    } else if (form.adTypeCode) {
+      // check if current form.adTypeCode is still valid for the new advertiser
+      const isValidForAdv = adOrders.some(o => o.adTypeCode === form.adTypeCode);
+      if (!isValidForAdv) {
+        setForm(prev => ({ ...prev, adTypeCode: adTypeOptions[0]?.adTypeCode ?? '' }));
+      }
+    }
+  }, [advFilter, adOrders, form.adTypeCode]);
+
   const loadRows = React.useCallback(async () => {
     setLoading(true);
     setError('');
@@ -150,6 +181,7 @@ export function AdvertiserList() {
   const firstAdTypeCode = adTypeOptions[0]?.adTypeCode ?? '';
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
+    if (advFilter && row.id !== Number(advFilter)) return false;
     if (!keyword) return true;
     return [row.name, row.adTypeCode, row.status].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
@@ -232,6 +264,10 @@ export function AdvertiserList() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdvertiser')}</button></div>
           <div className="toolbar-right">
+            <select className="filter-select" value={advFilter} onChange={e => setAdvFilter(e.target.value)}>
+              <option value="">{t('all') || 'Tất cả'}</option>
+              {rows.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
+            </select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('advertisers.csv', advertiserColumns, visibleRows)}>{t('export')}</button>
           </div>

@@ -12,6 +12,7 @@ const dashboard_js_1 = __importDefault(require("./routes/dashboard.js"));
 const admin_js_1 = __importDefault(require("./routes/admin.js"));
 const yiyiData_js_1 = __importDefault(require("./routes/yiyiData.js"));
 const leDashboard_js_1 = __importDefault(require("./routes/leDashboard.js"));
+const index_js_1 = __importDefault(require("./routes/bff/index.js"));
 (0, dotenv_1.config)();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT ?? 3000;
@@ -39,6 +40,7 @@ app.use('/api/dashboard', dashboard_js_1.default);
 app.use('/api/dashboard', leDashboard_js_1.default);
 app.use('/api', admin_js_1.default);
 app.use('/api', yiyiData_js_1.default);
+app.use('/api/bff', index_js_1.default);
 // Health check
 app.get('/api/health', (_req, res) => {
     res.json({ success: true, message: 'OK', timestamp: new Date().toISOString() });

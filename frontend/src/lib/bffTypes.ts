@@ -1,5 +1,23 @@
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'RATIO';
+export type EntryType = 'CPM' | 'RATIO' | 'CPA' | 'CPS';
+
+/**
+ * Maps UI-facing label to backend API value
+ * CPS (user-facing) → RATIO (backend)
+ */
+export function uiTypeToApiType(type: EntryType): 'CPM' | 'RATIO' | 'CPA' {
+    if (type === 'CPS') return 'RATIO';
+    return type;
+}
+
+/**
+ * Maps backend API value to UI-facing label
+ * RATIO (backend) → CPS (user-facing)
+ */
+export function apiTypeToUiType(type: 'CPM' | 'RATIO' | 'CPA'): 'CPM' | 'CPS' | 'CPA' {
+    if (type === 'RATIO') return 'CPS';
+    return type;
+}
 export type DataEntryStatus = 'pending' | 'confirmed';
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
 export type ReportStatusParam = 'confirmed' | 'unconfirmed' | 'pending' | 'all';
@@ -73,6 +91,8 @@ export interface Media {
   status: EntityStatus;
   upstreamId?: number;
   billingMethod?: EntryType;
+  currentUnitPrice?: number;
+  currentRatio?: number;
 }
 
 export interface CreateMediaInput {

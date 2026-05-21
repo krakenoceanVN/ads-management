@@ -5,6 +5,7 @@ import { Table, TypeTag } from '../components/Table';
 import {
   createMedia,
   deleteMedia,
+  getMedia,
   listAdOrders,
   listAdvertisers,
   listMedia,
@@ -81,6 +82,12 @@ type MediaFormState = {
   status: EntityStatus;
 };
 
+function isValidEmailForm(value: string) {
+  const raw = value.trim();
+  if (!raw) return true; // empty is allowed (optional field)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw);
+}
+
 function defaultMediaForm(upstreamId = ''): MediaFormState {
   return {
     name: '',
@@ -97,8 +104,8 @@ function mediaFormFromRecord(record: Media, fallbackUpstreamId = ''): MediaFormS
     name: record.name ?? '',
     upstreamId: String(record.upstreamId ?? fallbackUpstreamId),
     billingMethod: record.billingMethod ?? 'CPM',
-    currentUnitPrice: '',
-    currentRatio: '',
+    currentUnitPrice: record.currentUnitPrice != null ? String(record.currentUnitPrice) : '',
+    currentRatio: record.currentRatio != null ? String(record.currentRatio) : '',
     status: record.status ?? 'active',
   };
 }
@@ -112,6 +119,7 @@ function toOptionalNumber(value: string) {
 
 export function MediaMgmt() {
   const [search, setSearch] = React.useState('');
+  const [upstreamFilter, setUpstreamFilter] = React.useState('');
   const [rows, setRows] = React.useState<Media[]>([]);
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -160,6 +168,7 @@ export function MediaMgmt() {
 
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
+    if (upstreamFilter && row.upstreamId !== Number(upstreamFilter)) return false;
     if (!keyword) return true;
     return [row.name, row.upstreamId, advertiserName(row.upstreamId), row.billingMethod, row.status].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
@@ -168,7 +177,9 @@ export function MediaMgmt() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(defaultMediaForm(firstUpstreamId));
+    // v5.pdf cascade: pre-fill upstream with filter selection if set
+    const defaultUpstream = upstreamFilter || firstUpstreamId;
+    setForm(defaultMediaForm(defaultUpstream));
     setFormError('');
     setFormOpen(true);
   };
@@ -198,6 +209,13 @@ export function MediaMgmt() {
     const payload = buildPayload();
     if (!payload) {
       setFormError(t('requiredFields'));
+      return;
+    }
+
+    // v5.pdf: validate email format when present in the advertiser's contact
+    const selectedAdvertiser = advertisers.find(a => String(a.id) === form.upstreamId);
+    if (selectedAdvertiser?.email && !isValidEmailForm(selectedAdvertiser.email)) {
+      setFormError(t('invalidEmail') || 'Email không hợp lệ');
       return;
     }
 
@@ -252,6 +270,10 @@ export function MediaMgmt() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newMedia')}</button></div>
           <div className="toolbar-right">
+            <select className="filter-select" value={upstreamFilter} onChange={e => setUpstreamFilter(e.target.value)}>
+              <option value="">{t('all') || 'Tất cả'}</option>
+              {advertisers.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}
+            </select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media.csv', mediaColumns, visibleRows)}>{t('export')}</button>
           </div>
@@ -294,13 +316,14 @@ export function MediaMgmt() {
                 <div className="form-group"><label>{t('type')}</label>
                   <select value={form.billingMethod} onChange={e => setForm(prev => ({ ...prev, billingMethod: e.target.value as EntryType }))}>
                     <option value="CPM">CPM</option>
-                    <option value="RATIO">RATIO</option>
+                    <option value="RATIO">CPS</option>
+                    <option value="CPA">CPA</option>
                   </select>
                 </div>
-                <div className="form-group"><label>{form.billingMethod === 'CPM' ? t('unitPrice') : t('revenueShare')}</label>
+                <div className="form-group"><label>{form.billingMethod === 'CPM' ? t('unitPrice') : form.billingMethod === 'CPA' ? t('rate') : t('revenueShare')}</label>
                   <input
                     type="text"
-                    value={form.billingMethod === 'CPM' ? form.currentUnitPrice : form.currentRatio}
+                    value={form.billingMethod === 'CPM' ? form.currentUnitPrice : form.billingMethod === 'CPA' ? form.currentRatio : form.currentRatio}
                     onChange={e => setForm(prev => form.billingMethod === 'CPM' ? ({ ...prev, currentUnitPrice: e.target.value }) : ({ ...prev, currentRatio: e.target.value }))}
                   />
                 </div>

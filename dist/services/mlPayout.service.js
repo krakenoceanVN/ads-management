@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.calculateCostBreakdownMonthly = calculateCostBreakdownMonthly;
 exports.calculateMLPayout = calculateMLPayout;
 exports.calculateLEPayout = calculateLEPayout;
 exports.calculateYiyiPayout = calculateYiyiPayout;
@@ -11,6 +12,111 @@ const yiyiPricing_service_js_1 = require("./yiyiPricing.service.js");
 /** Convert "YYYY-MM-DD" → { startOfDay, endOfDay } in business TZ */
 function dateRange(dateStr) {
     return (0, date_js_1.getBusinessDayRange)(dateStr);
+}
+/**
+ * Optimized: calculate monthly cost breakdown in 3 queries total (vs 30*7 queries).
+ * Uses Prisma groupBy to fetch all daily aggregates in bulk, then computes in-memory.
+ */
+async function calculateCostBreakdownMonthly(year, month, adTypeCode, prisma) {
+    const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
+    const { gte, lt } = (0, date_js_1.getBusinessMonthRange)(year, month);
+    // 1. Batch: confirmed DailyInput aggregates grouped by date, per adTypeId
+    const revenueByDate = await prisma.dailyInput.groupBy({
+        by: ["recordDate"],
+        where: {
+            recordDate: { gte, lt },
+            status: "confirmed",
+            adSite: {
+                isArchived: false,
+                upstream: {
+                    adTypeId,
+                    status: "active",
+                },
+            },
+        },
+        _sum: { revenue: true, qty: true },
+    });
+    // Build lookup maps
+    const revenueMap = new Map();
+    const qtyMap = new Map();
+    for (const row of revenueByDate) {
+        const dateStr = (0, date_js_1.formatBusinessDate)(row.recordDate);
+        revenueMap.set(dateStr, Number(row._sum.revenue ?? 0));
+        qtyMap.set(dateStr, Number(row._sum.qty ?? 0));
+    }
+    // 2. Batch: all active downstream periods for the month
+    const downstreamPeriods = await prisma.downstreamPeriod.findMany({
+        where: {
+            downstream: { adTypeId, status: "active" },
+            startDate: { lte: lt },
+            OR: [{ endDate: null }, { endDate: { gte: gte } }],
+        },
+        include: { downstream: true },
+        orderBy: { startDate: "desc" },
+    });
+    const mlPeriod = downstreamPeriods.find((p) => p.downstream.downstreamType === "ML");
+    const lePeriod = downstreamPeriods.find((p) => p.downstream.downstreamType === "LE");
+    const mlRate = Number(mlPeriod?.downstream.payoutRate ?? calculations_js_1.DEFAULT_ML_PAYOUT_RATE);
+    const leRate = Number(lePeriod?.downstream.payoutRate ?? calculations_js_1.DEFAULT_LE_PAYOUT_RATE);
+    const leUnitPrice = Number(lePeriod?.unitPrice ?? calculations_js_1.DEFAULT_LE_UNIT_PRICE);
+    // 3. Batch: all yiyi daily data for the month
+    const yiyiByDate = new Map();
+    if (adTypeCode === "SM") {
+        const yiyiRecords = await prisma.yiyiDailyData.findMany({
+            where: { recordDate: { gte, lt } },
+        });
+        for (const rec of yiyiRecords) {
+            const dateStr = (0, date_js_1.formatBusinessDate)(rec.recordDate);
+            yiyiByDate.set(dateStr, (yiyiByDate.get(dateStr) ?? 0) + rec.qty);
+        }
+        const pricing = await (0, yiyiPricing_service_js_1.getYiyiDailyPricing)(`${year}-${String(month).padStart(2, "0")}-01`, prisma);
+        const days = (0, date_js_1.getDaysInMonth)(year, month);
+        const results = new Map();
+        for (const dayStr of days) {
+            const totalRevenue = revenueMap.get(dayStr) ?? 0;
+            const totalQty = qtyMap.get(dayStr) ?? 0;
+            const uv = yiyiByDate.get(dayStr) ?? totalQty;
+            const mlPayout = (0, calculations_js_1.calculateMlPayoutAmount)(totalRevenue, mlRate);
+            const leRevenue = (0, calculations_js_1.calculateLeRevenueFromSmRevenue)(totalRevenue, leRate);
+            const leMlCost = (0, calculations_js_1.calculateUnitPricePayout)(totalQty, leUnitPrice);
+            const leTax = (0, calculations_js_1.calculateTaxOnMargin)(leRevenue, leMlCost);
+            const lePayout = (0, calculations_js_1.calculateNetProfit)(leRevenue, leMlCost, leTax);
+            const yiyiPayout = (0, calculations_js_1.calculateYiyiAmount)(uv, pricing.unitPrice);
+            const cost = (0, calculations_js_1.calculateSmServiceCost)(mlPayout, lePayout, yiyiPayout);
+            const tax = (0, calculations_js_1.calculateTaxOnMargin)(totalRevenue, cost);
+            const profit = (0, calculations_js_1.calculateNetProfit)(totalRevenue, cost, tax);
+            const profit_rate = (0, calculations_js_1.calculateProfitRate)(profit, totalRevenue);
+            results.set(dayStr, {
+                revenue: totalRevenue,
+                ml_payout: mlPayout,
+                le_payout: lePayout,
+                yiyi_payout: yiyiPayout,
+                cost,
+                tax,
+                profit,
+                profit_rate,
+            });
+        }
+        return results;
+    }
+    // Non-SM: just ML payout
+    const results = new Map();
+    for (const [dateStr, totalRevenue] of revenueMap) {
+        const mlPayout = (0, calculations_js_1.calculateMlPayoutAmount)(totalRevenue, mlRate);
+        const cost = mlPayout;
+        const tax = (0, calculations_js_1.calculateTaxOnMargin)(totalRevenue, cost);
+        const profit = (0, calculations_js_1.calculateNetProfit)(totalRevenue, cost, tax);
+        const profit_rate = (0, calculations_js_1.calculateProfitRate)(profit, totalRevenue);
+        results.set(dateStr, {
+            revenue: totalRevenue,
+            ml_payout: mlPayout,
+            cost,
+            tax,
+            profit,
+            profit_rate,
+        });
+    }
+    return results;
 }
 // ============================================================
 // ML Payout — ALL ad types, ALWAYS ×0.8

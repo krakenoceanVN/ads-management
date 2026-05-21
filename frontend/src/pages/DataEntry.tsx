@@ -68,7 +68,7 @@ function errorMessage(error: unknown) {
 }
 
 function isAllowedEntryType(type: unknown): type is EntryType {
-  return type === 'CPM' || type === 'RATIO';
+  return type === 'CPM' || type === 'RATIO' || type === 'CPA';
 }
 
 function isNeutralDataCoefficient(value: unknown) {

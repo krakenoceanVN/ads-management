@@ -25,6 +25,9 @@ type StatusFilter = '' | 'online' | 'offline' | 'confirmed' | 'pendingConfirm' |
 
 const DEFAULT_REPORT_PERIOD = '2026-05';
 const totalProfitInFlight = new Map<string, Promise<TotalProfitReportRow[]>>();
+const orderProfitInFlight = new Map<string, Promise<OrderProfitReportRow[]>>();
+const advQueryInFlight = new Map<string, Promise<AdvertiserEntryRow[]>>();
+const mediaQueryInFlight = new Map<string, Promise<MediaEntryRow[]>>();
 
 function loadTotalProfitRows(date: string) {
   const existing = totalProfitInFlight.get(date);
@@ -33,6 +36,17 @@ function loadTotalProfitRows(date: string) {
     totalProfitInFlight.delete(date);
   });
   totalProfitInFlight.set(date, request);
+  return request;
+}
+
+function loadOrderProfitRows(date: string, adTypeCode?: string) {
+  const key = `${date}:${adTypeCode ?? ''}`;
+  const existing = orderProfitInFlight.get(key);
+  if (existing) return existing;
+  const request = getOrderProfitReport({ date, adTypeCode }).finally(() => {
+    orderProfitInFlight.delete(key);
+  });
+  orderProfitInFlight.set(key, request);
   return request;
 }
 
@@ -346,7 +360,7 @@ export function OrderProfit() {
     let cancelled = false;
     setLoading(true);
     setError('');
-    getOrderProfitReport({ date, adTypeCode: business || undefined })
+    loadOrderProfitRows(date, business || undefined)
       .then(data => {
         if (!cancelled) setRows(data);
       })
@@ -447,6 +461,36 @@ export function AdvQuery() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  // Use ref to keep latest rows available for deriving filter params
+  // without causing unnecessary effect re-runs
+  const rowsRef = React.useRef<AdvertiserEntryRow[]>([]);
+  rowsRef.current = rows;
+
+  const getReportParams = React.useCallback(() => {
+    const rows = rowsRef.current;
+    const advertiserId = filters.advertiser && rows.length > 0
+      ? (() => { const match = rows.find(r => r.advertiser === filters.advertiser); return match?.advertiserId; })()
+      : undefined;
+    return {
+      date: filters.date,
+      status: statusParam(filters.status),
+      advertiserId,
+      adTypeCode: filters.adId || undefined,
+    };
+  }, [filters.date, filters.status, filters.advertiser, filters.adId]);
+
+  const loadAdvQueryRows = React.useCallback(() => {
+    const params = getReportParams();
+    const key = `${params.date}:${params.status}:${params.advertiserId ?? ''}:${params.adTypeCode ?? ''}`;
+    const existing = advQueryInFlight.get(key);
+    if (existing) return existing;
+    const request = getAdvertiserReport(params).finally(() => {
+      advQueryInFlight.delete(key);
+    });
+    advQueryInFlight.set(key, request);
+    return request;
+  }, [getReportParams]);
+
   React.useEffect(() => {
     if (!filters.date) {
       setRows([]);
@@ -455,7 +499,7 @@ export function AdvQuery() {
     let cancelled = false;
     setLoading(true);
     setError('');
-    getAdvertiserReport({ date: filters.date, status: statusParam(filters.status) })
+    loadAdvQueryRows()
       .then(data => {
         if (!cancelled) setRows(data);
       })
@@ -468,7 +512,7 @@ export function AdvQuery() {
     return () => {
       cancelled = true;
     };
-  }, [filters.date, filters.status]);
+  }, [loadAdvQueryRows]);
 
   const visibleRows = sortRowsByDate(rows.filter(row =>
     (!filters.business || row.adOrder === filters.business)
@@ -514,7 +558,7 @@ export function AdvQuery() {
             <select className="report-control report-select" value={filters.advertiser} onChange={event => update('advertiser', event.target.value)}><option value="">{t('advertiser')}</option>{unique(businessRows.map(row => row.advertiser)).map(value => <option key={value} value={value}>{displayName(value)}</option>)}</select>
             <select className="report-control report-select" value={filters.adOrder} onChange={event => update('adOrder', event.target.value)}><option value="">{t('adOrder')}</option>{unique(businessRows.map(row => row.adOrder)).map(value => <option key={value} value={value}>{displayName(value)}</option>)}</select>
             <select className="report-control report-select" value={filters.adId} onChange={event => update('adId', event.target.value)}><option value="">{t('adId')}</option>{unique(businessRows.map(row => row.adId)).map(value => <option key={value} value={value}>{value}</option>)}</select>
-            <select className="report-control report-select report-select-small" value={filters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="RATIO">RATIO</option></select>
+            <select className="report-control report-select report-select-small" value={filters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
             <select className="report-control report-select report-rate-select" value={filters.rate} onChange={event => update('rate', event.target.value)}>
               <option value="">{t('unitPriceRevenueShare')}</option>
               {unique(businessRows.map(row => row.rate)).map(value => <option key={value} value={value}>{value}</option>)}
@@ -595,6 +639,36 @@ export function MediaQuery() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  // Use ref to keep latest rows available for deriving filter params
+  // without causing unnecessary effect re-runs
+  const rowsRef = React.useRef<MediaEntryRow[]>([]);
+  rowsRef.current = rows;
+
+  const getReportParams = React.useCallback(() => {
+    const rows = rowsRef.current;
+    const mediaId = filters.media && rows.length > 0
+      ? (() => { const match = rows.find(r => r.media === filters.media); return match?.mediaId; })()
+      : undefined;
+    return {
+      date: filters.date,
+      status: statusParam(filters.status),
+      mediaId,
+      adTypeCode: filters.mediaId || undefined,
+    };
+  }, [filters.date, filters.status, filters.media, filters.mediaId]);
+
+  const loadMediaQueryRows = React.useCallback(() => {
+    const params = getReportParams();
+    const key = `${params.date}:${params.status}:${params.mediaId ?? ''}:${params.adTypeCode ?? ''}`;
+    const existing = mediaQueryInFlight.get(key);
+    if (existing) return existing;
+    const request = getMediaReport(params).finally(() => {
+      mediaQueryInFlight.delete(key);
+    });
+    mediaQueryInFlight.set(key, request);
+    return request;
+  }, [getReportParams]);
+
   React.useEffect(() => {
     if (!filters.date) {
       setRows([]);
@@ -603,7 +677,7 @@ export function MediaQuery() {
     let cancelled = false;
     setLoading(true);
     setError('');
-    getMediaReport({ date: filters.date, status: statusParam(filters.status) })
+    loadMediaQueryRows()
       .then(data => {
         if (!cancelled) setRows(data);
       })
@@ -616,7 +690,7 @@ export function MediaQuery() {
     return () => {
       cancelled = true;
     };
-  }, [filters.date, filters.status]);
+  }, [loadMediaQueryRows]);
 
   const visibleRows = sortRowsByDate(rows.filter(row =>
     (!filters.business || row.mediaAdOrder === filters.business)
@@ -666,7 +740,7 @@ export function MediaQuery() {
             <select className="report-control report-select" value={filters.media} onChange={event => update('media', event.target.value)}><option value="">{t('media')}</option>{unique(businessRows.map(row => row.media)).map(value => <option key={value} value={value}>{displayName(value)}</option>)}</select>
             <select className="report-control report-select" value={filters.mediaAdOrder} onChange={event => update('mediaAdOrder', event.target.value)}><option value="">{t('mediaAdOrder')}</option>{unique(businessRows.map(row => row.mediaAdOrder)).map(value => <option key={value} value={value}>{displayName(value)}</option>)}</select>
             <select className="report-control report-select" value={filters.mediaId} onChange={event => update('mediaId', event.target.value)}><option value="">{t('mediaId')}</option>{unique(businessRows.map(row => row.mediaIdStr)).map(value => <option key={value} value={value}>{value}</option>)}</select>
-            <select className="report-control report-select report-select-small" value={filters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="RATIO">RATIO</option></select>
+            <select className="report-control report-select report-select-small" value={filters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
             <select className="report-control report-select report-rate-select" value={filters.rate} onChange={event => update('rate', event.target.value)}>
               <option value="">{t('unitPriceRevenueShare')}</option>
               {unique(businessRows.map(row => row.rate)).map(value => <option key={value} value={value}>{value}</option>)}

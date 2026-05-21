@@ -1,6 +1,6 @@
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart } from "../utils/date.js"
-import { calculateActualRevenue, calculateCpmRevenue, calculateRatioRevenue, calculateRebateAmount } from "../utils/calculations.js"
+import { calculateActualRevenue, calculateCpmRevenue, calculateRatioRevenue, calculateCpaRevenue, calculateRebateAmount } from "../utils/calculations.js"
 import { AdTypeCode } from "../types/index.js"
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -173,6 +173,11 @@ export async function saveDailyInputBatch(
             } else {
                 revenue = baseRevenue
             }
+        } else if (site.billingMethod === "CPA") {
+            // CPA: revenue = rate × settlement (direct multiplier)
+            const rate = Number(item.ratio_override ?? existing?.ratioSnapshot ?? site.currentRatio) ?? 0
+            const settlement = Number(item.amount1 ?? existing?.amount1 ?? 0)
+            revenue = calculateCpaRevenue(rate, settlement)
         } else {
             // RATIO: ratio_override from frontend > existing snapshot > current ratio
             const baseRatio = item.ratio_override ?? existing?.ratioSnapshot ?? site.currentRatio ?? 1
@@ -189,7 +194,7 @@ export async function saveDailyInputBatch(
             const updateData: Record<string, unknown> = {
                 amount1: item.amount1,
                 amount2: item.amount2,
-                ratioSnapshot: site.billingMethod === "RATIO"
+                ratioSnapshot: site.billingMethod === "RATIO" || site.billingMethod === "CPA"
                     ? (item.ratio_override ?? existing.ratioSnapshot ?? site.currentRatio)
                     : undefined,
                 rebateAmount: site.billingMethod === "CPM" && adTypeCode === "SM" ? rebateAmount : existing.rebateAmount,
@@ -220,7 +225,7 @@ export async function saveDailyInputBatch(
                         : undefined,
                     amount1: item.amount1 ?? 0,
                     amount2: item.amount2 ?? 0,
-                    ratioSnapshot: site.billingMethod === "RATIO"
+                    ratioSnapshot: site.billingMethod === "RATIO" || site.billingMethod === "CPA"
                         ? (item.ratio_override ?? site.currentRatio)
                         : undefined,
                     rebateAmount: site.billingMethod === "CPM" && adTypeCode === "SM" ? rebateAmount : 0,

@@ -1,0 +1,3705 @@
+You are a senior frontend engineer and UI designer.
+
+Build a complete web-based admin dashboard frontend for an advertising / media management system. The UI should closely match the provided PDF wireframes and should be implemented as a modern React + Vite + TypeScript project, not a single HTML file.
+
+The final result should be a clean, production-ready frontend project with modular source code, reusable components, mock data, and working client-side interactions. No backend is required.
+
+# Tech Stack
+
+Use:
+- React
+- TypeScript
+- Vite
+- CSS / Tailwind-compatible CSS
+- Client-side state only
+- No backend API
+- No database
+- Mock data stored in frontend state
+
+Project structure should be similar to:
+
+src/
+  App.tsx
+  AppContext.tsx
+  main.tsx
+  index.css
+  lib/
+    data.ts
+  components/
+    Sidebar.tsx
+    Topbar.tsx
+    Table.tsx
+    GlobalModal.tsx
+  pages/
+    Advertiser.tsx
+    Media.tsx
+    DataEntry.tsx
+    Reports.tsx
+    Settlement.tsx
+    System.tsx
+
+# Overall Layout
+
+Create a full-screen admin dashboard.
+
+## Sidebar
+
+Left sidebar:
+- Fixed on the left
+- Width around 220px
+- Full height
+- Dark navy background: #1a2035
+- App logo/name at the top: KrakenOcean
+- Use a small logo icon, for example squid/octopus style
+- Multi-level collapsible navigation menu
+- Active child item highlighted with teal
+- User profile area at the bottom:
+  - Avatar with letter "N"
+  - Username: nancy
+  - Role: 管理员
+
+Sidebar menu hierarchy must be:
+
+1. 广告主管理
+   - 广告主管理
+   - 广告单管理
+   - 广告ID管理
+
+2. 流量管理
+   - 媒体管理
+   - 媒体广告单管理
+   - 媒体ID管理
+
+3. 数据录入
+   - AI数据录入
+   - 广告主数据录入
+   - 媒体数据管理
+
+4. 数据查询
+   - 总利润表
+   - 广告单利润表
+   - 广告主数据查询
+   - 媒体数据查询
+
+5. 结算单
+   - 广告主结算单
+   - 媒体结算单
+
+6. 操作记录
+
+Default active page on load:
+广告主管理 > 广告主管理
+
+## Topbar
+
+Main content should have a white topbar:
+- Height around 56px
+- Breadcrumb on the left, for example: 广告主管理 / 广告主管理
+- Language switcher on the right with three buttons:
+  - 中
+  - VI
+  - EN
+
+The interface should support basic i18n keys for Chinese, Vietnamese, and English. Chinese should be the default language.
+
+## Main Content
+
+Main content area:
+- Left margin equal to sidebar width
+- Background: #f0f2f5
+- Padding around 24px
+- Page title at top
+- White card container for each page
+- Subtle border and shadow
+- Clean enterprise admin style
+
+# Design System
+
+Use these visual styles:
+
+- Sidebar background: #1a2035
+- Sidebar text: muted blue-gray
+- Active / primary color: #00b4d8
+- Primary button: #00b4d8
+- Primary button hover: #0099bb
+- Main background: #f0f2f5
+- Card background: #ffffff
+- Text main: #1a2035
+- Text secondary: #6b7a99
+- Border: #e2e8f0
+- Table header background: #f8fafc
+- Row hover: #f0f7fa
+- Border radius: 8px
+- Font: PingFang SC, Microsoft YaHei, Helvetica Neue, Arial, sans-serif
+
+# Reusable Components
+
+Create reusable components:
+
+## Sidebar
+- Renders the full menu from a menu config.
+- Parent groups can collapse/expand.
+- Clicking a child item changes the current page.
+- Active item is highlighted.
+
+## Topbar
+- Shows breadcrumb based on current page.
+- Shows language switcher.
+- Clicking language button changes UI text.
+
+## Table
+Reusable table component with:
+- Column config
+- Data rows
+- Empty state
+- No. column support
+- Actions column support
+- Pencil edit button
+- Custom render function per column
+
+## GlobalModal
+One shared modal component for create/edit forms.
+- Centered modal
+- Width around 560px
+- White background
+- Header with title and close button
+- Body with form fields
+- Footer with Cancel and Submit buttons
+- Clicking backdrop closes modal
+- Modal should support both create and edit mode.
+
+# Data Model / Mock Data
+
+Use frontend mock state with these collections:
+
+advertisers:
+- id
+- name
+- contact
+- phone
+- email
+- notes
+
+adOrders:
+- id
+- advId
+- name
+- status
+- notes
+
+adIds:
+- id
+- advId
+- orderId
+- slot
+- type: CPM or CPS
+- rate
+- status
+- notes
+
+media:
+- id
+- name
+- contact
+- phone
+- email
+- notes
+
+mediaOrders:
+- id
+- mediaId
+- name
+- status
+- notes
+
+mediaIds:
+- id
+- mediaId
+- orderId
+- adSlot
+- slot
+- type: CPM or CPS
+- rate
+- status
+- notes
+
+Include sample mock data so all tables are not empty on first load.
+
+Example sample data:
+- Advertiser: 北京晓云
+- Advertiser: 上海快线
+- Media: 济宁森林慷厦
+- Media: 杭州数媒
+- Ad order examples: 神马搜索-低价, 百度品牌, 头条信息流
+- Ad ID examples: 252, 188
+- Media ID example: 321768
+
+# Pages
+
+## 1. 广告主管理
+
+Page title: 广告主管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建广告主
+  - Right: search input
+- Table columns:
+  - No.
+  - 广告主
+  - 联系人
+  - 手机号码
+  - 电子邮件
+  - 备注
+  - 操作
+
+Behavior:
+- Search by advertiser name or contact.
+- Pencil edit button opens the same modal with existing data.
+
+Modal 新建广告主:
+- 广告主名称 full width input
+- 联系人 / 手机号码 / 电子邮件 in a 3-column row
+- 备注 textarea
+- Footer: 取消 / 提交
+
+## 2. 广告单管理
+
+Page title: 广告单管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建广告单
+  - Right:
+    - 广告主 filter dropdown
+    - Search input
+- Table columns:
+  - No.
+  - 广告主
+  - 广告单
+  - 广告ID数量
+  - 状态
+  - 备注
+  - 操作
+
+Behavior:
+- Filter by advertiser.
+- Search by ad order name.
+- 广告ID数量 should count active ad IDs under that order.
+- 状态 should be a small toggle switch.
+- Pencil edit opens edit modal.
+
+Modal 新建广告单:
+- 选择广告主 dropdown
+- 广告单名称 input
+- Footer: 取消 / 提交
+
+Dropdown rule:
+- 选择广告主 only shows existing advertisers.
+
+## 3. 广告ID管理
+
+Page title: 广告ID管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建广告ID
+  - Right:
+    - 广告主 filter dropdown
+    - 广告单 filter dropdown
+    - 类型 filter dropdown: CPM / CPS
+    - Search input
+- Table columns:
+  - No.
+  - 广告主
+  - 广告单
+  - 广告ID
+  - 类型
+  - 单价/比例
+  - 状态
+  - 备注
+  - 操作
+
+Behavior:
+- Filter by advertiser, ad order, and type.
+- Search by 广告ID or 备注.
+- 类型 should display as a small colored tag:
+  - CPM teal tag
+  - CPS orange tag
+- 状态 should be a small toggle switch.
+- Pencil edit opens edit modal.
+
+Modal 新建广告ID:
+- First row, 2 columns:
+  - 选择广告主
+  - 选择广告单
+- 选择广告单 should cascade based on selected 广告主.
+- 广告槽 input
+- Second row, 2 columns:
+  - 类型 dropdown: CPM / CPS
+  - Conditional input:
+    - If CPM selected, label should be 单价
+    - If CPS selected, label should be 分成比例
+- Show a helper text:
+  - CPM: 选择 CPM → 填写单价（元/千次曝光）
+  - CPS: 选择 CPS → 填写我司分成占比（%）
+- 备注 textarea
+- Footer: 取消 / 提交
+
+## 4. 媒体管理
+
+Page title: 媒体管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建媒体
+  - Right: search input
+- Table columns:
+  - No.
+  - 媒体
+  - 联系人
+  - 手机号码
+  - 电子邮件
+  - 备注
+  - 操作
+
+Behavior:
+- Search by media name or contact.
+- Pencil edit opens edit modal.
+
+Modal 新建媒体:
+- 媒体名称 full width input
+- 联系人 / 手机号码 / 电子邮件 in a 3-column row
+- 备注 textarea
+- Footer: 取消 / 提交
+
+## 5. 媒体广告单管理
+
+Page title: 媒体广告单管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建媒体广告单
+  - Right:
+    - 媒体 filter dropdown
+    - Search input
+- Table columns:
+  - No.
+  - 媒体
+  - 媒体广告单
+  - 媒体广告ID数量
+  - 状态
+  - 备注
+  - 操作
+
+Behavior:
+- Filter by media.
+- Search by media ad order name.
+- 媒体广告ID数量 should count active media IDs under that order.
+- 状态 should be a small toggle switch.
+- Pencil edit opens edit modal.
+
+Modal 新建媒体广告单:
+- 选择媒体 dropdown
+- 媒体广告单名称 input
+- Footer: 取消 / 提交
+
+Dropdown rule:
+- 选择媒体 only shows existing media records.
+
+## 6. 媒体ID管理
+
+Page title: 媒体ID管理
+
+White card with:
+- Toolbar
+  - Left: primary button 新建媒体ID
+  - Right:
+    - 媒体 filter dropdown
+    - 媒体广告单 filter dropdown
+    - 类型 filter dropdown: CPM / CPS
+    - Search input
+- Table columns:
+  - No.
+  - 媒体
+  - 媒体广告单
+  - 媒体ID
+  - 类型
+  - 单价/比例
+  - 状态
+  - 备注
+  - 操作
+
+Behavior:
+- Filter by media, media ad order, and type.
+- Search by 媒体ID or 备注.
+- 类型 should display as CPM/CPS colored tag.
+- 状态 should be a small toggle switch.
+- Pencil edit opens edit modal.
+
+Modal 新建媒体ID:
+- First row, 3 columns:
+  - 选择媒体
+  - 选择媒体广告单
+  - 选择广告槽
+- 选择媒体广告单 should cascade based on selected 媒体.
+- 选择广告槽 should show existing advertiser ad slots / ad IDs.
+- 媒体槽 input
+- Second row, 2 columns:
+  - 类型 dropdown: CPM / CPS
+  - Conditional input:
+    - If CPM selected, label should be 单价
+    - If CPS selected, label should be 分成比例
+- Show helper text:
+  - CPM: 选择 CPM → 填写单价（元/千次曝光）
+  - CPS: 选择 CPS → 填写我司分成占比（%）
+- 备注 textarea
+- Footer: 取消 / 提交
+
+# Data Entry Pages
+
+## AI数据录入
+
+Page title: AI数据录入
+
+White card with:
+- Raw data textarea
+- Placeholder: 粘贴原始数据（日志、邮件等）进行AI解析...
+- Button: AI 解析
+- After clicking AI 解析, show preview table with example parsed rows:
+  - 广告主
+  - 广告ID
+  - 曝光量
+  - 状态
+- Include buttons:
+  - 取消
+  - 保存到系统
+
+## 广告主数据录入
+
+Page title: 广告主数据录入
+
+White card with:
+- Upload area
+  - Icon
+  - Text: 拖拽文件或点击上传
+  - Hint: 支持 .xlsx .csv .xls 格式
+- Separator: — OR —
+- Form row:
+  - 广告主 dropdown
+  - 开始日期 input
+  - 结束日期 input
+- Buttons:
+  - 取消
+  - 保存到系统
+
+## 媒体数据管理
+
+Page title: 媒体数据管理
+
+White card with:
+- Upload area
+  - Icon
+  - Text: 拖拽文件或点击上传
+  - Hint: 支持 .xlsx .csv .xls 格式
+- Separator: — OR —
+- Form row:
+  - 媒体 dropdown
+  - 开始日期 input
+  - 结束日期 input
+- Buttons:
+  - 取消
+  - 保存到系统
+
+# Data Query Pages
+
+## 总利润表
+
+Page title: 总利润表
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 日期
+  - 收入
+  - 成本
+  - 利润
+
+Use mock rows.
+
+## 广告单利润表
+
+Page title: 广告单利润表
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 广告主 dropdown
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 日期
+  - 广告主
+  - 广告单
+  - 收入
+  - 成本
+  - 利润
+
+Use mock rows.
+
+## 广告主数据查询
+
+Page title: 广告主数据查询
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 广告主 dropdown
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 日期
+  - 广告主
+  - 广告单
+  - 广告ID
+  - 曝光量
+  - 点击数
+  - 收入
+
+Use mock rows.
+
+## 媒体数据查询
+
+Page title: 媒体数据查询
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 媒体 dropdown
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 日期
+  - 媒体
+  - 媒体广告单
+  - 媒体ID
+  - 曝光量
+  - 点击数
+  - 成本
+
+Use mock rows.
+
+# Settlement Pages
+
+## 广告主结算单
+
+Page title: 广告主结算单
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 广告主 dropdown
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 结算周期
+  - 广告主
+  - 金额
+  - 状态
+  - 操作
+
+Status tags:
+- 已结算
+- 待结算
+- 已支付
+
+## 媒体结算单
+
+Page title: 媒体结算单
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - 媒体 dropdown
+  - 查询 button
+  - 导出 button
+- Table columns:
+  - 结算周期
+  - 媒体
+  - 金额
+  - 状态
+  - 操作
+
+Status tags:
+- 已结算
+- 待结算
+- 已支付
+
+# Operation Log Page
+
+## 操作记录
+
+Page title: 操作记录
+
+White card with:
+- Filter row:
+  - 开始日期
+  - 结束日期
+  - Search input
+- Table columns:
+  - 时间
+  - 操作人
+  - 模块
+  - 操作内容
+
+Use mock rows, for example:
+- nancy created advertiser 北京晓云
+- nancy created ad ID 252
+- nancy created media 济宁森林慷厦
+- nancy imported AI data
+
+# Interaction Rules
+
+Implement the following interactions:
+
+1. Sidebar
+- Parent menu groups collapse and expand.
+- Child item click changes active page.
+- Current child item is highlighted.
+- Operation log is a single-level menu item.
+
+2. Language switcher
+- Default language is Chinese.
+- 中 / VI / EN buttons switch text labels.
+- It is acceptable for mock row data to stay Chinese.
+
+3. Modal
+- New buttons open GlobalModal.
+- Pencil buttons open the same modal in edit mode.
+- Submit creates or updates data in frontend state.
+- Cancel closes modal.
+- Close button closes modal.
+- Clicking backdrop closes modal.
+
+4. Cascading dropdowns
+- 新建广告单: advertiser dropdown uses existing advertisers.
+- 新建广告ID:
+  - advertiser dropdown uses existing advertisers.
+  - ad order dropdown filters by selected advertiser.
+- 新建媒体广告单:
+  - media dropdown uses existing media.
+- 新建媒体ID:
+  - media dropdown uses existing media.
+  - media ad order dropdown filters by selected media.
+  - ad slot dropdown uses existing advertiser ad IDs / slots.
+
+5. CPM / CPS conditional field
+- For 广告ID and 媒体ID modals:
+  - If CPM selected, right-side field label is 单价.
+  - If CPS selected, right-side field label is 分成比例.
+  - The value is saved into rate.
+  - Show a short helper text explaining CPM or CPS.
+
+6. Status toggles
+- 广告单管理, 广告ID管理, 媒体广告单管理, 媒体ID管理 should include a small toggle switch in the 状态 column.
+- Toggling should update frontend state immediately.
+- Count columns should only count active IDs where status is not false.
+
+7. Search / filters
+- Search and filter controls should work client-side.
+- No backend calls.
+
+# Styling Details
+
+Make the UI clean, compact, and similar to an internal enterprise admin panel.
+
+Tables:
+- Header background #f8fafc
+- Header text uppercase/small
+- Row divider light gray
+- Row hover highlight
+- Edit action uses pencil icon button
+- Empty state if no rows
+
+Cards:
+- White background
+- Light border
+- Subtle shadow
+- Border radius around 8px
+
+Buttons:
+- Primary teal button
+- Outline secondary button
+- Hover states
+
+Modal:
+- Centered
+- Width around 560px
+- Max height 90vh
+- White background
+- Rounded corners
+- Shadow
+- Header / body / footer sections
+- Form labels small, uppercase, muted
+- Form rows should support 2-column and 3-column layouts
+
+Upload zone:
+- Dashed border
+- Centered icon and text
+- Hover effect with teal border
+
+# Important Requirements
+
+- Generate the full working React + Vite + TypeScript project.
+- Keep the code modular and readable.
+- Use AppContext for global state: language, current page, mock database, modal state.
+- Keep all mock data and i18n labels in src/lib/data.ts.
+- Use reusable components instead of duplicating table/sidebar/modal logic.
+- Do not implement real backend APIs.
+- Do not require login.
+- Do not add unrelated pages outside the specified menu.
+- Make sure the project runs with npm install and npm run dev.
+- The final UI should closely resemble the PDF dashboard layout and the generated frontend should be functionally interactive.
+
+------------------------------------
+
+You are a senior React + Vite + TypeScript frontend engineer.
+
+Continue from the existing approved frontend project. Do not rebuild the project from scratch. The current project is already accepted by the client/boss as generally OK, so preserve the existing architecture, UI style, sidebar, topbar, i18n, AppContext state, mock data, reusable components, and all existing pages.
+
+Your task is to implement the next revision based on the new PDF modification comments v2.0 dated 2026-05-12.
+
+# Important Context
+
+The current frontend is an advertising / media management admin dashboard.
+
+Existing tech stack:
+- React
+- Vite
+- TypeScript
+- CSS
+- Client-side mock state only
+- No backend
+- No database
+
+Existing core files:
+- src/App.tsx
+- src/AppContext.tsx
+- src/lib/data.ts
+- src/components/Sidebar.tsx
+- src/components/Topbar.tsx
+- src/components/Table.tsx
+- src/components/GlobalModal.tsx
+- src/pages/Advertiser.tsx
+- src/pages/Media.tsx
+- src/pages/DataEntry.tsx
+- src/pages/Reports.tsx
+- src/pages/Settlement.tsx
+- src/pages/System.tsx
+
+Keep the existing visual style:
+- Sidebar: dark navy
+- Brand: KrakenOcean
+- User: nancy
+- Main content background: #f0f2f5
+- White card containers
+- Teal primary buttons
+- Enterprise admin dashboard style
+- Chinese as default language
+- Keep language switcher 中 / VI / EN
+
+# Goal of This Revision
+
+Modify the 数据录入 section.
+
+Specifically update these two pages:
+
+1. 广告主数据录入
+2. 媒体数据管理
+
+The previous upload-style layout is no longer enough. Replace or extend it with an Excel-like editable data table, matching the v2 PDF screenshots.
+
+The key requirement from the PDF:
+
+- The highlighted red-box table cells can be manually entered and modified.
+- After editing, the user clicks 确认数据 to update that row.
+- There should also be a 确认全部数据 button to confirm all rows.
+- Calculation formulas should be implemented inside the table.
+- Formula-based fields should automatically recalculate when related input cells change.
+
+Do not change unrelated pages unless needed for shared types or mock data.
+
+# Page 1: 广告主数据录入
+
+Update the 广告主数据录入 page to match the new v2 requirement.
+
+## Layout
+
+Use the same dashboard layout:
+- Sidebar active path: 数据录入 > 广告主数据录入
+- Page title: 广告主数据录入
+- Main content inside one large white card
+- The card should contain:
+  - Top filter/search bar
+  - Editable data table
+  - Total row at bottom
+
+## Top Filter Bar
+
+Add controls similar to the PDF:
+
+- Date selector on the left
+- 广告主 dropdown
+- 广告单 dropdown
+- 广告ID dropdown
+- Search input
+- 数据下载 button on the right
+
+All filters can work with mock data only.
+
+## Table Columns
+
+The 广告主数据录入 table must have these columns:
+
+1. 日期
+2. 广告主
+3. 广告单
+4. 类型
+5. 广告ID
+6. 单价/分成比例
+7. 流量数据
+8. 结算数据/广告主金额
+9. 应收金额
+10. 状态
+
+## Editable Cells
+
+The following columns must be editable directly inside the table:
+
+- 单价/分成比例
+- 流量数据
+- 结算数据/广告主金额
+
+Use compact input boxes inside table cells.
+
+The user should be able to type values directly in those cells.
+
+## Formula Rules
+
+Implement formula calculation for 应收金额.
+
+For CPM rows:
+
+应收金额 = 单价/分成比例 × 结算数据
+
+Example:
+- 单价/分成比例 = 0.016
+- 结算数据 = 5000
+- 应收金额 = 80
+
+For CPS rows:
+
+应收金额 = 结算数据/广告主金额 × 分成比例
+
+Example:
+- 分成比例 = 70%
+- 结算数据/广告主金额 = 16
+- 应收金额 = 11.2
+
+Rules:
+- If 类型 is CPM, treat 单价/分成比例 as a decimal unit price.
+- If 类型 is CPS, treat 单价/分成比例 as a percentage.
+- Support percentage input formats such as 70 or 70%.
+- Format calculated numbers cleanly, without unnecessary long decimals.
+- If required input values are missing, show a formula hint such as 单价*结算数据 or 广告主金额*分成比例.
+
+## Status Column
+
+For each row, show a green button:
+
+确认数据
+
+When clicked:
+- Save the edited row into frontend state.
+- Recalculate 应收金额.
+- Mark the row as confirmed.
+- The button can change to 已确认 or keep showing 确认数据 but visually indicate the row is confirmed.
+- Add an operation log entry such as:
+  nancy 确认广告主数据 [广告主] [广告ID]
+
+At the bottom total row:
+- Show total 应收金额.
+- Show a green button:
+  确认全部数据
+
+When clicked:
+- Confirm all rows on this page.
+- Recalculate all rows.
+- Update frontend state.
+- Add an operation log entry:
+  nancy 确认全部广告主数据
+
+# Page 2: 媒体数据管理
+
+Update the 媒体数据管理 page to match the new v2 requirement.
+
+## Layout
+
+Use the same dashboard layout:
+- Sidebar active path: 数据录入 > 媒体数据管理
+- Page title: 媒体数据管理
+- Main content inside one large white card
+- The card should contain:
+  - Top filter/search bar
+  - Editable data table
+  - Total row at bottom
+  - Formula note text under the table
+
+## Top Filter Bar
+
+Add controls similar to the PDF:
+
+- Date selector on the left
+- 媒体 dropdown
+- 媒体广告单 dropdown
+- 媒体ID dropdown
+- Search input
+- 数据下载 button on the right
+
+All filters can work with mock data only.
+
+## Table Columns
+
+The 媒体数据管理 table must have these columns:
+
+1. 日期
+2. 媒体
+3. 媒体广告单
+4. 类型
+5. 媒体ID
+6. 单价/分成比例
+7. 流量数据
+8. 结算数据/广告主金额
+9. 数据系数
+10. 应收金额
+11. 分账比例
+12. 实收金额
+13. 状态
+
+## Editable Cells
+
+The following columns must be editable directly inside the table:
+
+- 单价/分成比例
+- 数据系数
+- 分账比例
+
+Use compact input boxes inside table cells.
+
+Other upstream-related fields can be displayed as inherited values.
+
+## Upstream Data Rules
+
+媒体数据管理 should inherit data from 广告主数据录入 mock state where possible.
+
+For each media row:
+
+- 流量数据 should display inherited upstream traffic data.
+- 结算数据/广告主金额 should display inherited upstream settlement data.
+
+Specific rule from the PDF:
+
+When 类型 is CPM:
+- 结算数据/广告主金额 should inherit the upstream 结算数据.
+
+When 类型 is CPS:
+- 结算数据/广告主金额 should inherit the upstream 应收金额.
+
+Show this note below the table in blue text:
+
+当类型为CPM时，结算数据继承上游结算数据  
+当类型为CPS时，广告主金额继承上游应收金额
+
+## Formula Rules
+
+Implement formula calculation for 应收金额 and 实收金额.
+
+For CPM rows:
+
+应收金额 = 单价/分成比例 × 结算数据 × 数据系数
+
+Example:
+- 单价/分成比例 = 0.015
+- 结算数据 = 5000
+- 数据系数 = 90%
+- 应收金额 = 67.5
+
+For CPS rows:
+
+应收金额 = 广告主金额 × 数据系数
+
+Example:
+- 广告主金额 = 11.2
+- 数据系数 = 90%
+- 应收金额 = 10.08
+
+For all rows:
+
+实收金额 = 应收金额 × 分账比例
+
+Example:
+- 应收金额 = 67.5
+- 分账比例 = 80%
+- 实收金额 = 54
+
+Rules:
+- Support percentage input formats such as 90 or 90%.
+- Format calculated numbers cleanly.
+- If required input values are missing, show formula hints such as:
+  - 单价*结算数据*数据系数
+  - 应收金额*分账比例
+
+## Status Column
+
+For each row, show a green button:
+
+确认数据
+
+When clicked:
+- Save the edited row into frontend state.
+- Recalculate 应收金额 and 实收金额.
+- Mark the row as confirmed.
+- Add an operation log entry such as:
+  nancy 确认媒体数据 [媒体] [媒体ID]
+
+At the bottom total row:
+- Show total 实收金额.
+- Show a green button:
+  确认全部数据
+
+When clicked:
+- Confirm all rows on this page.
+- Recalculate all rows.
+- Update frontend state.
+- Add an operation log entry:
+  nancy 确认全部媒体数据
+
+# Mock Data Requirements
+
+Add mock data in src/lib/data.ts for both editable data-entry tables.
+
+For 广告主数据录入, include rows similar to:
+
+- 日期: 2026-05-05
+- 广告主: 圣乐游
+- 广告单: 神马-18
+- 类型: CPM
+- 广告ID: 252(321768)
+- 单价/分成比例: editable
+- 流量数据: editable
+- 结算数据/广告主金额: editable
+- 应收金额: calculated
+
+- 日期: 2026-05-05
+- 广告主: 北京响云
+- 广告单: 神马-16
+- 类型: CPM
+- 广告ID: 253(123456)
+- 单价/分成比例: 0.016
+- 流量数据: 5000
+- 结算数据/广告主金额: 5000
+- 应收金额: 80
+
+- 日期: 2026-05-05
+- 广告主: 北京响云
+- 广告单: 百度
+- 类型: CPS
+- 广告ID: 764
+- 单价/分成比例: 70%
+- 流量数据: 180000
+- 结算数据/广告主金额: 16
+- 应收金额: 11.2
+
+For 媒体数据管理, include rows similar to:
+
+- 日期: 2026-05-06
+- 媒体: 森林麋鹿
+- 媒体广告单: 神马-17
+- 类型: CPM
+- 媒体ID: 252(321768)
+- 单价/分成比例: editable
+- 流量数据: 继承上游数据
+- 结算数据/广告主金额: 继承上游数据
+- 数据系数: editable
+- 应收金额: calculated
+- 分账比例: editable
+- 实收金额: calculated
+
+- 日期: 2026-05-06
+- 媒体: 森林麋鹿
+- 媒体广告单: 神马-15
+- 类型: CPM
+- 媒体ID: 253(123456)
+- 单价/分成比例: 0.015
+- 流量数据: 5000
+- 结算数据/广告主金额: 5000
+- 数据系数: 90%
+- 应收金额: 67.5
+- 分账比例: 80%
+- 实收金额: 54
+
+- 日期: 2026-05-06
+- 媒体: 森林麋鹿
+- 媒体广告单: 百度JS
+- 类型: CPS
+- 媒体ID: 764
+- 单价/分成比例: —
+- 流量数据: 180000
+- 结算数据/广告主金额: 11.2
+- 数据系数: 90%
+- 应收金额: 10.08
+- 分账比例: 80%
+- 实收金额: 8.064
+
+# UI Details
+
+The editable table should visually look like a spreadsheet/admin table:
+
+- Compact row height
+- Light gray table borders
+- Header background #f8fafc
+- Editable cells should show input fields
+- Inputs should have subtle border and white background
+- Confirm buttons should be green
+- Total row should have blue background, similar to the PDF
+- Total row text should be bold white
+- Use horizontal scroll if table is too wide
+- Keep the table inside the white card
+- Keep layout clean and aligned
+
+# Component / State Requirements
+
+Update the existing architecture cleanly.
+
+Recommended implementation:
+
+1. Extend AppContext state with:
+   - advertiserEntryRows
+   - mediaEntryRows
+   - updateAdvertiserEntryRow
+   - confirmAdvertiserEntryRow
+   - confirmAllAdvertiserEntryRows
+   - updateMediaEntryRow
+   - confirmMediaEntryRow
+   - confirmAllMediaEntryRows
+
+2. Add helper functions:
+   - parsePercent(value)
+   - parseNumber(value)
+   - formatAmount(value)
+   - calculateAdvertiserReceivable(row)
+   - calculateMediaReceivable(row)
+   - calculateMediaActualReceived(row)
+
+3. Keep formulas centralized, not scattered across JSX.
+
+4. Keep existing Table component if possible, but it is acceptable to create a dedicated EditableDataTable component if the reusable Table component is not suitable for input-heavy rows.
+
+# Do Not Do
+
+- Do not remove existing accepted features.
+- Do not rebuild the whole project.
+- Do not change sidebar hierarchy unless required by this task.
+- Do not remove language switcher.
+- Do not remove management pages.
+- Do not remove reports, settlement, operation log pages.
+- Do not implement backend APIs.
+- Do not use real file upload.
+- Do not replace the whole page with a modal.
+- Do not make the data entry pages upload-only anymore.
+
+# Acceptance Criteria
+
+Before finishing, verify:
+
+1. 广告主数据录入 is an editable table, not just an upload form.
+2. 媒体数据管理 is an editable table, not just an upload form.
+3. Red-box fields from the PDF are editable as table inputs.
+4. 应收金额 auto-calculates correctly for 广告主数据录入.
+5. 媒体数据管理 inherits upstream data correctly.
+6. 媒体数据管理 calculates 应收金额 and 实收金额 correctly.
+7. Each row has 确认数据.
+8. Bottom total row has 确认全部数据.
+9. Totals recalculate after edits.
+10. Confirm actions update frontend state.
+11. Confirm actions add operation log records.
+12. The UI still matches the existing KrakenOcean dashboard style.
+13. The project still runs with:
+
+npm install
+npm run dev
+
+Return the complete updated source code files needed for this revision.
+
+
+---------------------------------
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project from scratch. Continue from the current accepted version.
+
+The boss has provided modification comments v3.0 dated 2026-05-13. This revision focuses on the 数据查询 section.
+
+Important note from the PDF:
+The screenshots are only used to explain page modification requirements. The existing design language can be reused.
+
+# Main Goal
+
+Update and complete the 数据查询 pages:
+
+1. 总利润表
+2. 广告单利润表
+3. 广告主数据查询
+4. 媒体数据查询
+
+These pages should become real read-only query/report pages with filter bars, downloadable/export button, tables, scrollable layouts, and total rows.
+
+Do not change unrelated modules unless shared helpers or i18n keys are needed.
+
+# Existing Project Context
+
+Current project:
+- React + Vite + TypeScript
+- Client-side mock state only
+- No backend
+- No database
+- Existing KrakenOcean dashboard layout
+- Dark navy sidebar
+- Topbar with breadcrumb
+- Language switcher 中 / VI / EN
+- AppContext global state
+- Existing mock data for advertisers, ad orders, ad IDs, media, media orders, media IDs
+- Existing data-entry rows:
+  - advertiserEntryRows
+  - mediaEntryRows
+- Existing operation log
+- Existing i18n system
+
+Keep all existing accepted features:
+- Management pages
+- Data entry pages
+- Confirm/edit logic
+- Status filter
+- Count click navigation
+- i18n
+- Operation log
+- Existing sidebar hierarchy
+
+# General UI Requirements For 数据查询
+
+All four query pages should follow the same visual style as the current app:
+
+- Page title at top
+- White card container
+- Top filter/search bar
+- Green 数据下载 button on the right
+- Read-only table
+- Blue total row at bottom
+- Clean grid borders
+- Compact row height
+- Header background #f8fafc
+- Table body white/light gray
+- Horizontal scroll when the table is wide
+- No editable input boxes
+- No 确认数据 buttons
+- No 修改 buttons
+- No modal required
+- Query pages are for viewing/reporting only
+
+# Data Source Rules
+
+Use existing client-side mock data/state as the data source.
+
+Recommended:
+- 广告主数据查询 should read from advertiserEntryRows.
+- 媒体数据查询 should read from mediaEntryRows.
+- 总利润表 and 广告单利润表 can be calculated from advertiserEntryRows and mediaEntryRows where possible.
+- If needed, add mock report data in src/lib/data.ts.
+
+Since there is no backend, all calculations can be mock/client-side but should look realistic and consistent.
+
+# Page 1: 总利润表
+
+Menu path:
+数据查询 > 总利润表
+
+Page title:
+总利润表
+
+This page should match the v3 PDF page for 总利润表.
+
+## Filter Bar
+
+Add a compact filter bar:
+
+- Date selector or date range
+- Search input if useful
+- 数据下载 button on the right
+
+The screenshot mainly shows a date filter on the left and 数据下载 on the right.
+
+## Table Columns
+
+Use a daily summary table.
+
+Columns:
+
+1. 日期
+2. 利润总计
+3. 神马
+4. 千问
+5. 百度
+6. 360
+7. 爱奇艺
+
+Rows:
+- Use daily rows, for example 2026-05-01 to 2026-05-23.
+- Each row should have:
+  - 利润总计 = sum of each channel/order profit columns
+  - 神马 = 5000
+  - 千问 = 4000
+  - 百度 = 3000
+  - 360 = 2000
+  - 爱奇艺 = 1000
+  - 利润总计 = 15000
+
+Bottom total row:
+- Blue background
+- White bold text
+- Totals:
+  - 利润总计 = 465000
+  - 神马 = 155000
+  - 千问 = 124000
+  - 百度 = 93000
+  - 360 = 62000
+  - 爱奇艺 = 31000
+
+If the number of generated days changes, calculate totals dynamically, but the default mock data should match the screenshot totals.
+
+# Page 2: 广告单利润表
+
+Menu path:
+数据查询 > 广告单利润表
+
+Page title:
+广告单利润表
+
+This page is wider and should support horizontal scrolling.
+
+## Filter Bar
+
+Add:
+
+- Date selector or date range
+- Search input, placeholder 搜索名称
+- 数据下载 button on the right
+
+## Table Structure
+
+This table should have grouped/multi-level headers similar to the PDF.
+
+Base columns:
+
+1. 日期
+2. 利润
+3. 利润率
+4. 收入
+5. 支出
+6. 税点
+7. 税额
+
+Then grouped columns:
+
+Group 1:
+上游
+
+Under 上游, show several advertiser/ad-order contribution columns:
+
+- 深利至乐游
+- 北京响云
+- 南通百收
+- 北京套利
+- 个人-刘佳
+- 个人-大白
+- 总计
+
+Group 2:
+下游
+
+Under 下游, show several media/media-order cost columns:
+
+- 济宁森林麋鹿
+- 个人-11
+- 总计
+
+If the table is too wide, use horizontal scroll.
+
+## Row Data
+
+Use daily rows, for example 2026-05-01 to 2026-05-22.
+
+Example row values:
+
+- 日期: 2026-05-01
+- 利润: 21000
+- 利润率: 37.6%
+- 收入: 21000
+- 支出: 12600
+- 税点: 6%
+- 税额: 504
+- 上游 columns:
+  - 深利至乐游: 1000
+  - 北京响云: 2000
+  - 南通百收: 3000
+  - 北京套利: 4000
+  - 个人-刘佳: 5000
+  - 个人-大白: 6000
+  - 总计: 21000
+- 下游 columns:
+  - 济宁森林麋鹿: 12000
+  - 个人-11: 600
+  - 总计: 12600
+
+Bottom total row:
+- Blue background
+- White bold text
+- At minimum, show total 利润 = 651000 as in the screenshot.
+- Other totals can be calculated dynamically.
+
+Important:
+- Keep the grouped header visually clear.
+- Use different subtle header background colors for grouped sections:
+  - 上游 group can use light green
+  - 下游 group can use light blue
+- Do not use editable cells.
+
+# Page 3: 广告主数据查询
+
+Menu path:
+数据查询 > 广告主数据查询
+
+Page title:
+广告主数据查询
+
+This page should be a read-only query view of advertiser data entry records.
+
+## Filter Bar
+
+Add filters similar to the screenshot:
+
+1. 日期
+2. 广告主
+3. 广告单
+4. 广告ID
+5. 类型
+6. 单价/分成比例
+7. 状态
+8. 搜索
+9. 数据下载
+
+Rules:
+- Filters should work together.
+- Search should match advertiser name, ad order, ad ID, or notes.
+- 状态 should support:
+  - 全部状态
+  - 在线
+  - 离线
+  - 已确认
+  - 待确认
+
+If the current system mainly uses confirmed/unconfirmed status, map:
+- confirmed = 在线 or 已确认
+- unconfirmed = 离线 or 待确认
+
+Use the current status model consistently.
+
+## Table Columns
+
+Columns:
+
+1. 日期
+2. 广告主
+3. 广告单
+4. 类型
+5. 广告ID
+6. 单价/分成比例
+7. 流量数据
+8. 结算数据/广告主金额
+9. 应收金额
+10. 状态
+
+Rows should be read-only.
+
+Use data from advertiserEntryRows where possible.
+
+Example rows:
+
+1.
+- 日期: 26-05-05
+- 广告主: 北京响云
+- 广告单: 神马
+- 类型: CPM
+- 广告ID: 123(123456)
+- 单价/分成比例: 0.016
+- 流量数据: 5000
+- 结算数据/广告主金额: 5000
+- 应收金额: 80
+- 状态: 在线
+
+2.
+- 日期: 26-05-05
+- 广告主: 北京响云
+- 广告单: 神马
+- 类型: CPM
+- 广告ID: 234(234567)
+- 单价/分成比例: 0.023
+- 流量数据: 10000
+- 结算数据/广告主金额: 5000
+- 应收金额: 80
+- 状态: 离线
+
+3.
+- 日期: 26-05-05
+- 广告主: 北京响云
+- 广告单: 百度JS
+- 类型: CPS
+- 广告ID: 753
+- 单价/分成比例: 70%
+- 流量数据: 180000
+- 结算数据/广告主金额: 16
+- 应收金额: 11.2
+- 状态: 在线
+
+Bottom total row:
+- Blue background
+- White bold text
+- First cell date, for example 26-05-05
+- Total 应收金额 should show 3724 as in the screenshot, or calculate from mock rows.
+- Do not show duplicate 总计 labels.
+
+# Page 4: 媒体数据查询
+
+Menu path:
+数据查询 > 媒体数据查询
+
+Page title:
+媒体数据查询
+
+This page should be a read-only query view of media data records.
+
+## Filter Bar
+
+Add filters similar to the screenshot:
+
+1. 日期
+2. 媒体
+3. 媒体广告单
+4. 媒体ID
+5. 类型
+6. 单价/分成比例
+7. 分账比例
+8. 状态
+9. 搜索
+10. 数据下载
+
+Rules:
+- Filters should work together.
+- Search should match media name, media ad order, media ID, or notes.
+- 状态 filter should work consistently.
+
+## Table Columns
+
+Columns:
+
+1. 日期
+2. 媒体
+3. 媒体广告单
+4. 类型
+5. 媒体ID
+6. 单价/分成比例
+7. 流量数据
+8. 结算数据/广告主金额
+9. 数据系数
+10. 应收金额
+11. 分账比例
+12. 实收金额
+13. 状态
+
+Rows should be read-only.
+
+Use data from mediaEntryRows where possible.
+
+Example rows:
+
+1.
+- 日期: 2026-5-6
+- 媒体: 济宁森林麋鹿
+- 媒体广告单: 神马
+- 类型: CPM
+- 媒体ID: 123(123456)
+- 单价/分成比例: 0.016
+- 流量数据: 5000
+- 结算数据/广告主金额: 5000
+- 数据系数: 100%
+- 应收金额: 80
+- 分账比例: 80%
+- 实收金额: 64
+- 状态: 在线
+
+2.
+- 日期: 2026-5-6
+- 媒体: 济宁森林麋鹿
+- 媒体广告单: 神马
+- 类型: CPM
+- 媒体ID: 234(234567)
+- 单价/分成比例: 0.023
+- 流量数据: 10000
+- 结算数据/广告主金额: 10000
+- 数据系数: 90%
+- 应收金额: 207
+- 分账比例: 80%
+- 实收金额: 165.6
+- 状态: 离线
+
+3.
+- 日期: 2026-5-6
+- 媒体: 济宁森林麋鹿
+- 媒体广告单: 百度JS
+- 类型: CPS
+- 媒体ID: 753
+- 单价/分成比例: —
+- 流量数据: 180000
+- 结算数据/广告主金额: 11.2
+- 数据系数: 90%
+- 应收金额: 10.08
+- 分账比例: 80%
+- 实收金额: 8.064
+- 状态: 在线
+
+Bottom total row:
+- Blue background
+- White bold text
+- First cell date, for example 2026-5-6
+- Total 实收金额 should show 2660.864 as in the screenshot, or calculate from mock rows.
+- Do not show duplicate 总计 labels.
+
+# Calculation Rules
+
+Reuse existing calculation helpers where possible.
+
+## 广告主数据查询
+
+For CPM:
+应收金额 = 单价/分成比例 × 结算数据
+
+For CPS:
+应收金额 = 结算数据/广告主金额 × 分成比例
+
+## 媒体数据查询
+
+For CPM:
+应收金额 = 单价/分成比例 × 结算数据 × 数据系数
+
+For CPS:
+应收金额 = 广告主金额 × 数据系数
+
+For all media rows:
+实收金额 = 应收金额 × 分账比例
+
+Keep values formatted cleanly:
+- Remove unnecessary long decimals
+- Keep percentages as percentages
+- Keep CPM/CPS unchanged
+
+# Download Button
+
+All four query pages should have a 数据下载 button.
+
+Since there is no backend:
+- Implement a mock CSV export or placeholder alert.
+- Preferred: export the currently filtered table rows to CSV.
+- File names:
+  - 总利润表.csv
+  - 广告单利润表.csv
+  - 广告主数据查询.csv
+  - 媒体数据查询.csv
+
+CSV export should respect the current filters.
+
+# i18n Requirements
+
+Update Chinese / Vietnamese / English translations.
+
+## Page Names
+
+Chinese:
+- 总利润表
+- 广告单利润表
+- 广告主数据查询
+- 媒体数据查询
+
+Vietnamese:
+- 总利润表 = Bảng lợi nhuận tổng
+- 广告单利润表 = Bảng lợi nhuận đơn quảng cáo
+- 广告主数据查询 = Truy vấn dữ liệu nhà quảng cáo
+- 媒体数据查询 = Truy vấn dữ liệu media
+
+English:
+- 总利润表 = Total Profit Report
+- 广告单利润表 = Ad Order Profit Report
+- 广告主数据查询 = Advertiser Data Query
+- 媒体数据查询 = Media Data Query
+
+## Common Table / Filter Labels
+
+Chinese:
+- 日期
+- 利润总计
+- 利润
+- 利润率
+- 收入
+- 支出
+- 税点
+- 税额
+- 上游
+- 下游
+- 总计
+- 广告主
+- 广告单
+- 广告ID
+- 媒体
+- 媒体广告单
+- 媒体ID
+- 类型
+- 单价/分成比例
+- 流量数据
+- 结算数据/广告主金额
+- 数据系数
+- 应收金额
+- 分账比例
+- 实收金额
+- 状态
+- 在线
+- 离线
+- 数据下载
+- 搜索...
+
+Vietnamese:
+- 日期 = Ngày
+- 利润总计 = Tổng lợi nhuận
+- 利润 = Lợi nhuận
+- 利润率 = Tỷ suất lợi nhuận
+- 收入 = Doanh thu
+- 支出 = Chi phí
+- 税点 = Thuế suất
+- 税额 = Tiền thuế
+- 上游 = Upstream
+- 下游 = Downstream
+- 总计 = Tổng cộng
+- 广告主 = Nhà quảng cáo
+- 广告单 = Đơn quảng cáo
+- 广告ID = ID quảng cáo
+- 媒体 = Media
+- 媒体广告单 = Đơn quảng cáo media
+- 媒体ID = ID media
+- 类型 = Loại
+- 单价/分成比例 = Đơn giá / Tỷ lệ chia sẻ
+- 流量数据 = Dữ liệu lưu lượng
+- 结算数据/广告主金额 = Dữ liệu quyết toán / Số tiền nhà quảng cáo
+- 数据系数 = Hệ số dữ liệu
+- 应收金额 = Số tiền phải thu
+- 分账比例 = Tỷ lệ chia doanh thu
+- 实收金额 = Số tiền thực nhận
+- 状态 = Trạng thái
+- 在线 = Đang hoạt động
+- 离线 = Tạm ngưng
+- 数据下载 = Tải dữ liệu
+- 搜索... = Tìm kiếm...
+
+English:
+- 日期 = Date
+- 利润总计 = Total Profit
+- 利润 = Profit
+- 利润率 = Profit Margin
+- 收入 = Revenue
+- 支出 = Cost
+- 税点 = Tax Rate
+- 税额 = Tax Amount
+- 上游 = Upstream
+- 下游 = Downstream
+- 总计 = Total
+- 广告主 = Advertiser
+- 广告单 = Ad Order
+- 广告ID = Ad ID
+- 媒体 = Media
+- 媒体广告单 = Media Ad Order
+- 媒体ID = Media ID
+- 类型 = Type
+- 单价/分成比例 = Unit Price / Revenue Share
+- 流量数据 = Traffic Data
+- 结算数据/广告主金额 = Settlement Data / Advertiser Amount
+- 数据系数 = Data Coefficient
+- 应收金额 = Receivable Amount
+- 分账比例 = Revenue Split Ratio
+- 实收金额 = Actual Received Amount
+- 状态 = Status
+- 在线 = Online
+- 离线 = Offline
+- 数据下载 = Download Data
+- 搜索... = Search...
+
+# Important Behavior Rules
+
+1. These pages are read-only query pages.
+2. Do not add editable inputs.
+3. Do not add confirm buttons.
+4. Do not add edit buttons.
+5. Filters should update the visible rows immediately.
+6. Totals should recalculate based on currently filtered rows.
+7. Download should export currently filtered rows.
+8. Wide tables should be horizontally scrollable.
+9. Preserve current sidebar and topbar behavior.
+10. Preserve 中 / VI / EN language switching.
+11. Preserve current app layout and styling.
+
+# Suggested Implementation
+
+You may update:
+
+- src/pages/Reports.tsx
+- src/lib/data.ts
+- src/lib/i18n.ts or existing i18n dictionary
+- src/AppContext.tsx if report data or helpers are centralized
+- src/index.css for report table styles
+
+Recommended helper functions:
+
+- formatAmount(value)
+- formatPercent(value)
+- buildCsv(rows, columns)
+- downloadCsv(filename, rows)
+- filterReportRows(rows, filters)
+- sumBy(rows, key)
+
+Recommended components:
+
+- ReportFilterBar
+- ReportTable
+- GroupedReportTable
+- TotalRow
+
+Do not overcomplicate. Keep it clean and maintainable.
+
+# Acceptance Criteria
+
+Before finishing, verify:
+
+1. 总利润表 page matches the v3 requirement and has a daily profit summary table.
+2. 总利润表 has a blue total row.
+3. 广告单利润表 has grouped headers for 上游 and 下游.
+4. 广告单利润表 supports horizontal scrolling.
+5. 广告主数据查询 is read-only and shows advertiser data rows.
+6. 广告主数据查询 has filters: date, advertiser, ad order, ad ID, type, price/share, status, search.
+7. 广告主数据查询 has a blue total row with total 应收金额.
+8. 媒体数据查询 is read-only and shows media data rows.
+9. 媒体数据查询 has filters: date, media, media ad order, media ID, type, price/share, revenue split, status, search.
+10. 媒体数据查询 has a blue total row with total 实收金额.
+11. All query pages have 数据下载.
+12. Download exports current filtered rows to CSV or uses a clear placeholder if CSV export is not implemented.
+13. No query page has editable input boxes.
+14. No query page has 确认数据 or 修改 buttons.
+15. Totals update when filters change.
+16. 中 / VI / EN translations work correctly.
+17. Existing data-entry and management features are not broken.
+18. npm run lint passes.
+19. npm run build passes.
+
+
+------------------------------
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project. Only fix the filter/search toolbar layout in 数据查询 pages.
+
+# Problem
+
+The current 数据查询 pages have incorrect filter UI.
+
+Filters are displayed as full-width vertical rows, for example:
+- 选择广告主 takes the whole row
+- 选择广告单 takes the whole row
+- 选择广告ID takes the whole row
+- 类型 takes the whole row
+- 状态 takes the whole row
+- Search and 数据下载 are pushed to separate rows
+
+This is wrong.
+
+The filter/search area in 数据查询 should visually match the existing management pages, especially 流量管理 / 媒体ID管理:
+
+- Compact controls
+- Same row alignment
+- Filters on the right side
+- Search input beside filters
+- 数据下载 button at the far right
+- No full-width stacked select boxes
+
+# Goal
+
+Make all 数据查询 filter bars look like the management page toolbar style.
+
+Apply to these pages:
+
+1. 总利润表
+2. 广告单利润表
+3. 广告主数据查询
+4. 媒体数据查询
+
+# Required Layout Style
+
+Use a toolbar layout similar to 媒体ID管理:
+
+White card
+Top toolbar row:
+- Left side: optional date input / date range
+- Right side: compact filters + search + 数据下载
+
+The toolbar should be one horizontal row when screen width allows.
+
+Example layout:
+
+[ YYYY-MM-DD ]                           [ 选择广告主 ] [ 选择广告单 ] [ 选择广告ID ] [ 类型 ] [ 状态 ] [ 搜索... ] [ 数据下载 ]
+
+For pages with many filters, do NOT make each filter full width.
+
+Use compact fixed-width controls:
+- Date input: 130px
+- Select: 130px to 160px
+- Type select: 110px
+- Status select: 130px
+- Price/share input: 130px
+- Search input: 180px to 220px
+- Download button: normal compact button
+
+If the page is too narrow:
+- Allow the toolbar to wrap naturally into 2 rows
+- But each control must keep compact width
+- Do not stretch select/input to 100% width
+
+# Page-Specific Toolbar Layout
+
+## 总利润表
+
+Toolbar:
+
+Left:
+- Date input or date range
+
+Right:
+- Search input
+- 数据下载 button
+
+Layout:
+[ YYYY-MM-DD ]                                      [ 搜索... ] [ 数据下载 ]
+
+## 广告单利润表
+
+Toolbar:
+
+Left:
+- Date input or date range
+
+Right:
+- Search input
+- 数据下载 button
+
+Layout:
+[ YYYY-MM-DD ]                                      [ 搜索名称... ] [ 数据下载 ]
+
+## 广告主数据查询
+
+Toolbar should be compact and aligned like management pages.
+
+Controls:
+
+- Date input
+- 选择广告主
+- 选择广告单
+- 选择广告ID
+- 类型
+- 单价/分成比例
+- 状态
+- 搜索...
+- 数据下载
+
+Suggested layout:
+
+[ YYYY-MM-DD ]   [ 选择广告主 ] [ 选择广告单 ] [ 选择广告ID ] [ 类型 ] [ 单价/分成比例 ] [ 全部状态 ] [ 搜索... ] [ 数据下载 ]
+
+Do not put every select on a separate full-width row.
+
+## 媒体数据查询
+
+Toolbar should also be compact.
+
+Controls:
+
+- Date input
+- 选择媒体
+- 选择媒体广告单
+- 选择媒体ID
+- 类型
+- 单价/分成比例
+- 分账比例
+- 状态
+- 搜索...
+- 数据下载
+
+Suggested layout:
+
+[ YYYY-MM-DD ]   [ 选择媒体 ] [ 选择媒体广告单 ] [ 选择媒体ID ] [ 类型 ] [ 单价/分成比例 ] [ 分账比例 ] [ 全部状态 ] [ 搜索... ] [ 数据下载 ]
+
+Do not put every select on a separate full-width row.
+
+# CSS Requirements
+
+Create or update a reusable report toolbar class.
+
+Suggested CSS:
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  flex-wrap: wrap;
+}
+
+.report-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.report-toolbar .filter-date {
+  width: 130px;
+  min-width: 130px;
+}
+
+.report-toolbar .filter-select {
+  width: 140px;
+  min-width: 140px;
+}
+
+.report-toolbar .filter-select.wide {
+  width: 160px;
+  min-width: 160px;
+}
+
+.report-toolbar .filter-input {
+  width: 130px;
+  min-width: 130px;
+}
+
+.report-toolbar .search-input {
+  width: 200px;
+  min-width: 200px;
+}
+
+.report-toolbar .data-download-btn {
+  white-space: nowrap;
+}
+
+Important:
+- Remove any CSS that makes report page select/input width: 100%.
+- Do not use display: block full-width for query filter controls.
+- Do not use vertical stacked form layout for query pages.
+
+# Visual Requirements
+
+The filter bar should look consistent with existing management pages:
+
+- Same control height
+- Same border radius
+- Same font size
+- Same select arrow style
+- Same search input style
+- Same green 数据下载 button style
+- Same card spacing
+
+# Behavior Requirements
+
+Do not break filtering logic.
+
+Existing filters must still work:
+- Date
+- Advertiser/media
+- Order
+- ID
+- Type
+- Price/share
+- Revenue split
+- Status
+- Search
+
+The download button must still export the currently filtered rows.
+
+# i18n Requirements
+
+Keep 中 / VI / EN language switching working.
+
+Do not hardcode only Chinese labels.
+
+The compact layout should work in all three languages:
+- Chinese
+- Vietnamese
+- English
+
+If Vietnamese or English labels are longer, keep the control compact but readable.
+
+# Do Not Do
+
+- Do not rebuild the project.
+- Do not change sidebar.
+- Do not change unrelated management pages.
+- Do not remove any filters.
+- Do not remove 数据下载.
+- Do not make query tables editable.
+- Do not add confirm/edit buttons to query pages.
+- Do not make filters full-width.
+
+# Acceptance Criteria
+
+Before finishing, verify:
+
+1. 总利润表 toolbar is compact and not full-width stacked.
+2. 广告单利润表 toolbar is compact and not full-width stacked.
+3. 广告主数据查询 toolbar is compact like 媒体ID管理.
+4. 媒体数据查询 toolbar is compact like 媒体ID管理.
+5. Select boxes do not take the full page width.
+6. Search input and 数据下载 button are on the same toolbar area.
+7. Toolbar can wrap on smaller screens but each control keeps compact width.
+8. All filters still work.
+9. 数据下载 still works.
+10. 中 / VI / EN translations still work.
+11. npm run lint passes.
+12. npm run build passes.
+
+
+--------------
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project. Continue from the current src project. Only implement the v4.0 modification comments from the boss dated 2026-05-14.
+
+Important note from the PDF:
+The screenshots are only for explaining page modification requirements. Keep the existing KrakenOcean dashboard design language.
+
+# Current Project Context
+
+Current stack:
+- React + Vite + TypeScript
+- Client-side state only
+- No backend
+- No database
+- Existing files include:
+  - src/App.tsx
+  - src/AppContext.tsx
+  - src/components/GlobalModal.tsx
+  - src/pages/Advertiser.tsx
+  - src/pages/Media.tsx
+  - src/pages/DataEntry.tsx
+  - src/pages/Reports.tsx
+  - src/lib/data.ts
+  - src/lib/i18n.ts
+  - src/lib/dataEntryMath.ts
+  - src/lib/date.ts
+
+Keep existing accepted features:
+- Sidebar / Topbar / i18n 中 VI EN
+- Management pages
+- Data entry pages
+- Query pages
+- Count click navigation
+- Status filter
+- Date picker
+- CSV download
+- Existing UI style
+
+# Main Goal
+
+Implement all v4.0 fixes:
+
+1. Fix search behavior in management pages.
+2. Add missing notes field in ad order/media order modals.
+3. Fix edit mode so edit buttons actually edit existing records.
+4. Add delete button inside edit modals.
+5. Rename 广告槽 to 广告ID for ad ID creation/editing.
+6. Display CPS revenue share as percentage.
+7. Apply the same management fixes to 流量管理 pages.
+8. Fix 数据录入 date behavior to support date range query, not only single-day query.
+9. In 数据录入, the red-box controls are not multi-condition query filters.
+10. In 媒体主数据管理, CPS 单价/分成比例 should be disabled or default to 0.
+
+# Part 1: 广告主管理 Search Fix
+
+Page:
+广告主管理 > 广告主管理
+
+Current issue:
+Search only works for advertiser name/contact. It cannot search phone, email, and notes.
+
+Fix:
+Search should match all these fields:
+
+- 广告主
+- 联系人
+- 手机号码
+- 电子邮件
+- 备注
+
+Rules:
+- Search should support Chinese and localized display names.
+- Search should be case-insensitive where applicable.
+- Empty search shows all rows.
+
+Acceptance:
+Typing phone number should find matching advertiser.
+Typing email should find matching advertiser.
+Typing notes should find matching advertiser.
+
+# Part 2: 广告单管理 Search Fix
+
+Page:
+广告主管理 > 广告单管理
+
+Current issue:
+Search cannot search by 广告主.
+
+Fix:
+Search should match:
+
+- 广告主 name
+- 广告单 name
+- 备注
+
+Also keep the advertiser dropdown filter working.
+
+Rules:
+- Search and advertiser dropdown filter should work together.
+- Empty search shows rows matching dropdown filter or all rows.
+
+Acceptance:
+Typing 北京晓云 should show ad orders belonging to 北京晓云.
+Typing 神马 should show related ad orders.
+Typing notes should also match.
+
+# Part 3: 新建 / 编辑 广告单 Add 备注
+
+Page:
+广告主管理 > 广告单管理
+
+Current issue:
+新建广告单 modal is missing 广告单备注.
+
+Fix:
+In 新建广告单 modal, add:
+
+- 备注 textarea
+
+Modal fields should be:
+
+1. 选择广告主
+2. 广告单名称
+3. 备注
+
+Save notes into adOrders.notes.
+
+Also show 备注 in the 广告单管理 table if it already has the column.
+
+Apply the same to edit mode.
+
+# Part 4: 广告单管理 Edit Existing Record + Delete Button
+
+Page:
+广告主管理 > 广告单管理
+
+Current issue:
+Clicking the edit pencil opens the create modal, but it cannot edit the original ad order correctly.
+Also, the edit modal has no delete button.
+
+Fix:
+Implement proper edit mode.
+
+When clicking pencil on an ad order row:
+- Open modal title: 编辑广告单
+- Pre-fill selected 广告主
+- Pre-fill 广告单名称
+- Pre-fill 备注
+- Submit should update the existing ad order, not create a new one.
+
+Inside edit modal:
+- Add a red / danger Delete button.
+- Button text:
+  Chinese: 删除
+  Vietnamese: Xóa
+  English: Delete
+
+Delete behavior:
+- Ask for confirmation first.
+- If confirmed, delete the current ad order.
+- Also handle related ad IDs safely:
+  - Either delete related ad IDs, or prevent deletion if related ad IDs exist and show a warning.
+  - Preferred for this mock frontend: ask confirmation and delete related ad IDs together.
+- Close modal after deletion.
+- Add operation log if operation logs are already implemented.
+
+Do not show delete button in create mode.
+
+# Part 5: 新建 / 编辑 广告ID Label Fix
+
+Page:
+广告主管理 > 广告ID管理
+
+Current issue:
+新建广告ID modal still uses 广告槽.
+Boss requested:
+新建广告ID，将广告槽改为广告ID.
+
+Fix:
+In 新建广告ID and 编辑广告ID modal:
+
+Replace all visible labels/placeholders:
+
+- 广告槽 -> 广告ID
+
+Do this in:
+- Form label
+- Placeholder
+- i18n key display
+- Validation message if any
+
+Internal data field can still be slot if changing it risks breaking code, but the visible UI must say 广告ID.
+
+Modal fields should be:
+
+1. 选择广告主
+2. 选择广告单
+3. 广告ID
+4. 类型 CPM/CPS
+5. 单价 or 分成比例
+6. 备注
+
+# Part 6: CPS Revenue Share Percentage Display
+
+Page:
+广告主管理 > 广告ID管理
+
+Current issue:
+When 类型 is CPS, 分成比例 should display as percentage.
+
+Fix:
+For CPS:
+- Store and display revenue share as percentage format, for example:
+  - 70%
+  - 12%
+  - 0.12 can be displayed as 12% if existing data uses decimal ratio.
+- In modal, if type is CPS, label should be 分成比例.
+- Input can accept:
+  - 70
+  - 70%
+  - 0.7
+- Normalize display to percentage.
+
+For CPM:
+- Keep unit price numeric, for example 0.015.
+
+Important:
+- Do not show CPS share as plain 0.12 if the intended display is 12%.
+- Avoid breaking existing calculations.
+
+# Part 7: 广告ID管理 Edit Existing Record + Delete Button
+
+Page:
+广告主管理 > 广告ID管理
+
+Current issue:
+Clicking edit only opens a create-style modal and cannot edit the original ad ID.
+Edit modal has no delete button.
+
+Fix:
+When clicking pencil on an ad ID row:
+- Open modal title: 编辑广告ID
+- Pre-fill 广告主
+- Pre-fill 广告单
+- Pre-fill 广告ID
+- Pre-fill 类型
+- Pre-fill 单价 / 分成比例
+- Pre-fill 备注
+- Submit updates the existing ad ID, not create new one.
+
+Inside edit modal:
+- Add Delete button.
+- Confirm before deleting.
+- Delete current ad ID from state.
+- Close modal after deletion.
+- Do not show delete button in create mode.
+
+# Part 8: Apply Same Fixes To 流量管理
+
+PDF says:
+流量管理修改意见参考广告主管理意见.
+
+Apply the same pattern to these pages:
+
+1. 流量管理 > 媒体管理
+2. 流量管理 > 媒体广告单管理
+3. 流量管理 > 媒体ID管理
+
+## 媒体管理 Search
+
+Search should match:
+
+- 媒体
+- 联系人
+- 手机号码
+- 电子邮件
+- 备注
+
+## 媒体广告单管理 Search
+
+Search should match:
+
+- 媒体 name
+- 媒体广告单 name
+- 备注
+
+Keep media dropdown filter working together with search.
+
+## 新建 / 编辑 媒体广告单 Add 备注
+
+Modal fields should be:
+
+1. 选择媒体
+2. 媒体广告单名称
+3. 备注
+
+Save notes into mediaOrders.notes.
+
+## 媒体广告单管理 Edit + Delete
+
+Click pencil:
+- Open 编辑媒体广告单
+- Pre-fill values
+- Submit updates existing record
+- Add Delete button in edit mode
+- If deleting, also handle related media IDs safely
+
+## 媒体ID管理 Edit + Delete
+
+Click pencil:
+- Open 编辑媒体ID
+- Pre-fill values
+- Submit updates existing record
+- Add Delete button in edit mode
+
+For media ID modal, keep existing visible labels unless boss specifically requested otherwise.
+
+# Part 9: Refactor Modal State Properly
+
+Current code appears to use window.editData after openModal.
+
+This is fragile.
+
+Refactor modal state cleanly in AppContext:
+
+Recommended:
+
+modalState:
+{
+  type: string;
+  mode: 'create' | 'edit';
+  record?: any;
+}
+
+Functions:
+- openCreateModal(type)
+- openEditModal(type, record)
+- closeModal()
+
+Or keep existing openModal but extend it:
+
+openModal(type, record?)
+
+Rules:
+- If record exists, modal is edit mode.
+- If no record, modal is create mode.
+- GlobalModal should initialize formData from record.
+- Submit should create or update based on mode.
+- Delete button only appears in edit mode.
+
+Do not use window.editData.
+
+# Part 10: 数据录入 Date Range Query
+
+Pages:
+
+1. 数据录入 > 广告主数据录入
+2. 数据录入 > 媒体主数据管理
+
+PDF v4 says:
+红色箭头需支持日期段查询，而不是仅支持单日查询.
+
+Current issue:
+Date only supports single-day selection.
+
+Fix:
+Data entry date control should support a date range.
+
+Use two date picker fields:
+
+- 开始日期
+- 结束日期
+
+or one date range component if simpler.
+
+Requirements:
+- User can select start date and end date.
+- Show rows within the selected date range.
+- If selected date range contains dates with no saved data, generate template rows for those dates.
+- Date range should not make the table empty just because some dates have no records.
+- Generated template rows should follow previous rule:
+  - Keep business columns from template rows.
+  - Clear only daily input fields like 流量数据.
+  - Mark new generated rows as pending/editable.
+- Confirm actions save rows for their specific dates.
+- Returning to the same date range should show saved data.
+
+Example:
+Existing template date is 2026-05-05.
+User selects:
+2026-05-05 to 2026-05-07.
+
+The table should show rows for:
+- 2026-05-05
+- 2026-05-06
+- 2026-05-07
+
+If 2026-05-06 and 2026-05-07 do not exist yet:
+- Generate rows from templates.
+- Set 日期 to those dates.
+- Clear 流量数据.
+- Keep advertiser/media/order/ID/type/rate/settlement/data coefficient/share ratio as required.
+- Status should be pending.
+
+# Part 11: 数据录入 Red Box Is Not Multi-Condition Query
+
+PDF v4 says:
+红色方框内不是多条件查询.
+
+This means:
+Do not treat the red-box controls in 数据录入 as strict multi-condition search filters that hide rows like a report page.
+
+In 数据录入:
+- Date range is the main query scope.
+- Red-box controls should not cause confusing multi-filter behavior.
+- Do not make the user combine advertiser/order/id/status filters to query records.
+- If these controls remain visible, they should be simple selection/scope controls and must not hide all rows unexpectedly.
+- It is acceptable to remove or simplify these controls if they are causing confusion, but keep the UI close to the PDF.
+
+Recommended behavior:
+- Keep date range on the left.
+- Keep red-box controls visually if needed:
+  - 选择广告主 / 选择广告单 / 选择广告ID / 状态
+  - 选择媒体 / 选择媒体广告单 / 选择媒体ID / 状态
+- But do not implement them as strict multi-condition filters that can empty the table.
+- If a control is selected, it may narrow rows lightly, but default state must always show all rows in date range.
+- The table must never show only total row because of these controls.
+
+# Part 12: 媒体主数据管理 CPS 单价/分成比例
+
+PDF v4 says:
+橙色方框内在CPS类型下，可默认不可编辑，或者默认为0.
+
+Page:
+数据录入 > 媒体主数据管理
+
+Current issue:
+For CPS row, 单价/分成比例 may show editable Value.
+
+Fix:
+When row type is CPS:
+- 单价/分成比例 should be disabled/read-only
+- Or default to 0
+- Preferred:
+  - Show 0 or —
+  - Disable the input
+  - Make it visually muted
+- CPS calculation should not depend on this field.
+
+For CPS media rows:
+应收金额 = 广告主金额 × 数据系数
+
+For all media rows:
+实收金额 = 应收金额 × 分账比例
+
+Do not allow user to edit 单价/分成比例 for CPS media data rows.
+
+# Part 13: i18n Requirements
+
+Add/update Chinese, Vietnamese, English keys.
+
+Chinese:
+- 编辑广告单
+- 编辑广告ID
+- 编辑媒体广告单
+- 编辑媒体ID
+- 删除
+- 确认删除
+- 开始日期
+- 结束日期
+- 广告ID
+- 备注
+- 删除后不可恢复
+- 该记录有关联数据，是否一起删除？
+
+Vietnamese:
+- 编辑广告单 = Chỉnh sửa đơn quảng cáo
+- 编辑广告ID = Chỉnh sửa ID quảng cáo
+- 编辑媒体广告单 = Chỉnh sửa đơn quảng cáo media
+- 编辑媒体ID = Chỉnh sửa ID media
+- 删除 = Xóa
+- 确认删除 = Xác nhận xóa
+- 开始日期 = Ngày bắt đầu
+- 结束日期 = Ngày kết thúc
+- 广告ID = ID quảng cáo
+- 备注 = Ghi chú
+- 删除后不可恢复 = Sau khi xóa sẽ không thể khôi phục
+- 该记录有关联数据，是否一起删除？ = Bản ghi này có dữ liệu liên quan, bạn có muốn xóa cùng không?
+
+English:
+- 编辑广告单 = Edit Ad Order
+- 编辑广告ID = Edit Ad ID
+- 编辑媒体广告单 = Edit Media Ad Order
+- 编辑媒体ID = Edit Media ID
+- 删除 = Delete
+- 确认删除 = Confirm Delete
+- 开始日期 = Start Date
+- 结束日期 = End Date
+- 广告ID = Ad ID
+- 备注 = Notes
+- 删除后不可恢复 = This cannot be undone after deletion
+- 该记录有关联数据，是否一起删除？ = This record has related data. Delete related data as well?
+
+# Part 14: Operation Log
+
+If operation log is already implemented, add logs for:
+
+- edit advertiser
+- delete advertiser
+- edit ad order
+- delete ad order
+- edit ad ID
+- delete ad ID
+- edit media
+- delete media
+- edit media ad order
+- delete media ad order
+- edit media ID
+- delete media ID
+
+Keep it simple and structured if possible.
+
+# Do Not Do
+
+- Do not rebuild the project.
+- Do not break existing sidebar.
+- Do not break language switcher.
+- Do not break 数据查询 pages.
+- Do not remove count click navigation.
+- Do not remove existing data-entry confirm/edit behavior.
+- Do not remove status toggles.
+- Do not use window.editData.
+- Do not make edit create a duplicate record.
+- Do not show delete button in create mode.
+
+# Acceptance Criteria
+
+Before finishing, verify all:
+
+## 广告主管理
+
+1. 广告主管理 search works for name, contact, phone, email, notes.
+2. 广告单管理 search works for advertiser name, ad order name, notes.
+3. 新建广告单 modal has 备注.
+4. 编辑广告单 pre-fills existing data.
+5. 编辑广告单 submit updates original row.
+6. 编辑广告单 has delete button.
+7. Deleting ad order works safely.
+
+## 广告ID管理
+
+8. 新建广告ID modal shows 广告ID, not 广告槽.
+9. 编辑广告ID pre-fills existing data.
+10. 编辑广告ID submit updates original row.
+11. 编辑广告ID has delete button.
+12. CPS rate/share displays as percentage.
+
+## 流量管理
+
+13. 媒体管理 search works for name, contact, phone, email, notes.
+14. 媒体广告单管理 search works for media name, media ad order name, notes.
+15. 新建媒体广告单 modal has 备注.
+16. 编辑媒体广告单 updates original row and has delete.
+17. 编辑媒体ID updates original row and has delete.
+
+## 数据录入
+
+18. 广告主数据录入 supports start date and end date.
+19. 媒体主数据管理 supports start date and end date.
+20. Date range can generate/show rows for dates with no saved records.
+21. Date range does not cause empty table with only total row.
+22. Red-box controls are not strict multi-condition query filters.
+23. For new generated dates, 流量数据 is blank but other business columns remain.
+24. In 媒体主数据管理, CPS 单价/分成比例 is disabled or defaults to 0.
+25. Existing formulas still work.
+26. Confirm/edit row behavior still works.
+
+## General
+
+27. Chinese / Vietnamese / English translations work.
+28. npm run lint passes.
+29. npm run build passes.
+
+
+------------------------
+
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project. Continue from the current codebase and only implement the boss's v5.0 modification comments dated 2026-05-15.
+
+Important note from the PDF:
+The screenshots are only used to explain page modification requirements. Keep the existing KrakenOcean dashboard design language.
+
+# Current Project Context
+
+Current stack:
+- React + Vite + TypeScript
+- Client-side state only
+- No backend
+- No database
+- Existing AppContext global state
+- Existing i18n system 中 / VI / EN
+- Existing management pages
+- Existing data entry pages
+- Existing data query pages
+- Existing edit/delete/status/date-range logic from v4
+
+Do not remove or break existing accepted features.
+
+# Main Goal Of v5
+
+Implement these fixes:
+
+1. 广告ID管理 search must support fuzzy search by 广告单名称.
+2. 广告ID管理 red-box filters are not independent multi-condition filters; they are cascading filters.
+3. 流量管理 should apply the same cascading filter logic as 广告主管理.
+4. 媒体管理 must add email format validation.
+5. 新建媒体ID should rename 广告槽 to 广告ID.
+6. 新建媒体ID should add advertiser/ad order/ad ID selector group to filter available ad IDs.
+7. Already selected 广告ID should not appear in available options when creating a new 媒体ID.
+8. 数据录入 red-box filters are also not independent multi-condition filters; they should follow the cascading logic from 1.1.1.
+9. Make sure the sidebar/page label for media data entry uses 媒体主数据管理 consistently.
+
+# Part 1: 广告ID管理 Search Fix
+
+Page:
+广告主管理 > 广告ID管理
+
+Current issue:
+The search box cannot fuzzy search by 广告单名称.
+
+Fix:
+Search should match these fields:
+
+- 广告主
+- 广告单
+- 广告ID
+- 类型
+- 单价/比例
+- 备注
+
+Important:
+- Searching by partial 广告单名称 should work.
+- Example: typing 神马 should show rows with ad orders containing 神马.
+- Example: typing 神马搜索 should show matching ad IDs.
+- Search should be fuzzy/partial match.
+- Search should work together with cascading dropdowns.
+
+# Part 2: 广告ID管理 Cascading Filters
+
+Page:
+广告主管理 > 广告ID管理
+
+PDF v5 says:
+红色方框内不是多条件查询，即逐级查询.
+
+Meaning:
+The red-box filters are not separate independent filters. They should be cascading / hierarchical filters.
+
+Current filter area:
+- 广告主
+- 广告单
+- 类型
+- 搜索
+
+Required behavior:
+
+1. 广告主 dropdown:
+   - Shows all advertisers that have related ad ID rows.
+   - When user selects an advertiser, the 广告单 dropdown options must only show ad orders belonging to that advertiser.
+   - Example: if 广告主 = 北京响云, 广告单 options should not show 360, 千问, 头条 if they do not belong to 北京响云.
+
+2. 广告单 dropdown:
+   - Options depend on selected 广告主.
+   - If no 广告主 selected, show all ad orders that have related ad ID rows.
+   - When 广告单 is selected, 类型 options should only show types available under that advertiser + ad order scope.
+
+3. 类型 dropdown:
+   - Options depend on selected 广告主 and 广告单.
+   - If selected scope only has CPM, only show CPM.
+   - If selected scope has CPM and CPS, show both.
+   - Default option should be 类型.
+
+4. Reset behavior:
+   - If 广告主 changes, clear selected 广告单 and 类型.
+   - If 广告单 changes, clear selected 类型.
+   - Search text can remain.
+
+5. Table behavior:
+   - Table should show rows according to the current cascading scope.
+   - Search box then fuzzy searches within the current cascading result.
+   - Empty/default dropdown value means no restriction for that level.
+
+Do not implement these three dropdowns as unrelated independent filters.
+
+# Part 3: Apply Same Cascading Logic To 流量管理
+
+PDF v5 says:
+流量管理修改意见参考广告主管理意见.
+
+Apply the same cascading filter pattern to:
+
+1. 流量管理 > 媒体ID管理
+
+For 媒体ID管理 filter area:
+
+- 媒体
+- 媒体广告单
+- 类型
+- 搜索
+
+Required behavior:
+
+1. 媒体 dropdown:
+   - Shows media that have related media ID rows.
+   - Selecting media limits 媒体广告单 options.
+
+2. 媒体广告单 dropdown:
+   - Options depend on selected 媒体.
+   - If no 媒体 selected, show all media ad orders that have related media ID rows.
+
+3. 类型 dropdown:
+   - Options depend on selected 媒体 and 媒体广告单.
+   - Only show CPM/CPS types available within current scope.
+
+4. Reset behavior:
+   - If 媒体 changes, clear 媒体广告单 and 类型.
+   - If 媒体广告单 changes, clear 类型.
+
+5. Search:
+   - Search should fuzzy match 媒体, 媒体广告单, 媒体ID, 类型, 单价/比例, 备注.
+   - Search works within the current cascading scope.
+
+Also check whether 媒体广告单管理 has similar parent dropdown behavior. If it has media filter, keep it working cleanly.
+
+# Part 4: 媒体管理 Email Format Validation
+
+Page:
+流量管理 > 媒体管理
+
+PDF v5 says:
+增加电子邮件格式检查.
+
+Fix:
+Add email format validation when creating or editing media.
+
+Apply to:
+- 新建媒体 modal
+- 编辑媒体 modal
+
+Rules:
+- If email field is empty, allow it if current form design allows optional email.
+- If email is not empty, validate it using a reasonable email regex.
+- Invalid examples should be rejected:
+  - lksfj
+  - abc
+  - 123@
+  - test.com
+- Valid examples:
+  - chengjifeng@senlinmilu.com
+  - wf@hzsm.com
+  - 234@qq.com
+
+Behavior:
+- Show inline error message near the email field.
+- Do not submit if email is invalid.
+- Keep modal open.
+- Do not create/update the record until email is valid.
+
+Add same email validation to 广告主管理 advertiser modal too if it is not already implemented, for consistency.
+
+i18n error message:
+
+Chinese:
+请输入正确的电子邮件格式
+
+Vietnamese:
+Vui lòng nhập đúng định dạng email
+
+English:
+Please enter a valid email address
+
+# Part 5: 新建媒体ID Modal - Rename 广告槽 To 广告ID
+
+Page:
+流量管理 > 媒体ID管理
+
+PDF v5 says:
+新建媒体ID，将广告槽改为广告ID.
+
+Fix all visible labels/placeholders in the media ID modal:
+
+- 广告槽 -> 广告ID
+
+This applies to:
+- Form label
+- Placeholder
+- Select placeholder
+- Any helper text
+- i18n label
+
+Internal field name can stay as adSlot if changing it risks breaking state, but visible UI must say 广告ID.
+
+# Part 6: 新建媒体ID Modal - Add Advertiser / Ad Order / Ad ID Selector Group
+
+Page:
+流量管理 > 媒体ID管理
+
+PDF v5 shows new red-box fields at the top of 新建媒体ID modal:
+
+- 选择广告主
+- 选择广告单
+- 选择广告ID
+
+Goal:
+Add these fields to help select/filter upstream 广告ID before creating a media ID.
+
+Modal layout should include:
+
+Row 1:
+- 选择广告主
+- 选择广告单
+- 选择广告ID
+
+Row 2:
+- 选择媒体
+- 选择媒体广告单
+- 分账比例
+
+Then:
+- 媒体ID / 媒体槽 field
+- 类型 CPM/CPS
+- 单价 or 分成比例
+- 备注
+
+Keep the layout clean and similar to current modal.
+
+# Part 7: Upstream Ad ID Cascading In 新建媒体ID
+
+The new fields should cascade:
+
+1. 选择广告主:
+   - Shows advertisers with available ad IDs.
+
+2. 选择广告单:
+   - Shows only ad orders under selected advertiser.
+   - If advertiser changes, clear selected ad order and selected ad ID.
+
+3. 选择广告ID:
+   - Shows only ad IDs under selected advertiser + selected ad order.
+   - If ad order changes, clear selected ad ID.
+
+4. When selected 广告ID changes:
+   - Auto-fill or derive related values where appropriate:
+     - type CPM/CPS
+     - upstream ad ID display
+     - revenue share / rate if needed
+   - Do not break existing media ID fields.
+
+# Part 8: Already Selected 广告ID Should Not Appear In Candidate List
+
+PDF v5 says:
+已被选择过的广告ID，不出现在备选列表.
+
+Meaning:
+When creating a new 媒体ID, an upstream 广告ID that has already been selected/linked by another media ID should not appear in the 选择广告ID dropdown.
+
+Rules:
+- In create mode:
+  - Exclude ad IDs that are already used by existing mediaIds.
+- In edit mode:
+  - The currently assigned ad ID for this media ID should remain visible/selectable.
+  - Other already-used ad IDs should be excluded.
+- If all ad IDs are used, dropdown should show no available options or a clear empty state.
+
+Suggested display:
+Chinese:
+暂无可选广告ID
+
+Vietnamese:
+Không có ID quảng cáo khả dụng
+
+English:
+No available ad IDs
+
+# Part 9: 分账比例 In 新建媒体ID
+
+PDF v5 shows 分账比例 in the red-box area.
+
+Make sure 新建媒体ID and 编辑媒体ID include 分账比例.
+
+Rules:
+- It should support percentage values like 70%, 80%, 100%.
+- User can input 70 or 70%.
+- Display should normalize as percentage.
+- Save it into mediaIds or related media data state if already supported.
+- Do not break existing media data calculations.
+
+# Part 10: 数据录入 Red-Box Controls Should Follow Cascading Logic
+
+Pages:
+数据录入 > 广告主数据录入
+数据录入 > 媒体主数据管理
+
+PDF v5 says:
+红色方框内不是多条件查询，修改方式参考1.1.1.
+
+Meaning:
+The red-box controls in data entry should not be independent multi-condition filters. They should be cascading / hierarchical selection controls like the 广告ID管理 example.
+
+Keep existing date range from v4:
+- 开始日期
+- 结束日期
+
+But change red-box controls behavior.
+
+## 广告主数据录入
+
+Controls:
+- 选择广告主
+- 选择广告单
+- 选择广告ID
+- 状态
+- 搜索
+
+Cascading behavior:
+
+1. Selecting 广告主 limits 广告单 options to that advertiser.
+2. Selecting 广告单 limits 广告ID options to that advertiser + ad order.
+3. 状态 options can be limited to available statuses in the current selected scope.
+4. Changing 广告主 clears 广告单 and 广告ID.
+5. Changing 广告单 clears 广告ID.
+6. Search fuzzy searches within selected cascading scope.
+7. Default state shows all generated rows for the selected date range.
+
+Important:
+- Date range is still the main scope.
+- Cascading controls should not unexpectedly make the table empty.
+- If a selection produces no rows, keep the date range rows visible or show a proper empty state, but never show only the total row.
+- For missing dates, still generate template rows as implemented in v4.
+
+## 媒体主数据管理
+
+Controls:
+- 选择媒体
+- 选择媒体广告单
+- 选择媒体ID
+- 状态
+- 搜索
+
+Cascading behavior:
+
+1. Selecting 媒体 limits 媒体广告单 options to that media.
+2. Selecting 媒体广告单 limits 媒体ID options to that media + media ad order.
+3. 状态 options can be limited to available statuses in current scope.
+4. Changing 媒体 clears 媒体广告单 and 媒体ID.
+5. Changing 媒体广告单 clears 媒体ID.
+6. Search fuzzy searches within selected cascading scope.
+7. Default state shows all generated rows for selected date range.
+
+# Part 11: Sidebar / Page Label For 媒体主数据管理
+
+PDF v5 highlights the sidebar item:
+
+媒体主数据管理
+
+Make sure the label is consistent.
+
+Chinese:
+媒体主数据管理
+
+Vietnamese:
+Quản lý dữ liệu media chính
+
+English:
+Media Master Data Management
+
+Apply this label consistently in:
+- Sidebar menu
+- Breadcrumb
+- Page title
+- i18n dictionary
+
+Do not mix 媒体数据管理 and 媒体主数据管理 in Chinese mode.
+
+# Part 12: i18n Requirements
+
+Add or verify translations:
+
+Chinese:
+- 暂无可选广告ID
+- 请输入正确的电子邮件格式
+- 选择广告主
+- 选择广告单
+- 选择广告ID
+- 分账比例
+- 媒体主数据管理
+
+Vietnamese:
+- 暂无可选广告ID = Không có ID quảng cáo khả dụng
+- 请输入正确的电子邮件格式 = Vui lòng nhập đúng định dạng email
+- 选择广告主 = Chọn nhà quảng cáo
+- 选择广告单 = Chọn đơn quảng cáo
+- 选择广告ID = Chọn ID quảng cáo
+- 分账比例 = Tỷ lệ chia doanh thu
+- 媒体主数据管理 = Quản lý dữ liệu media chính
+
+English:
+- 暂无可选广告ID = No available ad IDs
+- 请输入正确的电子邮件格式 = Please enter a valid email address
+- 选择广告主 = Select Advertiser
+- 选择广告单 = Select Ad Order
+- 选择广告ID = Select Ad ID
+- 分账比例 = Revenue Split Ratio
+- 媒体主数据管理 = Media Master Data Management
+
+# Do Not Do
+
+- Do not rebuild the project.
+- Do not remove existing v4 fixes.
+- Do not remove date range in 数据录入.
+- Do not remove edit/delete modal behavior.
+- Do not remove status toggle state persistence.
+- Do not remove query/report pages.
+- Do not make red-box controls independent unrelated filters.
+- Do not show already-selected ad IDs in new media ID candidate list.
+- Do not allow invalid email to be saved in media management.
+
+# Acceptance Criteria
+
+Before finishing, verify:
+
+## 广告ID管理
+
+1. Search box can fuzzy search by 广告单名称.
+2. Selecting 广告主 limits 广告单 options.
+3. Selecting 广告单 limits 类型 options.
+4. Changing 广告主 clears downstream selections.
+5. Dropdowns behave as cascading filters, not unrelated independent filters.
+6. Table result updates correctly.
+7. Search works within the selected cascading scope.
+
+## 流量管理 / 媒体ID管理
+
+8. 媒体ID管理 has equivalent cascading filter behavior.
+9. Search can fuzzy search by 媒体广告单名称.
+10. Changing 媒体 clears downstream selections.
+11. Changing 媒体广告单 clears 类型.
+
+## 媒体管理
+
+12. 新建媒体 validates email format.
+13. 编辑媒体 validates email format.
+14. Invalid email cannot be submitted.
+15. Error message is shown in 中 / VI / EN.
+
+## 新建媒体ID / 编辑媒体ID
+
+16. Visible label uses 广告ID, not 广告槽.
+17. Modal has 选择广告主 / 选择广告单 / 选择广告ID fields.
+18. These three fields cascade correctly.
+19. Already selected ad IDs are excluded in create mode.
+20. Current assigned ad ID remains visible in edit mode.
+21. 分账比例 exists and supports percentage display.
+
+## 数据录入
+
+22. 广告主数据录入 red-box controls are cascading selectors.
+23. 媒体主数据管理 red-box controls are cascading selectors.
+24. Date range remains the main scope.
+25. Table never shows only total row because of these controls.
+26. Missing date rows still generate correctly.
+27. 媒体主数据管理 label is consistent in sidebar, breadcrumb, and title.
+
+## General
+
+28. Chinese / Vietnamese / English language switch still works.
+29. npm run lint passes.
+30. npm run build passes.
+
+
+--------------------
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project. Only fix the row sorting after date range filtering.
+
+# Problem
+
+After selecting a date range in 数据录入, the table rows are not sorted by date correctly.
+
+Example:
+Selected date range:
+2026-05-01 to 2026-05-15
+
+Current table order is wrong:
+2026-05-05
+2026-05-01
+2026-05-02
+...
+
+Correct order should be:
+2026-05-01
+2026-05-02
+2026-05-03
+...
+2026-05-15
+
+# Pages To Fix
+
+Apply to:
+
+1. 数据录入 > 广告主数据录入
+2. 数据录入 > 媒体主数据管理
+
+Also apply the same date sorting helper to 数据查询 pages if they use date filtering and generated rows.
+
+# Required Behavior
+
+After filtering or generating rows by date range:
+
+- Rows must be sorted by 日期 ascending by default.
+- Earliest date first.
+- Latest date last.
+- Total row must always stay at the bottom.
+- Sorting must work for both saved rows and generated template rows.
+- Sorting must still work after changing advertiser/media/order/id/status filters.
+- Sorting must still work after search.
+
+# Date Format Handling
+
+Normalize dates before sorting.
+
+Support these formats:
+
+- 2026-05-01
+- 2026-5-1
+- 26-05-01
+- 26-5-1
+
+Create or reuse helper:
+
+normalizeDate(value: string): string
+
+Then sort using normalized date value.
+
+# Secondary Sort
+
+If multiple rows have the same date, keep a stable business order:
+
+For 广告主数据录入:
+1. 日期 ascending
+2. 广告主
+3. 广告单
+4. 广告ID
+
+For 媒体主数据管理:
+1. 日期 ascending
+2. 媒体
+3. 媒体广告单
+4. 媒体ID
+
+# Important
+
+Do not change formulas.
+Do not change date range behavior.
+Do not remove generated rows.
+Do not make the table empty.
+Do not move the total row into the sorted data rows.
+
+# Acceptance Criteria
+
+1. Selecting 2026-05-01 to 2026-05-15 shows rows starting from 2026-05-01.
+2. 2026-05-05 no longer appears before 2026-05-01.
+3. Saved rows and generated rows are mixed together correctly by date.
+4. Total row stays at the bottom.
+5. 广告主数据录入 sorts correctly.
+6. 媒体主数据管理 sorts correctly.
+7. Filters and search still work.
+8. npm run lint passes.
+9. npm run build passes.
+
+
+----------------------
+
+
+You are continuing the existing React + Vite + TypeScript KrakenOcean admin dashboard project.
+
+Do not rebuild the project. Only add and integrate the new ad order type CPA based on the boss's latest clarification.
+
+# Boss Clarification
+
+The boss clarified that the current ad order types should be:
+
+1. CPM
+2. CPA
+3. CPS
+
+Current project only supports CPM and CPS. Add CPA everywhere.
+
+# Pricing / Calculation Rules
+
+Use these rules:
+
+CPM:
+价格 = 单价 × 数据 / 1000
+
+CPA:
+价格 = 单价 × 数据
+
+CPS:
+价格 = 金额 × 比例
+
+Meaning:
+
+- CPM uses unit price per 1000 data/impressions.
+- CPA uses unit price multiplied directly by data/action count.
+- CPS uses amount multiplied by revenue share ratio.
+
+# Important Compatibility Note
+
+The current mock data may use CPM unit price values like 0.016 and calculate 0.016 × 5000 = 80.
+
+After applying the boss's CPM formula:
+CPM = 单价 × 数据 / 1000
+
+To keep the same result 80, the displayed CPM unit price should be 16, because:
+
+16 × 5000 / 1000 = 80
+
+So update mock CPM rates where needed:
+- 0.016 should become 16 if it represents CPM per-thousand price.
+- 0.015 should become 15.
+- 0.023 should become 23.
+- 0.002 should become 2.
+- 0.032666 should become 32.666.
+
+Do this only if needed to keep existing mock totals consistent.
+
+# Pages / Modules To Update
+
+Apply CPA support everywhere type CPM/CPS currently appears:
+
+1. 广告ID管理
+2. 媒体ID管理
+3. 新建广告ID modal
+4. 编辑广告ID modal
+5. 新建媒体ID modal
+6. 编辑媒体ID modal
+7. 广告主数据录入
+8. 媒体主数据管理
+9. 广告主数据查询
+10. 媒体数据查询
+11. Report/query filters
+12. i18n
+13. Calculation helpers
+14. CSV export if type columns are exported
+15. Tags / type badge UI
+
+# Type Dropdowns
+
+Every type dropdown should support:
+
+- CPM
+- CPA
+- CPS
+
+This includes:
+- Create/edit ad ID modal
+- Create/edit media ID modal
+- Management page type filters
+- Data entry filters
+- Query page type filters
+
+# Type Badge UI
+
+Currently type tag only supports CPM/CPS.
+
+Add CPA tag style.
+
+Suggested:
+- CPM: blue/cyan
+- CPA: purple or green
+- CPS: orange
+
+Do not break existing CPM/CPS styles.
+
+# Modal Behavior
+
+## 广告ID modal
+
+When type = CPM:
+- Label: 单价
+- Help text: 选择 CPM → 填写单价（元/千次数据）
+- Formula: 单价 × 数据 / 1000
+
+When type = CPA:
+- Label: 单价
+- Help text: 选择 CPA → 填写单价
+- Formula: 单价 × 数据
+
+When type = CPS:
+- Label: 分成比例
+- Help text: 选择 CPS → 填写分成比例（%）
+- Formula: 金额 × 比例
+- Display as percentage, for example 70%
+
+## 媒体ID modal
+
+Also support CPM / CPA / CPS.
+
+When type = CPA:
+- Use 单价 input
+- Do not use percentage input
+- Formula should use 单价 × 数据 where applicable.
+
+# Data Entry Calculation Rules
+
+Update src/lib/dataEntryMath.ts.
+
+Current EntryType is probably:
+
+type EntryType = 'CPM' | 'CPS'
+
+Change to:
+
+type EntryType = 'CPM' | 'CPA' | 'CPS'
+
+## 广告主数据录入
+
+For CPM:
+应收金额 = 单价 × 流量数据 / 1000
+or
+应收金额 = 单价 × 结算数据 / 1000
+
+Use the same data field currently used for CPM calculation, but divide by 1000.
+
+For CPA:
+应收金额 = 单价 × 数据
+
+Use the data / settlement field that represents action count.
+
+For CPS:
+应收金额 = 金额 × 分成比例
+
+Use current CPS logic.
+
+## 媒体主数据管理
+
+For CPM:
+应收金额 = 单价 × 结算数据 × 数据系数 / 1000
+
+For CPA:
+应收金额 = 单价 × 结算数据 × 数据系数
+
+For CPS:
+应收金额 = 广告主金额 × 数据系数
+
+For all media rows:
+实收金额 = 应收金额 × 分账比例
+
+# Media Data Entry CPS Rule
+
+Keep the previous v5/v4 rule:
+
+- In 媒体主数据管理, when type is CPS, 单价/分成比例 should be disabled or default to 0.
+- CPS calculation does not depend on media 单价/分成比例.
+
+But for CPA:
+- 单价/分成比例 should be editable like CPM.
+- CPA uses 单价.
+
+# Query Pages
+
+Update type filter options:
+
+- 类型
+- CPM
+- CPA
+- CPS
+
+Do this in:
+- 广告主数据查询
+- 媒体数据查询
+- Any other query/report page with type filter.
+
+Search should also match CPA.
+
+# Mock Data
+
+Add at least one CPA mock row so the UI can demonstrate CPA.
+
+Example advertiser data row:
+
+日期: 2026-05-05
+广告主: 北京响云
+广告单: 千问
+类型: CPA
+广告ID: 701
+单价/分成比例: 1.45
+流量数据: 2000
+结算数据/广告主金额: 2000
+应收金额: 2900
+
+Because:
+1.45 × 2000 = 2900
+
+Example media data row:
+
+日期: 2026-05-06
+媒体: 济宁森林麋鹿
+媒体广告单: 千问
+类型: CPA
+媒体ID: 701
+单价/分成比例: 1.45
+流量数据: 2000
+结算数据/广告主金额: 2000
+数据系数: 100%
+应收金额: 2900
+分账比例: 80%
+实收金额: 2320
+
+Because:
+1.45 × 2000 × 100% = 2900
+2900 × 80% = 2320
+
+# i18n
+
+Add/update translations if needed.
+
+Chinese:
+- CPA = CPA
+- cpaHelp = 选择 CPA → 填写单价
+
+Vietnamese:
+- CPA = CPA
+- cpaHelp = Chọn CPA → nhập đơn giá
+
+English:
+- CPA = CPA
+- cpaHelp = Select CPA → enter unit price
+
+Also update any text that says:
+CPM/CPS
+
+to:
+CPM/CPA/CPS
+
+# Do Not Break Existing Features
+
+Do not break:
+- v5 cascading filters
+- search fuzzy by ad order/media order
+- email validation
+- media ID upstream ad ID selector
+- already selected ad ID exclusion
+- date range in 数据录入
+- sorting by date
+- edit/delete/status toggle
+- standalone build
+
+# Acceptance Criteria
+
+Before finishing, verify:
+
+1. All type dropdowns include CPM, CPA, CPS.
+2. 广告ID管理 can create and edit CPA ad IDs.
+3. 媒体ID管理 can create and edit CPA media IDs.
+4. Type badges display CPA correctly.
+5. 广告主数据录入 calculates CPA as 单价 × 数据.
+6. 媒体主数据管理 calculates CPA as 单价 × 结算数据 × 数据系数.
+7. CPM calculation uses 单价 × 数据 / 1000.
+8. CPS calculation still uses 金额 × 比例.
+9. Query pages can filter by CPA.
+10. Search can find CPA rows.
+11. Mock data includes at least one CPA example.
+12. 中 / VI / EN language switching still works.
+13. npm run lint passes.
+14. npm run build passes.

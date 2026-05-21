@@ -11,6 +11,7 @@ import { OpLog } from './pages/System';
 import { FALLBACK_PAGE, FEATURE_FLAGS, isPageEnabled } from './lib/featureFlags';
 import { LoginPage } from './pages/Login';
 import {
+  BFF_AUTH_TOKEN_CHANGED_EVENT,
   BFF_AUTH_TOKEN_INVALID_EVENT,
   BFF_AUTH_TOKEN_STORAGE_KEY,
 } from './lib/bffApi';

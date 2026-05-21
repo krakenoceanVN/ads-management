@@ -54,7 +54,34 @@
       "Bash(git push *)",
       "Bash(taskkill //F //PID 14216)",
       "Bash(taskkill //F //PID 28604)",
-      "Bash(git ls-files *)"
+      "Bash(git ls-files *)",
+      "Bash(python3 -c \"import PyPDF2; print\\('PyPDF2 ok'\\)\")",
+      "Bash(python3 -c \"import pdfplumber; print\\('pdfplumber ok'\\)\")",
+      "Bash(choco install *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -c ' *)",
+      "Bash(/c/Users/bao23/AppData/Local/Python/pythoncore-3.14-64/python.exe -c ' *)",
+      "Bash(/c/Users/bao23/AppData/Local/Python/pythoncore-3.14-64/python.exe -c \"import fitz; print\\('PyMuPDF ok'\\)\")",
+      "Bash(/c/Users/bao23/AppData/Local/Python/pythoncore-3.14-64/python.exe -c \"import pdf2image; print\\('pdf2image ok'\\)\")",
+      "Bash(/c/Users/bao23/AppData/Local/Python/pythoncore-3.14-64/Scripts/pip3.exe install *)",
+      "Bash(/c/Users/bao23/AppData/Local/Python/pythoncore-3.14-64/python.exe)",
+      "Bash(cp \"D:/Download/manager/kko/150426/ads-management/pdf-design/v4_pages/v4_p1.png\" /tmp/v4_p1.png && echo \"OK\")",
+      "Bash(xxd -l 200 \"D:/Download/manager/kko/150426/ads-management/pdf-design/v4_pages/v4_p1.png\")",
+      "Bash(powershell -Command \"Get-Content 'D:\\\\Download\\\\manager\\\\kko\\\\150426\\\\ads-management\\\\pdf-design\\\\v4_pages\\\\v4_p1.png' -Raw -Encoding Byte\")",
+      "Bash(powershell -Command \"Add-Type -AssemblyName System.Drawing; [System.Drawing.Image]::FromFile\\('D:\\\\\\\\Download\\\\\\\\manager\\\\\\\\kko\\\\\\\\150426\\\\\\\\ads-management\\\\\\\\pdf-design\\\\\\\\v4_pages\\\\\\\\v4_p1.png'\\).Width\")",
+      "Bash(dir \"D:\\\\Download\\\\manager\\\\kko\\\\150426\\\\ads-management\\\\pdf-design\\\\v4_pages\\\\\" 2>/dev/null)",
+      "Bash(identify \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6_pages/v6_p1.png\")",
+      "Bash(xxd -l 200 \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6_pages/v6_p1.png\")",
+      "Bash(pdftotext \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6.pdf\" -)",
+      "Bash(pdftotext -layout \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6.pdf\" -)",
+      "Bash(pdfinfo \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6.pdf\")",
+      "Bash(convert \"D:/Download/manager/kko/150426/ads-management/pdf-design/v6_pages/v6_p1.png\" -resize 800x450 \"d:/tmp/v6_p1_thumb.jpg\")",
+      "Bash(convert v6_p1.png -resize 800x450 /d/tmp/v6_p1_thumb.jpg)",
+      "Bash(convert -version)",
+      "Bash(convert \"/d/Download/manager/kko/150426/ads-management/pdf-design/v6_pages/v6_p1.png\" -resize 800x450 v6_p1_thumb.jpg)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

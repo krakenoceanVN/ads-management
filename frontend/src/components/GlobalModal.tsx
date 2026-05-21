@@ -5,6 +5,7 @@
  * CPA/CPS types and local AppContext.db mutations are not supported.
  */
 import React, { useEffect, useState } from 'react';
+import { useAppContext } from '../AppContext';
 
 type ModalType = 'newAdvertiser' | 'newAdOrder' | 'newAdId' | 'newMedia' | 'newMediaAdOrder' | 'newMediaId';
 

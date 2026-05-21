@@ -98,7 +98,6 @@ export function OpLog() {
             { key: 'action', label: t('operation') },
           ]}
           data={rows}
-          loading={loading}
           emptyText={rows.length === 0 && !loading ? t('search') + '...' : undefined}
         />
       </div>

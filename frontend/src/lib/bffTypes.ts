@@ -73,12 +73,20 @@ export interface CreateAdvertiserInput {
   name: string;
   adTypeCode: AdTypeCode;
   status?: EntityStatus;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
 }
 
 export interface UpdateAdvertiserInput {
   name?: string;
   adTypeCode?: AdTypeCode;
   status?: EntityStatus;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
 }
 
 export interface Media {
@@ -115,14 +123,32 @@ export interface UpdateMediaInput {
 
 export interface AdOrder {
   id: number;
-  advId: number | null;
+  advId: number;
   name: string;
   adTypeCode: string;
   notes: string | null;
+  status: EntityStatus;
+  isVirtual?: boolean;
 }
 
 export interface ListAdOrdersParams {
-  advId?: number;
+  advertiserId?: number;
+  adTypeCode?: string;
+}
+
+export interface CreateAdOrderInput {
+  advertiserId: number;
+  adTypeCode: string;
+  name: string;
+  notes?: string | null;
+  status?: EntityStatus;
+}
+
+export interface UpdateAdOrderInput {
+  name?: string;
+  adTypeCode?: string;
+  notes?: string | null;
+  status?: EntityStatus;
 }
 
 export interface AdId {
@@ -134,6 +160,7 @@ export interface AdId {
   advertiserId: number;
   advertiserName: string;
   adTypeCode: string;
+  adOrderId: number | null;
   upstreamId: number;
   billingMethod: EntryType;
   isActive: boolean;
@@ -142,9 +169,31 @@ export interface AdId {
 
 export interface ListAdIdsParams {
   advertiserId?: number;
+  adOrderId?: number;
   adTypeCode?: AdTypeCode;
   type?: EntryType;
   archived?: boolean;
+}
+
+export interface CreateAdIdInput {
+  advertiserId: number;
+  adOrderId?: number | null;
+  slot: string;
+  type: 'CPM' | 'RATIO' | 'CPA';
+  unitPrice?: number;
+  ratio?: number;
+  notes?: string | null;
+  status?: EntityStatus;
+}
+
+export interface UpdateAdIdInput {
+  adOrderId?: number | null;
+  slot?: string;
+  type?: 'CPM' | 'RATIO' | 'CPA';
+  unitPrice?: number;
+  ratio?: number;
+  notes?: string | null;
+  status?: EntityStatus;
 }
 
 export interface MediaId {
@@ -275,26 +324,34 @@ export interface UnconfirmEntryResult {
 }
 
 export interface AdvertiserReportParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   advertiserId?: number;
   adTypeCode?: AdTypeCode;
   status?: ReportStatusParam;
 }
 
 export interface MediaReportParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   mediaId?: number;
   adTypeCode?: AdTypeCode;
   status?: ReportStatusParam;
 }
 
 export interface TotalProfitReportParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   adTypeCode?: AdTypeCode;
 }
 
 export interface OrderProfitReportParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   adTypeCode?: AdTypeCode;
 }
 

@@ -228,7 +228,7 @@ export function AdvEntry() {
   const saveRows = async (targetRows: AdvertiserEntryRow[]) => {
     const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ adId: number; type: EntryType; rate: string; traffic: string; settlement: string }> }>();
     for (const row of targetRows) {
-      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM and RATIO are supported.');
+      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM, CPS, and CPA are supported.');
       const date = normalizeDate(row.date);
       const adTypeCode = adTypeCodeForRow(row);
       if (!date || !adTypeCode) throw new Error(t('requiredFields'));
@@ -486,7 +486,7 @@ export function MediaDataMgmt() {
   const saveRows = async (targetRows: MediaEntryRow[]) => {
     const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ mediaId: number; type: EntryType; rate: string; traffic: string; settlement: string; dataCoefficient: string }> }>();
     for (const row of targetRows) {
-      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM and RATIO are supported.');
+      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM, CPS, and CPA are supported.');
       if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error('dataCoefficient must be neutral: 1, 100%, or empty.');
       const date = normalizeDate(row.date);
       const adTypeCode = adTypeCodeForRow(row);

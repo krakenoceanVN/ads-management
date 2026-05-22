@@ -186,6 +186,71 @@ function ReportDateField({
   );
 }
 
+function ReportDateRangeField({
+  startValue,
+  endValue,
+  onStartChange,
+  onEndChange,
+  placeholder,
+}: {
+  startValue: string;
+  endValue: string;
+  onStartChange: (value: string) => void;
+  onEndChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const startRef = React.useRef<HTMLInputElement>(null);
+  const endRef = React.useRef<HTMLInputElement>(null);
+
+  const openStartPicker = () => {
+    const input = startRef.current;
+    if (!input) return;
+    input.focus();
+    try {
+      (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+    } catch {}
+  };
+
+  const openEndPicker = () => {
+    const input = endRef.current;
+    if (!input) return;
+    input.focus();
+    try {
+      (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+    } catch {}
+  };
+
+  const label = startValue && endValue ? `${startValue} — ${endValue}` : placeholder;
+
+  return (
+    <div className="report-date-range-field" onClick={openStartPicker}>
+      <span className={`report-date-text ${startValue && endValue ? '' : 'placeholder'}`}>{label}</span>
+      <CalendarDays className="report-date-icon" size={15} strokeWidth={1.8} />
+      <div className="report-date-range-inputs">
+        <input
+          ref={startRef}
+          type="date"
+          className="report-date-native"
+          value={startValue}
+          aria-label={`${placeholder} start`}
+          onChange={event => onStartChange(event.target.value)}
+          onClick={e => e.stopPropagation()}
+        />
+        <span className="report-date-range-sep">—</span>
+        <input
+          ref={endRef}
+          type="date"
+          className="report-date-native"
+          value={endValue}
+          aria-label={`${placeholder} end`}
+          onChange={event => onEndChange(event.target.value)}
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ReportSearchField({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="report-search">
@@ -228,21 +293,22 @@ function businessOptionsFromRows<T>(rows: T[], getValue: (row: T) => string, get
 
 export function TotalProfit() {
   const { t, displayName } = useAppContext();
-  const [date, setDate] = React.useState(DEFAULT_REPORT_PERIOD);
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [rows, setRows] = React.useState<TotalProfitReportRow[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    if (!date) {
+    if (!startDate || !endDate) {
       setRows([]);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError('');
-    loadTotalProfitRows(date)
+    getTotalProfitReport({ startDate, endDate })
       .then(data => {
         if (!cancelled) setRows(data);
       })
@@ -255,7 +321,7 @@ export function TotalProfit() {
     return () => {
       cancelled = true;
     };
-  }, [date]);
+  }, [startDate, endDate]);
 
   const totalRow = rows.find(row => row.date.endsWith('-total'));
   const dailyRows = rows.filter(row => !row.date.endsWith('-total'));
@@ -283,7 +349,13 @@ export function TotalProfit() {
       <div className="card report-card report-table-card total-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
-            <ReportDateField type="month" placeholder={t('date')} value={date} onChange={setDate} />
+            <ReportDateRangeField
+              startValue={startDate}
+              endValue={endDate}
+              onStartChange={setStartDate}
+              onEndChange={setEndDate}
+              placeholder={t('date')}
+            />
           </div>
           <div className="report-toolbar-right">
             <ReportSearchField placeholder={compactSearchPlaceholder(t('search'))} value={search} onChange={setSearch} />
@@ -345,7 +417,8 @@ export function TotalProfit() {
 
 export function OrderProfit() {
   const { t, displayName } = useAppContext();
-  const [date, setDate] = React.useState(DEFAULT_REPORT_PERIOD);
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
   const [business, setBusiness] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [rows, setRows] = React.useState<OrderProfitReportRow[]>([]);
@@ -353,14 +426,14 @@ export function OrderProfit() {
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    if (!date) {
+    if (!startDate || !endDate) {
       setRows([]);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError('');
-    loadOrderProfitRows(date, business || undefined)
+    getOrderProfitReport({ startDate, endDate, adTypeCode: business || undefined })
       .then(data => {
         if (!cancelled) setRows(data);
       })
@@ -373,7 +446,7 @@ export function OrderProfit() {
     return () => {
       cancelled = true;
     };
-  }, [date, business]);
+  }, [startDate, endDate, business]);
 
   const visibleRows = rows.filter(row =>
     matchesLocalized(displayName, search, [row.advertiser, row.adTypeCode, row.adTypeName])
@@ -395,7 +468,13 @@ export function OrderProfit() {
       <div className="card report-card report-table-card order-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
-            <ReportDateField type="month" placeholder={t('date')} value={date} onChange={setDate} />
+            <ReportDateRangeField
+              startValue={startDate}
+              endValue={endDate}
+              onStartChange={setStartDate}
+              onEndChange={setEndDate}
+              placeholder={t('date')}
+            />
           </div>
           <div className="report-toolbar-right">
             <ReportBusinessSelect value={business} onChange={setBusiness} options={businessOptions} />
@@ -447,7 +526,8 @@ export function OrderProfit() {
 export function AdvQuery() {
   const { t, displayName } = useAppContext();
   const [filters, setFilters] = React.useState({
-    date: DEFAULT_REPORT_PERIOD,
+    startDate: '',
+    endDate: '',
     business: '',
     advertiser: '',
     adOrder: '',
@@ -472,16 +552,17 @@ export function AdvQuery() {
       ? (() => { const match = rows.find(r => r.advertiser === filters.advertiser); return match?.advertiserId; })()
       : undefined;
     return {
-      date: filters.date,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
       status: statusParam(filters.status),
       advertiserId,
       adTypeCode: filters.adId || undefined,
     };
-  }, [filters.date, filters.status, filters.advertiser, filters.adId]);
+  }, [filters.startDate, filters.endDate, filters.status, filters.advertiser, filters.adId]);
 
   const loadAdvQueryRows = React.useCallback(() => {
     const params = getReportParams();
-    const key = `${params.date}:${params.status}:${params.advertiserId ?? ''}:${params.adTypeCode ?? ''}`;
+    const key = `${params.startDate ?? ''}:${params.endDate ?? ''}:${params.status}:${params.advertiserId ?? ''}:${params.adTypeCode ?? ''}`;
     const existing = advQueryInFlight.get(key);
     if (existing) return existing;
     const request = getAdvertiserReport(params).finally(() => {
@@ -492,7 +573,7 @@ export function AdvQuery() {
   }, [getReportParams]);
 
   React.useEffect(() => {
-    if (!filters.date) {
+    if (!filters.startDate || !filters.endDate) {
       setRows([]);
       return;
     }
@@ -551,7 +632,13 @@ export function AdvQuery() {
       <div className="card report-card report-table-card adv-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
-            <ReportDateField type="month" placeholder={t('date')} value={filters.date} onChange={value => update('date', value)} />
+            <ReportDateRangeField
+              startValue={filters.startDate}
+              endValue={filters.endDate}
+              onStartChange={value => update('startDate', value)}
+              onEndChange={value => update('endDate', value)}
+              placeholder={t('date')}
+            />
           </div>
           <div className="report-toolbar-right">
             <ReportBusinessSelect value={filters.business} onChange={value => update('business', value)} options={businessOptions} />
@@ -624,7 +711,8 @@ export function AdvQuery() {
 export function MediaQuery() {
   const { t, displayName } = useAppContext();
   const [filters, setFilters] = React.useState({
-    date: DEFAULT_REPORT_PERIOD,
+    startDate: '',
+    endDate: '',
     business: '',
     media: '',
     mediaAdOrder: '',
@@ -650,16 +738,17 @@ export function MediaQuery() {
       ? (() => { const match = rows.find(r => r.media === filters.media); return match?.mediaId; })()
       : undefined;
     return {
-      date: filters.date,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
       status: statusParam(filters.status),
       mediaId,
       adTypeCode: filters.mediaId || undefined,
     };
-  }, [filters.date, filters.status, filters.media, filters.mediaId]);
+  }, [filters.startDate, filters.endDate, filters.status, filters.media, filters.mediaId]);
 
   const loadMediaQueryRows = React.useCallback(() => {
     const params = getReportParams();
-    const key = `${params.date}:${params.status}:${params.mediaId ?? ''}:${params.adTypeCode ?? ''}`;
+    const key = `${params.startDate ?? ''}:${params.endDate ?? ''}:${params.status}:${params.mediaId ?? ''}:${params.adTypeCode ?? ''}`;
     const existing = mediaQueryInFlight.get(key);
     if (existing) return existing;
     const request = getMediaReport(params).finally(() => {
@@ -670,7 +759,7 @@ export function MediaQuery() {
   }, [getReportParams]);
 
   React.useEffect(() => {
-    if (!filters.date) {
+    if (!filters.startDate || !filters.endDate) {
       setRows([]);
       return;
     }
@@ -733,7 +822,13 @@ export function MediaQuery() {
       <div className="card report-card report-table-card media-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
-            <ReportDateField type="month" placeholder={t('date')} value={filters.date} onChange={value => update('date', value)} />
+            <ReportDateRangeField
+              startValue={filters.startDate}
+              endValue={filters.endDate}
+              onStartChange={value => update('startDate', value)}
+              onEndChange={value => update('endDate', value)}
+              placeholder={t('date')}
+            />
           </div>
           <div className="report-toolbar-right">
             <ReportBusinessSelect value={filters.business} onChange={value => update('business', value)} options={businessOptions} />

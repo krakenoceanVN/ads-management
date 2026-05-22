@@ -9,6 +9,8 @@ import type {
   BffDataResponse,
   BffMutationResponse,
   ConfirmEntryBatchResult,
+  CreateAdIdInput,
+  CreateAdOrderInput,
   CreateAdvertiserInput,
   CreateMediaInput,
   ListAdIdsParams,
@@ -34,6 +36,8 @@ import type {
   TotalProfitReportParams,
   TotalProfitReportRow,
   UnconfirmEntryResult,
+  UpdateAdIdInput,
+  UpdateAdOrderInput,
   UpdateAdvertiserInput,
   UpdateMediaInput,
 } from './bffTypes';
@@ -208,12 +212,48 @@ export async function getAdOrder(id: number) {
   return unwrapData(await request<BffDataResponse<AdOrder>>(`/api/bff/ad-orders/${id}`));
 }
 
+export async function createAdOrder(data: CreateAdOrderInput) {
+  return unwrapData(await request<BffDataResponse<AdOrder>>('/api/bff/ad-orders', {
+    method: 'POST',
+    body: data,
+  }));
+}
+
+export async function updateAdOrder(id: number, data: UpdateAdOrderInput) {
+  return unwrapData(await request<BffDataResponse<AdOrder>>(`/api/bff/ad-orders/${id}`, {
+    method: 'PUT',
+    body: data,
+  }));
+}
+
+export async function deleteAdOrder(id: number) {
+  return request<BffMutationResponse>(`/api/bff/ad-orders/${id}`, { method: 'DELETE' });
+}
+
 export async function listAdIds(params?: ListAdIdsParams) {
   return unwrapData(await request<BffDataResponse<AdId[]>>('/api/bff/ad-ids', { params }));
 }
 
 export async function getAdId(id: number) {
   return unwrapData(await request<BffDataResponse<AdId>>(`/api/bff/ad-ids/${id}`));
+}
+
+export async function createAdId(data: CreateAdIdInput) {
+  return unwrapData(await request<BffDataResponse<AdId>>('/api/bff/ad-ids', {
+    method: 'POST',
+    body: data,
+  }));
+}
+
+export async function updateAdId(id: number, data: UpdateAdIdInput) {
+  return unwrapData(await request<BffDataResponse<AdId>>(`/api/bff/ad-ids/${id}`, {
+    method: 'PUT',
+    body: data,
+  }));
+}
+
+export async function deleteAdId(id: number) {
+  return request<BffMutationResponse>(`/api/bff/ad-ids/${id}`, { method: 'DELETE' });
 }
 
 export async function listMediaIds(params?: ListMediaIdsParams) {
@@ -326,8 +366,14 @@ export const bffApi = {
   deleteMedia,
   listAdOrders,
   getAdOrder,
+  createAdOrder,
+  updateAdOrder,
+  deleteAdOrder,
   listAdIds,
   getAdId,
+  createAdId,
+  updateAdId,
+  deleteAdId,
   listMediaIds,
   getMediaId,
   listAdvertiserEntries,

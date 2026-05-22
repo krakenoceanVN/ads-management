@@ -9,12 +9,13 @@ export interface Column<T> {
 
 interface TableProps<T> {
   onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
   columns: Column<T>[];
   data: T[];
   emptyText?: string;
 }
 
-export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProps<T>) {
+export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete }: TableProps<T>) {
   const { t } = useAppContext();
 
   if (!data.length) {
@@ -43,7 +44,8 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProp
                 if (c.key === '__no__') return <td key={colIndex} className="td-no">{rowIndex + 1}</td>;
                 if (c.key === '__actions__') return (
                   <td key={colIndex}>
-                    <button className="action-btn" title={t('edit')} onClick={() => onEdit && onEdit(row)}>✏️</button>
+                    {onEdit && <button className="action-btn" title={t('edit')} onClick={() => onEdit(row)}>✏️</button>}
+                    {onDelete && <button className="action-btn action-btn-delete" title={t('delete')} onClick={() => onDelete(row)}>🗑️</button>}
                   </td>
                 );
                 if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;

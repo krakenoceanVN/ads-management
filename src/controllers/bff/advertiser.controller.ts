@@ -90,11 +90,15 @@ router.post(
         body("name").notEmpty().withMessage("name is required").isLength({ max: 200 }),
         body("adTypeCode").notEmpty().withMessage("adTypeCode is required (no default)"),
         body("status").optional().isIn(["active", "inactive"]),
+        body("contact").optional().isString(),
+        body("phone").optional().isString(),
+        body("email").optional().isString(),
+        body("notes").optional().isString(),
     ],
     handleValidation,
     async (req: Request, res: Response) => {
         try {
-            const { name, adTypeCode, status } = req.body as CreateAdvertiserRequest;
+            const { name, adTypeCode, status, contact, phone, email, notes } = req.body as CreateAdvertiserRequest;
 
             // Resolve adTypeCode to adTypeId
             const adType = await prisma.adType.findUnique({
@@ -114,6 +118,10 @@ router.post(
                     name: name.trim(),
                     adTypeId: adType.id,
                     status: status ?? "active",
+                    contact: contact?.trim() || null,
+                    phone: phone?.trim() || null,
+                    email: email?.trim() || null,
+                    notes: notes?.trim() || null,
                 },
                 include: { adType: true },
             });
@@ -145,12 +153,16 @@ router.put(
         body("name").optional().isLength({ max: 200 }),
         body("adTypeCode").optional().isLength({ max: 20 }),
         body("status").optional().isIn(["active", "inactive"]),
+        body("contact").optional().isString(),
+        body("phone").optional().isString(),
+        body("email").optional().isString(),
+        body("notes").optional().isString(),
     ],
     handleValidation,
     async (req: Request, res: Response) => {
         try {
             const id = Number(req.params.id);
-            const { name, adTypeCode, status } = req.body as UpdateAdvertiserRequest;
+            const { name, adTypeCode, status, contact, phone, email, notes } = req.body as UpdateAdvertiserRequest;
 
             const existing = await prisma.upstream.findUnique({ where: { id } });
             if (!existing) {
@@ -161,6 +173,10 @@ router.put(
             const updateData: Record<string, unknown> = {};
             if (name !== undefined) updateData.name = name.trim();
             if (status !== undefined) updateData.status = status;
+            if (contact !== undefined) updateData.contact = contact?.trim() || null;
+            if (phone !== undefined) updateData.phone = phone?.trim() || null;
+            if (email !== undefined) updateData.email = email?.trim() || null;
+            if (notes !== undefined) updateData.notes = notes?.trim() || null;
 
             // Resolve adTypeCode if provided
             if (adTypeCode !== undefined) {

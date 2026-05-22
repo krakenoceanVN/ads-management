@@ -6,7 +6,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../prisma.js";
 
-export type LogModule = "Advertiser" | "Media" | "DataEntry" | "Auth";
+export type LogModule = "Advertiser" | "Media" | "DataEntry" | "Auth" | "AdOrder" | "AdId";
 export type LogAction =
   | "CREATE"
   | "UPDATE"

@@ -9,6 +9,7 @@ import mediaController from "../../controllers/bff/media.controller.js";
 import adOrderController from "../../controllers/bff/adOrder.controller.js";
 import adIdController from "../../controllers/bff/adId.controller.js";
 import mediaIdController from "../../controllers/bff/mediaId.controller.js";
+import downstreamController from "../../controllers/bff/downstream.controller.js";
 import advertiserDataEntryController from "../../controllers/bff/advertiserDataEntry.controller.js";
 import mediaDataEntryController from "../../controllers/bff/mediaDataEntry.controller.js";
 import reportController from "../../controllers/bff/report.controller.js";
@@ -31,6 +32,9 @@ router.use("/ad-ids", adIdController);
 
 // MediaId routes (Frontend → AdSite + Downstream, supply side)
 router.use("/media-ids", mediaIdController);
+
+// Downstream routes (Frontend → Downstream, read-only lookup)
+router.use("/downstreams", downstreamController);
 
 // DataEntry - Advertiser (Frontend → DailyInput, advertiser side)
 router.use("/data-entry/advertisers", advertiserDataEntryController);

@@ -11,7 +11,8 @@
  */
 
 export interface BFFMediaId {
-    id: number;
+    id: number;                  // AdSite.id
+    junctionId: number;          // AdSiteDownstream.id — for edit/delete targeting
     slot: string;              // AdSite.name
     type: 'CPM' | 'RATIO';
     rate: number | null;       // currentUnitPrice (CPM) or currentRatio (RATIO)
@@ -25,6 +26,9 @@ export interface BFFMediaId {
     billingMethod: string;
     isActive: boolean;
     isArchived: boolean;
+    // Junction metadata
+    adSiteId: number;
+    downstreamId: number;
 }
 
 export interface CreateMediaIdRequest {
@@ -87,6 +91,7 @@ export interface AdSiteWithUpstreamAndDownstream {
 /**
  * Maps AdSite with downstream to BFFMediaId
  * shareRatio comes from Downstream.payoutRate via AdSiteDownstream
+ * junctionId comes from AdSiteDownstream.id
  */
 export function mapAdSiteWithDownstreamToMediaId(adSite: AdSiteWithUpstreamAndDownstream): BFFMediaId {
     // Get first downstream's payoutRate as shareRatio
@@ -97,6 +102,7 @@ export function mapAdSiteWithDownstreamToMediaId(adSite: AdSiteWithUpstreamAndDo
 
     return {
         id: adSite.id,
+        junctionId: primaryDownstream?.id ?? 0,
         slot: adSite.name,
         type: adSite.billingMethod as 'CPM' | 'RATIO',
         rate: adSite.billingMethod === 'CPM'
@@ -111,6 +117,8 @@ export function mapAdSiteWithDownstreamToMediaId(adSite: AdSiteWithUpstreamAndDo
         billingMethod: adSite.billingMethod,
         isActive: adSite.isActive,
         isArchived: adSite.isArchived,
+        adSiteId: adSite.id,
+        downstreamId: primaryDownstream?.downstreamId ?? 0,
     };
 }
 

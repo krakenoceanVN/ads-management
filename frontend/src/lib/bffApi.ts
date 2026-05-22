@@ -13,9 +13,12 @@ import type {
   CreateAdOrderInput,
   CreateAdvertiserInput,
   CreateMediaInput,
+  CreateMediaIdInput,
+  DownstreamDto,
   ListAdIdsParams,
   ListAdOrdersParams,
   ListAdvertiserEntriesParams,
+  ListDownstreamsParams,
   ListMediaEntriesParams,
   ListMediaIdsParams,
   ListOperationLogsParams,
@@ -40,6 +43,7 @@ import type {
   UpdateAdOrderInput,
   UpdateAdvertiserInput,
   UpdateMediaInput,
+  UpdateMediaIdInput,
 } from './bffTypes';
 import { uiTypeToApiType, apiTypeToUiType, type EntryType } from './bffTypes';
 
@@ -264,6 +268,28 @@ export async function getMediaId(id: number) {
   return unwrapData(await request<BffDataResponse<MediaId>>(`/api/bff/media-ids/${id}`));
 }
 
+export async function createMediaId(data: CreateMediaIdInput) {
+  return unwrapData(await request<BffDataResponse<MediaId>>('/api/bff/media-ids', {
+    method: 'POST',
+    body: data,
+  }));
+}
+
+export async function updateMediaId(id: number, data: UpdateMediaIdInput) {
+  return unwrapData(await request<BffDataResponse<MediaId>>(`/api/bff/media-ids/${id}`, {
+    method: 'PUT',
+    body: data,
+  }));
+}
+
+export async function deleteMediaId(id: number) {
+  return request<BffMutationResponse>(`/api/bff/media-ids/${id}`, { method: 'DELETE' });
+}
+
+export async function listDownstreams(params?: ListDownstreamsParams) {
+  return unwrapData(await request<BffDataResponse<DownstreamDto[]>>('/api/bff/downstreams', { params }));
+}
+
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
   const data = await unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/data-entry/advertisers', { params }));
   return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
@@ -376,6 +402,10 @@ export const bffApi = {
   deleteAdId,
   listMediaIds,
   getMediaId,
+  createMediaId,
+  updateMediaId,
+  deleteMediaId,
+  listDownstreams,
   listAdvertiserEntries,
   saveAdvertiserEntryBatch,
   confirmAdvertiserEntryBatch,

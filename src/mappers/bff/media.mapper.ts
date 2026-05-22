@@ -12,6 +12,7 @@ export interface BFFMedia {
     notes: string | null;
     status: 'active' | 'inactive';
     upstreamId?: number;
+    adTypeCode?: string;         // From upstream.adType.code
     billingMethod?: 'CPM' | 'RATIO' | 'CPA';
     currentUnitPrice?: number;
     currentRatio?: number;
@@ -49,6 +50,11 @@ export interface AdSiteRaw {
         id: number;
         name: string;
         status: string;
+        adType?: {
+            id: number;
+            code: string;
+            name: string;
+        };
     };
 }
 
@@ -65,6 +71,7 @@ export function mapAdSiteToMedia(adSite: AdSiteRaw): BFFMedia {
         notes: null,
         status: adSite.status as 'active' | 'inactive',
         upstreamId: adSite.upstreamId,
+        adTypeCode: adSite.upstream?.adType?.code,
         billingMethod: adSite.billingMethod as 'CPM' | 'RATIO' | 'CPA',
         currentUnitPrice: adSite.currentUnitPrice != null ? Number(adSite.currentUnitPrice) : undefined,
         currentRatio: adSite.currentRatio != null ? Number(adSite.currentRatio) : undefined,

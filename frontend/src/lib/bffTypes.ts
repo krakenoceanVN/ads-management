@@ -98,6 +98,7 @@ export interface Media {
   notes: string | null;
   status: EntityStatus;
   upstreamId?: number;
+  adTypeCode?: string;          // From upstream.adType.code
   billingMethod?: EntryType;
   currentUnitPrice?: number;
   currentRatio?: number;
@@ -198,6 +199,7 @@ export interface UpdateAdIdInput {
 
 export interface MediaId {
   id: number;
+  junctionId: number; // AdSiteDownstream.id — used for edit/delete
   slot: string;
   type: EntryType;
   rate: number | null;
@@ -210,6 +212,8 @@ export interface MediaId {
   billingMethod: EntryType;
   isActive: boolean;
   isArchived: boolean;
+  adSiteId: number;
+  downstreamId: number;
 }
 
 export interface ListMediaIdsParams {
@@ -217,6 +221,33 @@ export interface ListMediaIdsParams {
   adTypeCode?: AdTypeCode;
   type?: EntryType;
   archived?: boolean;
+}
+
+export interface CreateMediaIdInput {
+  adSiteId: number;
+  downstreamId: number;
+  customPrice?: number | null;
+  status?: EntityStatus;
+}
+
+export interface UpdateMediaIdInput {
+  customPrice?: number | null;
+  status?: EntityStatus;
+}
+
+export interface DownstreamDto {
+  id: number;
+  downstreamType: string;
+  adTypeId: number;
+  adTypeCode: string;
+  payoutRate: number | null;
+  status: EntityStatus;
+}
+
+export interface ListDownstreamsParams {
+  adTypeCode?: AdTypeCode;
+  status?: EntityStatus;
+  keyword?: string;
 }
 
 export interface ListAdvertiserEntriesParams {

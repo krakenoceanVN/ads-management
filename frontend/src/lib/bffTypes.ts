@@ -178,7 +178,7 @@ export interface ListAdIdsParams {
 
 export interface CreateAdIdInput {
   advertiserId: number;
-  adOrderId?: number | null;
+  adOrderId: number;
   slot: string;
   type: 'CPM' | 'RATIO' | 'CPA';
   unitPrice?: number;

@@ -135,7 +135,7 @@ router.post(
     requireAuth,
     [
         body("advertiserId").notEmpty().withMessage("advertiserId is required").isInt(),
-        body("adOrderId").optional().isInt(),
+        body("adOrderId").notEmpty().withMessage("adOrderId is required").isInt(),
         body("slot").notEmpty().withMessage("slot (ad ID) is required").isLength({ max: 200 }),
         body("type").notEmpty().withMessage("type is required").isIn(["CPM", "RATIO", "CPA"]),
         body("unitPrice").optional().isFloat({ min: 0 }),
@@ -155,8 +155,23 @@ router.post(
                 return;
             }
 
+            // Validate adOrderId — must be real, active, and belong to the advertiser
+            const adOrder = await prisma.adOrder.findFirst({
+                where: {
+                    id: Number(adOrderId),
+                    status: "active",
+                    upstreamId: advertiserId,
+                },
+                include: { upstream: true, adType: true },
+            });
+            if (!adOrder) {
+                res.status(400).json({ success: false, error: "Invalid or inactive adOrderId, or does not belong to advertiser" });
+                return;
+            }
+
             const data: Prisma.AdSiteCreateInput = {
                 upstream: { connect: { id: advertiserId } },
+                adOrder: { connect: { id: adOrderId } },
                 name: slot.trim(),
                 billingMethod: type,
                 status: status ?? "active",
@@ -164,9 +179,6 @@ router.post(
                 isArchived: false,
             };
 
-            if (adOrderId) {
-                data.adOrder = { connect: { id: adOrderId } };
-            }
             if (type === "CPM" && unitPrice !== undefined) {
                 data.currentUnitPrice = unitPrice;
             }
@@ -226,16 +238,27 @@ router.put(
                 return;
             }
 
+            // If adOrderId is provided in payload, validate it (cannot clear it via this endpoint)
+            if (adOrderId !== undefined) {
+                const adOrder = await prisma.adOrder.findFirst({
+                    where: {
+                        id: Number(adOrderId),
+                        status: "active",
+                        upstreamId: existing.upstreamId,
+                    },
+                });
+                if (!adOrder) {
+                    res.status(400).json({ success: false, error: "Invalid or inactive adOrderId, or does not belong to advertiser" });
+                    return;
+                }
+            }
+
             const updateData: Prisma.AdSiteUpdateInput = {};
             if (slot !== undefined) updateData.name = slot.trim();
             if (type !== undefined) updateData.billingMethod = type;
             if (status !== undefined) updateData.status = status;
             if (adOrderId !== undefined) {
-                if (adOrderId === null) {
-                    updateData.adOrder = { disconnect: true };
-                } else {
-                    updateData.adOrder = { connect: { id: adOrderId } };
-                }
+                updateData.adOrder = { connect: { id: adOrderId } };
             }
             if (unitPrice !== undefined) updateData.currentUnitPrice = unitPrice;
             if (ratio !== undefined) updateData.currentRatio = ratio;

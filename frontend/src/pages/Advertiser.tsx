@@ -772,7 +772,8 @@ export function AdIdMgmt() {
   });
 
   const advertiserFilteredOrders = orders.filter(o => !form.advertiserId || String(o.advId) === form.advertiserId);
-  const formOrderOptions = advertiserFilteredOrders.length > 0 ? advertiserFilteredOrders : orders;
+  const realActiveOrders = advertiserFilteredOrders.filter(o => !o.isVirtual && o.status !== 'inactive');
+  const formOrderOptions = realActiveOrders.length > 0 ? realActiveOrders : orders.filter(o => !o.isVirtual && o.status !== 'inactive');
 
   const openCreate = () => {
     setEditing(null);
@@ -793,10 +794,14 @@ export function AdIdMgmt() {
       setFormError(t('requiredFields'));
       return;
     }
+    if (!form.adOrderId) {
+      setFormError(t('adOrderRequired') || 'Please select an ad order');
+      return;
+    }
     const type = form.type;
     const payload: CreateAdIdInput | UpdateAdIdInput = {
       advertiserId: Number(form.advertiserId),
-      adOrderId: form.adOrderId ? Number(form.adOrderId) : null,
+      adOrderId: Number(form.adOrderId),
       slot: form.slot.trim(),
       type,
       unitPrice: type === 'CPM' ? (parseFloat(form.unitPrice) || undefined) : undefined,
@@ -840,7 +845,7 @@ export function AdIdMgmt() {
   const updateStatus = async (record: AdId, active: boolean) => {
     const nextStatus: EntityStatus = active ? 'active' : 'inactive';
     try {
-      const updated = await updateAdId(record.id, { status: nextStatus });
+      const updated = await updateAdId(record.id, { status: nextStatus, adOrderId: record.adOrderId ?? 0 });
       setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
     } catch (err) {
       setError(errorMessage(err));

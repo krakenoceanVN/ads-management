@@ -38,6 +38,13 @@ export function getBusinessDayRange(dateStr: string): { gte: Date; lt: Date } {
   }
 }
 
+export function getBusinessDateRange(startDateStr: string, endDateStr: string): { gte: Date; lt: Date } {
+  return {
+    gte: getBusinessDayStart(startDateStr),
+    lt: new Date(getBusinessDayStart(endDateStr).getTime() + 24 * 60 * 60 * 1000),
+  }
+}
+
 export function getBusinessMonthRange(year: number, month: number): { gte: Date; lt: Date } {
   const startDate = `${year}-${String(month).padStart(2, "0")}-01`
   const nextYear = month === 12 ? year + 1 : year
@@ -54,6 +61,20 @@ export function getDaysInMonth(year: number, month: number): string[] {
   const date = new Date(Date.UTC(year, month - 1, 1))
   while (date.getUTCMonth() === month - 1) {
     const dayStr = String(date.getUTCDate()).padStart(2, "0")
+    days.push(`${year}-${String(month).padStart(2, "0")}-${dayStr}`)
+    date.setUTCDate(date.getUTCDate() + 1)
+  }
+  return days
+}
+
+export function getDaysInRange(gte: Date, lt: Date): string[] {
+  const days: string[] = []
+  const date = new Date(gte)
+  while (date < lt) {
+    const year = date.getUTCFullYear()
+    const month = date.getUTCMonth() + 1
+    const day = date.getUTCDate()
+    const dayStr = String(day).padStart(2, "0")
     days.push(`${year}-${String(month).padStart(2, "0")}-${dayStr}`)
     date.setUTCDate(date.getUTCDate() + 1)
   }

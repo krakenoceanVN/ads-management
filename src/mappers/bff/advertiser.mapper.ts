@@ -18,12 +18,20 @@ export interface CreateAdvertiserRequest {
     name: string;
     adTypeCode: string; // REQUIRED - no default
     status?: 'active' | 'inactive';
+    contact?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    notes?: string | null;
 }
 
 export interface UpdateAdvertiserRequest {
     name?: string;
     adTypeCode?: string;
     status?: 'active' | 'inactive';
+    contact?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    notes?: string | null;
 }
 
 export interface UpstreamRaw {
@@ -31,6 +39,10 @@ export interface UpstreamRaw {
     name: string;
     status: string;
     adTypeId: number;
+    contact?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    notes?: string | null;
     adType?: {
         code: string;
         name: string;
@@ -44,10 +56,10 @@ export function mapUpstreamToAdvertiser(upstream: UpstreamRaw): BFFAdvertiser {
     return {
         id: upstream.id,
         name: upstream.name,
-        contact: null, // Upstream has no contact field
-        phone: null,
-        email: null,
-        notes: null,
+        contact: upstream.contact ?? null,
+        phone: upstream.phone ?? null,
+        email: upstream.email ?? null,
+        notes: upstream.notes ?? null,
         status: upstream.status as 'active' | 'inactive',
         adTypeCode: upstream.adType?.code,
     };

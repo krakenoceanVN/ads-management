@@ -14,7 +14,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { AdTypeCode } from "../../types/index.js";
-import { getBusinessDayRange, getBusinessMonthRange, getDaysInMonth } from "../../utils/date.js";
+import { getBusinessDayRange, getBusinessMonthRange, getBusinessDateRange, getDaysInMonth, getDaysInRange } from "../../utils/date.js";
 import { calculateCostBreakdown, calculateCostBreakdownMonthly } from "../../services/mlPayout.service.js";
 import { mapDailyInputToAdvertiserEntry, mapDailyInputToMediaEntry } from "../../mappers/bff/dataEntry.mapper.js";
 
@@ -31,14 +31,17 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 
 // ============================================================
 // GET /api/bff/reports/advertisers
-// Query: date (YYYY-MM-DD or YYYY-MM), advertiserId (optional), adTypeCode (optional), status (optional)
+// Query: date (YYYY-MM-DD or YYYY-MM), OR startDate + endDate (for range)
+// advertiserId (optional), adTypeCode (optional), status (optional)
 // Returns advertiser-side report rows with receivable (DailyInput.revenue)
 // ============================================================
 router.get(
     "/advertisers",
     requireAuth,
     [
-        query("date").notEmpty().withMessage("date is required"),
+        query("date").optional().isISO8601(),
+        query("startDate").optional().isISO8601(),
+        query("endDate").optional().isISO8601(),
         query("advertiserId").optional().isInt().toInt(),
         query("adTypeCode").optional().isString(),
         query("status").optional().isIn(["confirmed", "unconfirmed", "pending", "all"]),
@@ -46,19 +49,30 @@ router.get(
     handleValidation,
     async (req: Request, res: Response) => {
         try {
-            const dateStr = req.query.date as string;
-            const advertiserId = req.query.advertiserId as number | undefined;
-            const adTypeCode = req.query.adTypeCode as string | undefined;
-            const statusFilter = req.query.status as string | undefined;
+            const { date: dateStr, startDate, endDate, advertiserId, adTypeCode, statusFilter } = req.query as {
+                date?: string;
+                startDate?: string;
+                endDate?: string;
+                advertiserId?: number;
+                adTypeCode?: string;
+                statusFilter?: string;
+            };
 
-            const isMonthRange = dateStr.length === 7;
             let gte: Date, lt: Date;
 
-            if (isMonthRange) {
-                const [year, month] = dateStr.split("-").map(Number);
-                ({ gte, lt } = getBusinessMonthRange(year, month));
+            if (startDate && endDate) {
+                ({ gte, lt } = getBusinessDateRange(startDate, endDate));
+            } else if (dateStr) {
+                const isMonthRange = dateStr.length === 7;
+                if (isMonthRange) {
+                    const [year, month] = dateStr.split("-").map(Number);
+                    ({ gte, lt } = getBusinessMonthRange(year, month));
+                } else {
+                    ({ gte, lt } = getBusinessDayRange(dateStr));
+                }
             } else {
-                ({ gte, lt } = getBusinessDayRange(dateStr));
+                res.status(400).json({ success: false, error: "date or startDate+endDate is required" });
+                return;
             }
 
             const baseWhere: Prisma.DailyInputWhereInput = {
@@ -118,14 +132,17 @@ router.get(
 
 // ============================================================
 // GET /api/bff/reports/media
-// Query: date (YYYY-MM-DD or YYYY-MM), mediaId (optional), adTypeCode (optional), status (optional)
+// Query: date (YYYY-MM-DD or YYYY-MM), OR startDate + endDate (for range)
+// mediaId (optional), adTypeCode (optional), status (optional)
 // Returns media-side report rows with receivable and actualReceived
 // ============================================================
 router.get(
     "/media",
     requireAuth,
     [
-        query("date").notEmpty().withMessage("date is required"),
+        query("date").optional().isISO8601(),
+        query("startDate").optional().isISO8601(),
+        query("endDate").optional().isISO8601(),
         query("mediaId").optional().isInt().toInt(),
         query("adTypeCode").optional().isString(),
         query("status").optional().isIn(["confirmed", "unconfirmed", "pending", "all"]),
@@ -133,19 +150,30 @@ router.get(
     handleValidation,
     async (req: Request, res: Response) => {
         try {
-            const dateStr = req.query.date as string;
-            const mediaId = req.query.mediaId as number | undefined;
-            const adTypeCode = req.query.adTypeCode as string | undefined;
-            const statusFilter = req.query.status as string | undefined;
+            const { date: dateStr, startDate, endDate, mediaId, adTypeCode, statusFilter } = req.query as {
+                date?: string;
+                startDate?: string;
+                endDate?: string;
+                mediaId?: number;
+                adTypeCode?: string;
+                statusFilter?: string;
+            };
 
-            const isMonthRange = dateStr.length === 7;
             let gte: Date, lt: Date;
 
-            if (isMonthRange) {
-                const [year, month] = dateStr.split("-").map(Number);
-                ({ gte, lt } = getBusinessMonthRange(year, month));
+            if (startDate && endDate) {
+                ({ gte, lt } = getBusinessDateRange(startDate, endDate));
+            } else if (dateStr) {
+                const isMonthRange = dateStr.length === 7;
+                if (isMonthRange) {
+                    const [year, month] = dateStr.split("-").map(Number);
+                    ({ gte, lt } = getBusinessMonthRange(year, month));
+                } else {
+                    ({ gte, lt } = getBusinessDayRange(dateStr));
+                }
             } else {
-                ({ gte, lt } = getBusinessDayRange(dateStr));
+                res.status(400).json({ success: false, error: "date or startDate+endDate is required" });
+                return;
             }
 
             const baseWhere: Prisma.DailyInputWhereInput = {
@@ -222,21 +250,96 @@ router.get(
     "/total-profit",
     requireAuth,
     [
-        query("date").notEmpty().withMessage("date is required"),
+        query("date").optional().isISO8601(),
+        query("startDate").optional().isISO8601(),
+        query("endDate").optional().isISO8601(),
         query("adTypeCode").optional().isString(),
     ],
     handleValidation,
     async (req: Request, res: Response) => {
         try {
-            const dateStr = req.query.date as string;
-            const adTypeCode = (req.query.adTypeCode as AdTypeCode) || "SM";
+            const { date: dateStr, startDate, endDate, adTypeCode } = req.query as {
+                date?: string;
+                startDate?: string;
+                endDate?: string;
+                adTypeCode?: string;
+            };
+            const adType = (adTypeCode as AdTypeCode) || "SM";
+
+            if (startDate && endDate) {
+                const { gte, lt } = getBusinessDateRange(startDate, endDate);
+                const gteYear = gte.getUTCFullYear();
+                const gteMonth = gte.getUTCMonth() + 1;
+                const ltYear = lt.getUTCFullYear();
+                const ltMonth = lt.getUTCMonth() + 1;
+
+                const results: {
+                    date: string;
+                    revenue: number;
+                    ml_payout: number;
+                    le_payout?: number;
+                    yiyi_payout?: number;
+                    cost: number;
+                    tax: number;
+                    profit: number;
+                    profit_rate: number;
+                }[] = [];
+                let total = { revenue: 0, ml_payout: 0, le_payout: 0, yiyi_payout: 0, cost: 0, tax: 0, profit: 0 };
+
+                const iterateMonths = (startYear: number, startMonth: number, endYear: number, endMonth: number) => {
+                    const months: [number, number][] = [];
+                    let y = startYear, m = startMonth;
+                    while (y < endYear || (y === endYear && m <= endMonth)) {
+                        months.push([y, m]);
+                        m++;
+                        if (m > 12) { m = 1; y++; }
+                    }
+                    return months;
+                };
+
+                const months = iterateMonths(gteYear, gteMonth, ltYear, ltMonth);
+                for (const [y, mo] of months) {
+                    const rangeStart = mo === gteMonth ? gte : getBusinessMonthRange(y, mo).gte;
+                    const rangeEnd = mo === ltMonth ? lt : getBusinessMonthRange(y, mo).lt;
+                    const breakdownMap = await calculateCostBreakdownMonthly(y, mo, adType, prisma, { gte: rangeStart, lt: rangeEnd });
+                    for (const [day, breakdown] of breakdownMap) {
+                        results.push({
+                            date: day,
+                            revenue: breakdown.revenue,
+                            ml_payout: breakdown.ml_payout,
+                            le_payout: breakdown.le_payout,
+                            yiyi_payout: breakdown.yiyi_payout,
+                            cost: breakdown.cost,
+                            tax: breakdown.tax,
+                            profit: breakdown.profit,
+                            profit_rate: breakdown.profit_rate,
+                        });
+                        total.revenue += breakdown.revenue;
+                        total.ml_payout += breakdown.ml_payout;
+                        total.le_payout += breakdown.le_payout ?? 0;
+                        total.yiyi_payout += breakdown.yiyi_payout ?? 0;
+                        total.cost += breakdown.cost;
+                        total.tax += breakdown.tax;
+                        total.profit += breakdown.profit;
+                    }
+                }
+                const profit_rate = total.revenue > 0 ? total.profit / total.revenue : 0;
+                results.push({ date: `${startDate}-${endDate}-total`, ...total, profit_rate });
+                res.json({ success: true, data: results });
+                return;
+            }
+
+            if (!dateStr) {
+                res.status(400).json({ success: false, error: "date or startDate+endDate is required" });
+                return;
+            }
 
             const isMonthRange = dateStr.length === 7;
 
             if (isMonthRange) {
                 const [year, month] = dateStr.split("-").map(Number);
 
-                const breakdownMap = await calculateCostBreakdownMonthly(year, month, adTypeCode, prisma);
+                const breakdownMap = await calculateCostBreakdownMonthly(year, month, adType as AdTypeCode, prisma);
                 const days = getDaysInMonth(year, month);
 
                 const results: {
@@ -307,7 +410,7 @@ router.get(
 
                 res.json({ success: true, data: results });
             } else {
-                const breakdown = await calculateCostBreakdown(dateStr, adTypeCode, prisma);
+                const breakdown = await calculateCostBreakdown(dateStr, adType as AdTypeCode, prisma);
                 res.json({
                     success: true,
                     data: [{
@@ -339,23 +442,36 @@ router.get(
     "/order-profit",
     requireAuth,
     [
-        query("date").notEmpty().withMessage("date is required"),
+        query("date").optional().isISO8601(),
+        query("startDate").optional().isISO8601(),
+        query("endDate").optional().isISO8601(),
         query("adTypeCode").optional().isString(),
     ],
     handleValidation,
     async (req: Request, res: Response) => {
         try {
-            const dateStr = req.query.date as string;
-            const adTypeCode = req.query.adTypeCode as string | undefined;
+            const { date: dateStr, startDate, endDate, adTypeCode } = req.query as {
+                date?: string;
+                startDate?: string;
+                endDate?: string;
+                adTypeCode?: string;
+            };
 
-            const isMonthRange = dateStr.length === 7;
             let gte: Date, lt: Date;
 
-            if (isMonthRange) {
-                const [year, month] = dateStr.split("-").map(Number);
-                ({ gte, lt } = getBusinessMonthRange(year, month));
+            if (startDate && endDate) {
+                ({ gte, lt } = getBusinessDateRange(startDate, endDate));
+            } else if (dateStr) {
+                const isMonthRange = dateStr.length === 7;
+                if (isMonthRange) {
+                    const [year, month] = dateStr.split("-").map(Number);
+                    ({ gte, lt } = getBusinessMonthRange(year, month));
+                } else {
+                    ({ gte, lt } = getBusinessDayRange(dateStr));
+                }
             } else {
-                ({ gte, lt } = getBusinessDayRange(dateStr));
+                res.status(400).json({ success: false, error: "date or startDate+endDate is required" });
+                return;
             }
 
             const where: Prisma.DailyInputWhereInput = {

@@ -30,10 +30,12 @@ export async function calculateCostBreakdownMonthly(
   year: number,
   month: number,
   adTypeCode: AdTypeCode,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  overrideRange?: { gte: Date; lt: Date }
 ): Promise<Map<string, CostBreakdown>> {
   const adTypeId = AD_TYPE_ID_MAP[adTypeCode];
-  const { gte, lt } = getBusinessMonthRange(year, month);
+  const defaultRange = getBusinessMonthRange(year, month);
+  const { gte, lt } = overrideRange ?? defaultRange;
 
   // 1. Batch: confirmed DailyInput aggregates grouped by date, per adTypeId
   const revenueByDate = await prisma.dailyInput.groupBy({

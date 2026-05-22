@@ -65,7 +65,7 @@ export interface BFFMediaEntryRow {
     media: string;
     mediaId: number;
     mediaAdOrder: string;
-    mediaAdOrderId: number;
+    mediaAdOrderId: number | null;
     type: "CPM" | "RATIO";
     mediaIdStr: string;
     upstreamAdId: string;
@@ -224,6 +224,11 @@ export function mapDailyInputToMediaEntry(
                 name: string;
                 adType: { id: number; code: string; name: string };
             };
+            adOrder?: {
+                id: number;
+                name: string;
+                orderNumber?: string;
+            } | null;
         };
     },
     shareRatio: number | null,
@@ -257,8 +262,8 @@ export function mapDailyInputToMediaEntry(
         media: record.adSite.name,
         mediaId: record.adSite.id,
         mediaIdStr: String(record.adSite.id),
-        mediaAdOrder: record.adSite.upstream.adType.name,
-        mediaAdOrderId: record.adSite.upstream.adType.id,
+        mediaAdOrder: record.adSite.adOrder?.name ?? '',
+        mediaAdOrderId: record.adSite.adOrder?.id ?? null,
         type: billingMethod,
         upstreamAdId: String(record.adSite.upstreamId),
         upstreamAdIdNum: record.adSite.upstreamId,
@@ -291,6 +296,11 @@ export function mapAdSiteToMediaEntry(
             name: string;
             adType: { id: number; code: string; name: string };
         };
+        adOrder?: {
+            id: number;
+            name: string;
+            orderNumber?: string;
+        } | null;
     },
     dateStr: string,
     shareRatio: number | null
@@ -307,8 +317,8 @@ export function mapAdSiteToMediaEntry(
         media: site.name,
         mediaId: site.id,
         mediaIdStr: String(site.id),
-        mediaAdOrder: site.upstream.adType.name,
-        mediaAdOrderId: site.upstream.adType.id,
+        mediaAdOrder: site.adOrder?.name ?? '',
+        mediaAdOrderId: site.adOrder?.id ?? null,
         type: site.billingMethod as "CPM" | "RATIO",
         upstreamAdId: String(site.upstreamId),
         upstreamAdIdNum: site.upstreamId,

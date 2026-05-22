@@ -74,6 +74,7 @@ router.get(
                 where: adSiteWhere,
                 include: {
                     upstream: { include: { adType: true } },
+                    adOrder: true,
                     downstreams: {
                         include: { downstream: true },
                     },
@@ -103,6 +104,7 @@ router.get(
                     adSite: {
                         include: {
                             upstream: { include: { adType: true } },
+                            adOrder: true,
                             downstreams: {
                                 include: { downstream: true },
                             },

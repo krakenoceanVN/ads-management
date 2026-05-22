@@ -287,7 +287,7 @@ export interface MediaEntryRow {
   media: string;
   mediaId: number;
   mediaAdOrder: string;
-  mediaAdOrderId: number;
+  mediaAdOrderId: number | null;
   type: EntryType;
   mediaIdStr: string;
   upstreamAdId: string;

@@ -48,7 +48,7 @@ export interface BFFAdvertiserEntryRow {
     advertiser: string;
     advertiserId: number;
     adOrder: string;
-    adOrderId: number;
+    adOrderId: number | null;
     type: "CPM" | "RATIO";
     adId: string;
     adIdNum: number;
@@ -99,11 +99,17 @@ export function mapDailyInputToAdvertiserEntry(
             id: number;
             name: string;
             billingMethod: string;
+            adOrderId: number | null;
             upstream: {
                 id: number;
                 name: string;
                 adType: { id: number; code: string; name: string };
             };
+            adOrder?: {
+                id: number;
+                name: string;
+                orderNumber?: string;
+            } | null;
         };
     },
     adTypeCode: string
@@ -132,8 +138,8 @@ export function mapDailyInputToAdvertiserEntry(
         date: formatBusinessDate(record.recordDate),
         advertiser: record.adSite.upstream.name,
         advertiserId: record.adSite.upstream.id,
-        adOrder: record.adSite.upstream.adType.name,
-        adOrderId: record.adSite.upstream.adType.id,
+        adOrder: record.adSite.adOrder?.name ?? '',
+        adOrderId: record.adSite.adOrder?.id ?? null,
         type: billingMethod,
         adId: String(record.adSite.id),
         adIdNum: record.adSite.id,
@@ -154,6 +160,7 @@ export function mapAdSiteToAdvertiserEntry(
         id: number;
         name: string;
         billingMethod: string;
+        adOrderId: number | null;
         currentUnitPrice?: unknown;
         currentRatio?: unknown;
         upstream: {
@@ -161,6 +168,11 @@ export function mapAdSiteToAdvertiserEntry(
             name: string;
             adType: { id: number; code: string; name: string };
         };
+        adOrder?: {
+            id: number;
+            name: string;
+            orderNumber?: string;
+        } | null;
     },
     dateStr: string
 ): BFFAdvertiserEntryRow {
@@ -168,16 +180,15 @@ export function mapAdSiteToAdvertiserEntry(
     if (site.billingMethod === "CPM") {
         rate = site.currentUnitPrice != null ? String(Number(site.currentUnitPrice)) : "";
     } else if (site.billingMethod === "RATIO" || site.billingMethod === "CPA") {
-        // CPA create flow stores ratio in currentRatio field (ratio param maps to currentRatio)
         rate = site.currentRatio != null ? String(Number(site.currentRatio)) : "";
     }
     return {
-        id: -site.id, // negative so it's distinguishable from real DailyInput ids
+        id: -site.id,
         date: dateStr,
         advertiser: site.upstream.name,
         advertiserId: site.upstream.id,
-        adOrder: site.upstream.adType.name,
-        adOrderId: site.upstream.adType.id,
+        adOrder: site.adOrder?.name ?? '',
+        adOrderId: site.adOrder?.id ?? null,
         type: site.billingMethod as "CPM" | "RATIO",
         adId: String(site.id),
         adIdNum: site.id,

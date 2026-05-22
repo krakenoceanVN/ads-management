@@ -41,7 +41,7 @@ router.get(
     requireAuth,
     [
         query("date").notEmpty().withMessage("date is required").isISO8601(),
-        query("advertiserId").optional().isInt().toInt(),
+        query("advertiserId").optional().isString(),
         query("adTypeCode").optional().isString(),
         query("status").optional().isIn(["pending", "confirmed", "unconfirmed"]),
     ],
@@ -49,16 +49,11 @@ router.get(
     async (req: Request, res: Response) => {
         try {
             const dateStr = req.query.date as string;
-            const advertiserId = req.query.advertiserId as number | undefined;
+            const advertiserFilter = req.query.advertiserId as string | undefined;
             const adTypeCode = req.query.adTypeCode as string | undefined;
             const statusFilter = req.query.status as string | undefined;
 
             const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr);
-
-            // Build base where for DailyInput query
-            const baseWhere: Prisma.DailyInputWhereInput = {
-                recordDate: { gte: startOfDay, lt: endOfDay },
-            };
 
             // Build where clause for AdSite master rows
             const adSiteWhere: Prisma.AdSiteWhereInput = {
@@ -66,7 +61,18 @@ router.get(
                 status: "active",
                 upstream: { status: "active" },
             };
-            if (advertiserId) adSiteWhere.upstreamId = advertiserId;
+            if (advertiserFilter) {
+                const numericId = Number(advertiserFilter);
+                if (Number.isInteger(numericId) && numericId > 0) {
+                    adSiteWhere.upstreamId = numericId;
+                } else {
+                    // Non-numeric or invalid — treat as upstream name string
+                    adSiteWhere.upstream = {
+                        status: "active",
+                        name: advertiserFilter,
+                    };
+                }
+            }
             if (adTypeCode) adSiteWhere.upstream = { ...adSiteWhere.upstream as object, adType: { code: adTypeCode } };
 
             // Load master AdSite rows (all active ad sites for this date's master data)
@@ -74,18 +80,28 @@ router.get(
                 where: adSiteWhere,
                 include: {
                     upstream: { include: { adType: true } },
+                    adOrder: true,
                 },
                 orderBy: { name: "asc" },
             });
 
             // Load existing DailyInput records for this date
-            let existingWhere: Prisma.DailyInputWhereInput = baseWhere;
-            if (advertiserId) {
-                existingWhere = { ...existingWhere, adSite: { upstreamId: advertiserId } };
+            let existingWhere: Prisma.DailyInputWhereInput = {
+                recordDate: { gte: startOfDay, lt: endOfDay },
+            };
+            if (advertiserFilter) {
+                const numericId = Number(advertiserFilter);
+                if (Number.isInteger(numericId) && numericId > 0) {
+                    existingWhere = { ...existingWhere, adSite: { upstreamId: numericId } };
+                } else {
+                    existingWhere = { ...existingWhere, adSite: { upstream: { status: "active", name: advertiserFilter } } };
+                }
             }
             if (adTypeCode) {
-                const adTypeFilter = advertiserId
-                    ? { upstreamId: advertiserId, upstream: { adType: { code: adTypeCode } } }
+                const adTypeFilter = advertiserFilter
+                    ? (Number.isInteger(Number(advertiserFilter)) && Number(advertiserFilter) > 0
+                        ? { upstreamId: Number(advertiserFilter), upstream: { adType: { code: adTypeCode } } }
+                        : { upstream: { name: advertiserFilter, adType: { code: adTypeCode } } })
                     : { upstream: { adType: { code: adTypeCode } } };
                 existingWhere = { ...existingWhere, adSite: adTypeFilter as Prisma.AdSiteWhereInput };
             }
@@ -99,6 +115,7 @@ router.get(
                     adSite: {
                         include: {
                             upstream: { include: { adType: true } },
+                            adOrder: true,
                         },
                     },
                 },

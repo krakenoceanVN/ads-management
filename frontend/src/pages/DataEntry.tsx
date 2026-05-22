@@ -167,33 +167,34 @@ export function AdvEntry() {
   const [busy, setBusy] = useState(false);
 
   const loadRows = React.useCallback(async () => {
-    const dates = datesBetween(filters.startDate, filters.endDate);
+    const date = normalizeDate(filters.startDate);
+    if (!date) return;
     setLoading(true);
     setError('');
     try {
-      const [orders, ...dateRows] = await Promise.all([
+      const [orders, dateRows] = await Promise.all([
         listAdOrders(),
-        ...dates.map(date => listAdvertiserEntries({ date })),
+        listAdvertiserEntries({ date }),
       ]);
       setAdOrders(orders);
-      setRows(dateRows.flat().filter(row => isAllowedEntryType(row.type)));
+      setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate, filters.endDate]);
+  }, [filters.startDate]);
 
   React.useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const scopedRows = useMemo(() => rows.filter(row => matchesEntryDateRange(row.date, filters.startDate, filters.endDate)), [rows, filters.startDate, filters.endDate]);
+  const scopedRows = useMemo(() => rows.filter(row => row.date === normalizeDate(filters.startDate)), [rows, filters.startDate]);
 
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.advertiser === filters.first)
-      && (!filters.second || row.adOrder === filters.second)
+      && (!filters.second || (row.adOrderId != null && String(row.adOrderId) === filters.second))
       && (!filters.third || row.adId === filters.third)
       && matchesStatusFilter(row.status, filters.status)
       && (!keyword || [row.advertiser, row.adOrder, row.adId, row.type, displayName(row.advertiser), displayName(row.adOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
@@ -204,9 +205,9 @@ export function AdvEntry() {
     [filteredRows, scopedRows]
   );
   const adOrderOptionRows = filters.first ? scopedRows.filter(row => row.advertiser === filters.first) : scopedRows;
-  const adIdOptionRows = filters.second ? adOrderOptionRows.filter(row => row.adOrder === filters.second) : adOrderOptionRows;
+  const adIdOptionRows = filters.second ? adOrderOptionRows.filter(row => row.adOrderId != null && String(row.adOrderId) === filters.second) : adOrderOptionRows;
   const advertiserOptions = uniqueOptions(scopedRows.map(row => row.advertiser));
-  const adOrderOptions = uniqueOptions(adOrderOptionRows.map(row => row.adOrder));
+  const adOrderOptions = uniqueOptions(adOrders.map(order => order.name));
   const adIdOptions = uniqueOptions(adIdOptionRows.map(row => row.adId));
   const setAdvertiserFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setAdOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
@@ -337,7 +338,6 @@ export function AdvEntry() {
       <div className="card data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
-          <DatePickerInput placeholder={t('endDate')} className="input-sm filter-date" value={filters.endDate} onChange={value => updateFilter(setFilters, 'endDate', value)} />
           <div className="filter-spacer"></div>
           <select className="input-sm" value={filters.first} onChange={e => setAdvertiserFilter(e.target.value)}>
             <option value="">{t('selectAdvertiser')}</option>
@@ -345,7 +345,7 @@ export function AdvEntry() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setAdOrderFilter(e.target.value)}>
             <option value="">{t('selectAdOrder')}</option>
-            {adOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
+            {adOrders.map(order => <option key={order.id} value={String(order.id)}>{displayName(order.name)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectAdId')}</option>
@@ -408,7 +408,7 @@ export function AdvEntry() {
             </tbody>
             <tfoot>
               <tr className="entry-total-row entry-total-sticky">
-                <td>{dateRangeLabel(filters, t('total'))}</td>
+                <td>{filters.startDate || t('total')}</td>
                 <td colSpan={7} className="total-label">{t('total')}:</td>
                 <td className="amount-cell">{formatAmount(totalReceivable)}</td>
                 <td><button className="entry-confirm-btn all" onClick={() => void confirmAllRows()} disabled={busy}>{t('confirmAllData')}</button></td>
@@ -432,33 +432,34 @@ export function MediaDataMgmt() {
   const [busy, setBusy] = useState(false);
 
   const loadRows = React.useCallback(async () => {
-    const dates = datesBetween(filters.startDate, filters.endDate);
+    const date = normalizeDate(filters.startDate);
+    if (!date) return;
     setLoading(true);
     setError('');
     try {
-      const [orders, ...dateRows] = await Promise.all([
+      const [orders, dateRows] = await Promise.all([
         listAdOrders(),
-        ...dates.map(date => listMediaEntries({ date })),
+        listMediaEntries({ date }),
       ]);
       setAdOrders(orders);
-      setRows(dateRows.flat().filter(row => isAllowedEntryType(row.type)));
+      setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate, filters.endDate]);
+  }, [filters.startDate]);
 
   React.useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const scopedRows = useMemo(() => rows.filter(row => matchesEntryDateRange(row.date, filters.startDate, filters.endDate)), [rows, filters.startDate, filters.endDate]);
+  const scopedRows = useMemo(() => rows.filter(row => row.date === normalizeDate(filters.startDate)), [rows, filters.startDate]);
 
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.media === filters.first)
-      && (!filters.second || row.mediaAdOrder === filters.second)
+      && (!filters.second || (row.mediaAdOrderId != null && String(row.mediaAdOrderId) === filters.second))
       && (!filters.third || row.mediaIdStr === filters.third)
       && matchesStatusFilter(row.status, filters.status)
       && (!keyword || [row.media, row.mediaAdOrder, row.mediaIdStr, row.type, displayName(row.media), displayName(row.mediaAdOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
@@ -469,9 +470,9 @@ export function MediaDataMgmt() {
     [filteredRows, scopedRows]
   );
   const mediaOrderOptionRows = filters.first ? scopedRows.filter(row => row.media === filters.first) : scopedRows;
-  const mediaIdOptionRows = filters.second ? mediaOrderOptionRows.filter(row => row.mediaAdOrder === filters.second) : mediaOrderOptionRows;
+  const mediaIdOptionRows = filters.second ? mediaOrderOptionRows.filter(row => row.mediaAdOrderId != null && String(row.mediaAdOrderId) === filters.second) : mediaOrderOptionRows;
   const mediaOptions = uniqueOptions(scopedRows.map(row => row.media));
-  const mediaOrderOptions = uniqueOptions(mediaOrderOptionRows.map(row => row.mediaAdOrder));
+  const mediaOrderOptions = uniqueOptions(adOrders.map(order => order.name));
   const mediaIdOptions = uniqueOptions(mediaIdOptionRows.map(row => row.mediaIdStr));
   const setMediaFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setMediaOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
@@ -479,7 +480,7 @@ export function MediaDataMgmt() {
   const totalActual = visibleRows.reduce((sum, row) => {
     return sum + (hasValue(row.actualReceived) ? Number(row.actualReceived) : 0);
   }, 0);
-  const totalDate = dateRangeLabel(filters, visibleRows[0]?.date || '2026-05-06');
+  const totalDate = filters.startDate || visibleRows[0]?.date || t('total');
 
   const adTypeCodeForRow = (row: MediaEntryRow) => {
     return adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeCode
@@ -608,7 +609,6 @@ export function MediaDataMgmt() {
       <div className="card data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
-          <DatePickerInput placeholder={t('endDate')} className="input-sm filter-date" value={filters.endDate} onChange={value => updateFilter(setFilters, 'endDate', value)} />
           <div className="filter-spacer"></div>
           <select className="input-sm" value={filters.first} onChange={e => setMediaFilter(e.target.value)}>
             <option value="">{t('selectMedia')}</option>
@@ -616,7 +616,7 @@ export function MediaDataMgmt() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setMediaOrderFilter(e.target.value)}>
             <option value="">{t('selectMediaAdOrder')}</option>
-            {mediaOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
+            {adOrders.map(order => <option key={order.id} value={String(order.id)}>{displayName(order.name)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectMediaId')}</option>

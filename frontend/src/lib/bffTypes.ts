@@ -270,7 +270,7 @@ export interface AdvertiserEntryRow {
   advertiser: string;
   advertiserId: number;
   adOrder: string;
-  adOrderId: number;
+  adOrderId: number | null;
   type: EntryType;
   adId: string;
   adIdNum: number;

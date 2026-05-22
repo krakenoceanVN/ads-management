@@ -267,7 +267,10 @@ export function AdvEntry() {
     setError('');
     try {
       await saveRows([row]);
-      await confirmAdvertiserEntryBatch([row.id]);
+      // Only confirm if row has a real DailyInput id (positive); generated rows (negative) must be saved first
+      if (row.id > 0) {
+        await confirmAdvertiserEntryBatch([row.id]);
+      }
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -277,6 +280,7 @@ export function AdvEntry() {
   };
 
   const unconfirmRow = async (row: AdvertiserEntryRow) => {
+    if (row.id <= 0) return; // cannot unconfirm a generated (unsaved) row
     setBusy(true);
     setError('');
     try {
@@ -296,7 +300,11 @@ export function AdvEntry() {
     setError('');
     try {
       await saveRows(pendingRows);
-      await confirmAdvertiserEntryBatch(pendingRows.map(row => row.id));
+      // Only confirm rows that have real DailyInput ids (positive); skip generated rows
+      const confirmableIds = pendingRows.filter(row => row.id > 0).map(row => row.id);
+      if (confirmableIds.length > 0) {
+        await confirmAdvertiserEntryBatch(confirmableIds);
+      }
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -527,7 +535,10 @@ export function MediaDataMgmt() {
     setError('');
     try {
       await saveRows([row]);
-      await confirmMediaEntryBatch([row.id]);
+      // Only confirm if row has a real DailyInput id (positive); generated rows (negative) must be saved first
+      if (row.id > 0) {
+        await confirmMediaEntryBatch([row.id]);
+      }
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -537,6 +548,7 @@ export function MediaDataMgmt() {
   };
 
   const unconfirmRow = async (row: MediaEntryRow) => {
+    if (row.id <= 0) return; // cannot unconfirm a generated (unsaved) row
     setBusy(true);
     setError('');
     try {
@@ -556,7 +568,11 @@ export function MediaDataMgmt() {
     setError('');
     try {
       await saveRows(pendingRows);
-      await confirmMediaEntryBatch(pendingRows.map(row => row.id));
+      // Only confirm rows that have real DailyInput ids (positive); skip generated rows
+      const confirmableIds = pendingRows.filter(row => row.id > 0).map(row => row.id);
+      if (confirmableIds.length > 0) {
+        await confirmMediaEntryBatch(confirmableIds);
+      }
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));

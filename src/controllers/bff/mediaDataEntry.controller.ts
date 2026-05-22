@@ -18,6 +18,7 @@ import { requireAuth, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 import {
     mapDailyInputToMediaEntry,
+    mapAdSiteToMediaEntry,
     validateDataCoefficient,
     mapTypeToBillingMethod,
     type BFFMediaEntryRow,
@@ -59,31 +60,45 @@ router.get(
 
             const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr);
 
-            // Build where clause step by step to avoid TypeScript issues
-            const baseWhere: Prisma.DailyInputWhereInput = {
+            // Build where clause for AdSite master rows
+            const adSiteWhere: Prisma.AdSiteWhereInput = {
+                isArchived: false,
+                status: "active",
+                upstream: { status: "active" },
+            };
+            if (mediaId) adSiteWhere.id = mediaId;
+            if (adTypeCode) adSiteWhere.upstream = { ...adSiteWhere.upstream as object, adType: { code: adTypeCode } };
+
+            // Load master AdSite rows with downstream info
+            const adSites = await prisma.adSite.findMany({
+                where: adSiteWhere,
+                include: {
+                    upstream: { include: { adType: true } },
+                    downstreams: {
+                        include: { downstream: true },
+                    },
+                },
+                orderBy: { name: "asc" },
+            });
+
+            // Build base where for existing DailyInput query
+            let existingWhere: Prisma.DailyInputWhereInput = {
                 recordDate: { gte: startOfDay, lt: endOfDay },
             };
-
-            // Determine adSite filter
-            let adSiteFilter: Prisma.AdSiteWhereInput | undefined;
-            if (mediaId && adTypeCode) {
-                adSiteFilter = { id: mediaId, upstream: { adType: { code: adTypeCode } } };
-            } else if (mediaId) {
-                adSiteFilter = { id: mediaId };
-            } else if (adTypeCode) {
-                adSiteFilter = { upstream: { adType: { code: adTypeCode } } };
+            if (mediaId) {
+                existingWhere = { ...existingWhere, adSite: { id: mediaId } };
             }
-
-            const where: Prisma.DailyInputWhereInput = adSiteFilter
-                ? { ...baseWhere, adSite: adSiteFilter }
-                : baseWhere;
-
+            if (adTypeCode) {
+                const base = mediaId ? { id: mediaId } : {};
+                existingWhere = { ...existingWhere, adSite: { ...base, upstream: { adType: { code: adTypeCode } } } as Prisma.AdSiteWhereInput };
+            }
             if (statusFilter) {
-                where.status = statusFilter === "pending" ? "unconfirmed" : statusFilter;
+                existingWhere.status = statusFilter === "pending" ? "unconfirmed" : statusFilter;
             }
 
-            const records = await prisma.dailyInput.findMany({
-                where,
+            // Load existing DailyInput records for this date
+            const existingRecords = await prisma.dailyInput.findMany({
+                where: existingWhere,
                 include: {
                     adSite: {
                         include: {
@@ -97,19 +112,26 @@ router.get(
                 orderBy: { adSite: { name: "asc" } },
             });
 
-            // Get shareRatio for each site from Downstream.payoutRate
-            const rows: BFFMediaEntryRow[] = await Promise.all(
-                records.map(async (r) => {
-                    let shareRatio: number | null = null;
-                    // Get the first active downstream's payoutRate as shareRatio
-                    // For SM, downstream is ML with payoutRate 0.8
-                    const downstream = r.adSite.downstreams.find((ds) => ds.downstream.status === "active");
-                    if (downstream) {
-                        shareRatio = Number(downstream.downstream.payoutRate);
-                    }
-                    return mapDailyInputToMediaEntry(r, shareRatio, adTypeCode || "SM");
-                })
-            );
+            // Build a map of existing DailyInput by adSiteId for merge
+            const existingByAdSiteId = new Map<number, typeof existingRecords[0]>();
+            for (const r of existingRecords) {
+                existingByAdSiteId.set(r.adSiteId, r);
+            }
+
+            // Merge: generate rows from AdSite master data, overlay existing DailyInput where present
+            const rows: BFFMediaEntryRow[] = adSites.map((site) => {
+                const existing = existingByAdSiteId.get(site.id);
+                // Get active downstream's payoutRate as shareRatio
+                let shareRatio: number | null = null;
+                const downstream = site.downstreams.find((ds) => ds.downstream.status === "active");
+                if (downstream) {
+                    shareRatio = Number(downstream.downstream.payoutRate);
+                }
+                if (existing) {
+                    return mapDailyInputToMediaEntry(existing, shareRatio, adTypeCode || site.upstream.adType.code);
+                }
+                return mapAdSiteToMediaEntry(site, dateStr, shareRatio);
+            });
 
             res.json({ success: true, data: rows });
         } catch (err: any) {

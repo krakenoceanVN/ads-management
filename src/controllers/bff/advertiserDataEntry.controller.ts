@@ -13,6 +13,7 @@ import { requireAuth, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 import {
     mapDailyInputToAdvertiserEntry,
+    mapAdSiteToAdvertiserEntry,
     validateDataCoefficient,
     mapTypeToBillingMethod,
     type BFFAdvertiserEntryRow,
@@ -54,31 +55,46 @@ router.get(
 
             const { gte: startOfDay, lt: endOfDay } = getBusinessDayRange(dateStr);
 
-            // Build where clause step by step to avoid TypeScript issues
+            // Build base where for DailyInput query
             const baseWhere: Prisma.DailyInputWhereInput = {
                 recordDate: { gte: startOfDay, lt: endOfDay },
             };
 
-            // Determine adSite filter
-            let adSiteFilter: Prisma.AdSiteWhereInput | undefined;
-            if (advertiserId && adTypeCode) {
-                adSiteFilter = { upstreamId: advertiserId, upstream: { adType: { code: adTypeCode } } };
-            } else if (advertiserId) {
-                adSiteFilter = { upstreamId: advertiserId };
-            } else if (adTypeCode) {
-                adSiteFilter = { upstream: { adType: { code: adTypeCode } } };
+            // Build where clause for AdSite master rows
+            const adSiteWhere: Prisma.AdSiteWhereInput = {
+                isArchived: false,
+                status: "active",
+                upstream: { status: "active" },
+            };
+            if (advertiserId) adSiteWhere.upstreamId = advertiserId;
+            if (adTypeCode) adSiteWhere.upstream = { ...adSiteWhere.upstream as object, adType: { code: adTypeCode } };
+
+            // Load master AdSite rows (all active ad sites for this date's master data)
+            const adSites = await prisma.adSite.findMany({
+                where: adSiteWhere,
+                include: {
+                    upstream: { include: { adType: true } },
+                },
+                orderBy: { name: "asc" },
+            });
+
+            // Load existing DailyInput records for this date
+            let existingWhere: Prisma.DailyInputWhereInput = baseWhere;
+            if (advertiserId) {
+                existingWhere = { ...existingWhere, adSite: { upstreamId: advertiserId } };
             }
-
-            const where: Prisma.DailyInputWhereInput = adSiteFilter
-                ? { ...baseWhere, adSite: adSiteFilter }
-                : baseWhere;
-
+            if (adTypeCode) {
+                const adTypeFilter = advertiserId
+                    ? { upstreamId: advertiserId, upstream: { adType: { code: adTypeCode } } }
+                    : { upstream: { adType: { code: adTypeCode } } };
+                existingWhere = { ...existingWhere, adSite: adTypeFilter as Prisma.AdSiteWhereInput };
+            }
             if (statusFilter) {
-                where.status = statusFilter === "pending" ? "unconfirmed" : statusFilter;
+                existingWhere.status = statusFilter === "pending" ? "unconfirmed" : statusFilter;
             }
 
-            const records = await prisma.dailyInput.findMany({
-                where,
+            const existingRecords = await prisma.dailyInput.findMany({
+                where: existingWhere,
                 include: {
                     adSite: {
                         include: {
@@ -89,9 +105,20 @@ router.get(
                 orderBy: { adSite: { name: "asc" } },
             });
 
-            const rows: BFFAdvertiserEntryRow[] = records.map((r) =>
-                mapDailyInputToAdvertiserEntry(r, adTypeCode || "360")
-            );
+            // Build a map of existing DailyInput by adSiteId for merge
+            const existingByAdSiteId = new Map<number, typeof existingRecords[0]>();
+            for (const r of existingRecords) {
+                existingByAdSiteId.set(r.adSiteId, r);
+            }
+
+            // Merge: generate rows from AdSite master data, overlay existing DailyInput where present
+            const rows: BFFAdvertiserEntryRow[] = adSites.map((site) => {
+                const existing = existingByAdSiteId.get(site.id);
+                if (existing) {
+                    return mapDailyInputToAdvertiserEntry(existing, adTypeCode || site.upstream.adType.code);
+                }
+                return mapAdSiteToAdvertiserEntry(site, dateStr);
+            });
 
             res.json({ success: true, data: rows });
         } catch (err: any) {

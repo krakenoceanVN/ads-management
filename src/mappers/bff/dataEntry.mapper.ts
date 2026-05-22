@@ -146,6 +146,41 @@ export function mapDailyInputToAdvertiserEntry(
 }
 
 /**
+ * Maps an AdSite master record to a generated advertiser entry row (no DailyInput yet).
+ * Used when there is no existing DailyInput for this adSite on the selected date.
+ */
+export function mapAdSiteToAdvertiserEntry(
+    site: {
+        id: number;
+        name: string;
+        billingMethod: string;
+        upstream: {
+            id: number;
+            name: string;
+            adType: { id: number; code: string; name: string };
+        };
+    },
+    dateStr: string
+): BFFAdvertiserEntryRow {
+    return {
+        id: -site.id, // negative so it's distinguishable from real DailyInput ids
+        date: dateStr,
+        advertiser: site.upstream.name,
+        advertiserId: site.upstream.id,
+        adOrder: site.upstream.adType.name,
+        adOrderId: site.upstream.adType.id,
+        type: site.billingMethod as "CPM" | "RATIO",
+        adId: String(site.id),
+        adIdNum: site.id,
+        rate: "",
+        traffic: "",
+        settlement: "",
+        receivable: "",
+        status: "pending",
+    };
+}
+
+/**
  * Maps Prisma DailyInput + shareRatio → BFFMediaEntryRow
  */
 export function mapDailyInputToMediaEntry(
@@ -216,5 +251,47 @@ export function mapDailyInputToMediaEntry(
         shareRatioNum: shareRatio,
         actualReceived,
         status: record.status === "confirmed" ? "confirmed" : "pending",
+    };
+}
+
+/**
+ * Maps an AdSite + shareRatio to a generated media entry row (no DailyInput yet).
+ * Used when there is no existing DailyInput for this adSite on the selected date.
+ */
+export function mapAdSiteToMediaEntry(
+    site: {
+        id: number;
+        name: string;
+        billingMethod: string;
+        upstreamId: number;
+        upstream: {
+            id: number;
+            name: string;
+            adType: { id: number; code: string; name: string };
+        };
+    },
+    dateStr: string,
+    shareRatio: number | null
+): BFFMediaEntryRow {
+    return {
+        id: -site.id, // negative so it's distinguishable from real DailyInput ids
+        date: dateStr,
+        media: site.name,
+        mediaId: site.id,
+        mediaIdStr: String(site.id),
+        mediaAdOrder: site.upstream.adType.name,
+        mediaAdOrderId: site.upstream.adType.id,
+        type: site.billingMethod as "CPM" | "RATIO",
+        upstreamAdId: String(site.upstreamId),
+        upstreamAdIdNum: site.upstreamId,
+        rate: "",
+        traffic: "",
+        settlement: "",
+        dataCoefficient: "1",
+        receivable: "",
+        shareRatio: shareRatio !== null ? String(shareRatio) : "",
+        shareRatioNum: shareRatio,
+        actualReceived: null,
+        status: "pending",
     };
 }

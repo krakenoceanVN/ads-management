@@ -194,7 +194,7 @@ export function AdvEntry() {
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.advertiser === filters.first)
-      && (!filters.second || (row.adOrderId != null && String(row.adOrderId) === filters.second))
+      && (!filters.second || (row.adOrderCode ?? row.adOrder) === filters.second)
       && (!filters.third || row.adId === filters.third)
       && matchesStatusFilter(row.status, filters.status)
       && (!keyword || [row.advertiser, row.adOrder, row.adId, row.type, displayName(row.advertiser), displayName(row.adOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
@@ -204,11 +204,11 @@ export function AdvEntry() {
     () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['advertiser', 'adOrder', 'adId']),
     [filteredRows, scopedRows]
   );
-  const adOrderOptionRows = filters.first ? scopedRows.filter(row => row.advertiser === filters.first) : scopedRows;
-  const adIdOptionRows = filters.second ? adOrderOptionRows.filter(row => row.adOrderId != null && String(row.adOrderId) === filters.second) : adOrderOptionRows;
+  const adOrderOptions = uniqueOptions(scopedRows.map(row => row.adOrderCode ?? row.adOrder).filter(Boolean));
   const advertiserOptions = uniqueOptions(scopedRows.map(row => row.advertiser));
-  const adOrderOptions = uniqueOptions(adOrders.map(order => order.name));
-  const adIdOptions = uniqueOptions(adIdOptionRows.map(row => row.adId));
+  const filteredByAdvertiser = filters.first ? scopedRows.filter(row => row.advertiser === filters.first) : scopedRows;
+  const filteredByOrder = filters.second ? filteredByAdvertiser.filter(row => (row.adOrderCode ?? row.adOrder) === filters.second) : filteredByAdvertiser;
+  const adIdOptions = uniqueOptions(filteredByOrder.map(row => row.adId));
   const setAdvertiserFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setAdOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
 
@@ -217,8 +217,8 @@ export function AdvEntry() {
   }, 0);
 
   const adTypeCodeForRow = (row: AdvertiserEntryRow) => {
-    return adOrders.find(order => order.id === row.adOrderId)?.adTypeCode
-      || adOrders.find(order => order.name === row.adOrder)?.adTypeCode
+    return row.adOrderCode
+      || adOrders.find(order => order.id === row.adOrderId)?.adTypeCode
       || '';
   };
 
@@ -345,7 +345,7 @@ export function AdvEntry() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setAdOrderFilter(e.target.value)}>
             <option value="">{t('selectAdOrder')}</option>
-            {adOrders.map(order => <option key={order.id} value={String(order.id)}>{displayName(order.name)}</option>)}
+            {adOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectAdId')}</option>
@@ -459,7 +459,7 @@ export function MediaDataMgmt() {
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.media === filters.first)
-      && (!filters.second || (row.mediaAdOrderId != null && String(row.mediaAdOrderId) === filters.second))
+      && (!filters.second || (row.mediaAdOrderCode ?? row.mediaAdOrder) === filters.second)
       && (!filters.third || row.mediaIdStr === filters.third)
       && matchesStatusFilter(row.status, filters.status)
       && (!keyword || [row.media, row.mediaAdOrder, row.mediaIdStr, row.type, displayName(row.media), displayName(row.mediaAdOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
@@ -469,11 +469,11 @@ export function MediaDataMgmt() {
     () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['media', 'mediaAdOrder', 'mediaId']),
     [filteredRows, scopedRows]
   );
-  const mediaOrderOptionRows = filters.first ? scopedRows.filter(row => row.media === filters.first) : scopedRows;
-  const mediaIdOptionRows = filters.second ? mediaOrderOptionRows.filter(row => row.mediaAdOrderId != null && String(row.mediaAdOrderId) === filters.second) : mediaOrderOptionRows;
   const mediaOptions = uniqueOptions(scopedRows.map(row => row.media));
-  const mediaOrderOptions = uniqueOptions(adOrders.map(order => order.name));
-  const mediaIdOptions = uniqueOptions(mediaIdOptionRows.map(row => row.mediaIdStr));
+  const mediaOrderOptions = uniqueOptions(scopedRows.map(row => row.mediaAdOrderCode ?? row.mediaAdOrder).filter(Boolean));
+  const filteredByMedia = filters.first ? scopedRows.filter(row => row.media === filters.first) : scopedRows;
+  const filteredByOrder = filters.second ? filteredByMedia.filter(row => (row.mediaAdOrderCode ?? row.mediaAdOrder) === filters.second) : filteredByMedia;
+  const mediaIdOptions = uniqueOptions(filteredByOrder.map(row => row.mediaIdStr));
   const setMediaFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setMediaOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
 
@@ -483,8 +483,8 @@ export function MediaDataMgmt() {
   const totalDate = filters.startDate || visibleRows[0]?.date || t('total');
 
   const adTypeCodeForRow = (row: MediaEntryRow) => {
-    return adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeCode
-      || adOrders.find(order => order.name === row.mediaAdOrder)?.adTypeCode
+    return row.mediaAdOrderCode
+      || adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeCode
       || '';
   };
 
@@ -616,7 +616,7 @@ export function MediaDataMgmt() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setMediaOrderFilter(e.target.value)}>
             <option value="">{t('selectMediaAdOrder')}</option>
-            {adOrders.map(order => <option key={order.id} value={String(order.id)}>{displayName(order.name)}</option>)}
+            {mediaOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectMediaId')}</option>

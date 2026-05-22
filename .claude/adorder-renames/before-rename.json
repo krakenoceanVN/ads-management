@@ -1,0 +1,135 @@
+[
+  {
+    "id": 1,
+    "name": "SLY - SM",
+    "upstreamId": 73,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 2,
+    "name": "Bobo",
+    "upstreamId": 89,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 3,
+    "name": "Duplicate Test",
+    "upstreamId": 73,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 4,
+    "name": "Another Duplicate",
+    "upstreamId": 73,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 5,
+    "name": "大白 - SM",
+    "upstreamId": 77,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 6,
+    "name": "YL - SM",
+    "upstreamId": 80,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 7,
+    "name": "BZ - SM",
+    "upstreamId": 81,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 8,
+    "name": "BB - SM",
+    "upstreamId": 82,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 9,
+    "name": "JW - SM",
+    "upstreamId": 84,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 10,
+    "name": "LJ - SM",
+    "upstreamId": 86,
+    "status": "active",
+    "adType": { "code": "SM" }
+  },
+  {
+    "id": 11,
+    "name": "上游测试 - 360",
+    "upstreamId": 91,
+    "status": "active",
+    "adType": { "code": "360" }
+  },
+  {
+    "id": 12,
+    "name": "大白 - 360",
+    "upstreamId": 92,
+    "status": "active",
+    "adType": { "code": "360" }
+  },
+  {
+    "id": 13,
+    "name": "BB - BAIDU_JS",
+    "upstreamId": 93,
+    "status": "active",
+    "adType": { "code": "BAIDU_JS" }
+  },
+  {
+    "id": 14,
+    "name": "BB - OTHER",
+    "upstreamId": 95,
+    "status": "active",
+    "adType": { "code": "OTHER" }
+  },
+  {
+    "id": 15,
+    "name": "BZ - OTHER",
+    "upstreamId": 96,
+    "status": "active",
+    "adType": { "code": "OTHER" }
+  },
+  {
+    "id": 16,
+    "name": "小玉 - OTHER",
+    "upstreamId": 100,
+    "status": "active",
+    "adType": { "code": "OTHER" }
+  },
+  {
+    "id": 17,
+    "name": "圣乐游-YSLY - iqiyi",
+    "upstreamId": 104,
+    "status": "active",
+    "adType": { "code": "iqiyi" }
+  },
+  {
+    "id": 18,
+    "name": "olo - yolo",
+    "upstreamId": 105,
+    "status": "active",
+    "adType": { "code": "yolo" }
+  },
+  {
+    "id": 19,
+    "name": "BB - 360",
+    "upstreamId": 89,
+    "status": "active",
+    "adType": { "code": "360" }
+  }
+]

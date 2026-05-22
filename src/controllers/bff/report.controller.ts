@@ -109,6 +109,7 @@ router.get(
                     adSite: {
                         include: {
                             upstream: { include: { adType: true } },
+                            adOrder: { include: { adType: true } },
                         },
                     },
                 },
@@ -210,6 +211,7 @@ router.get(
                     adSite: {
                         include: {
                             upstream: { include: { adType: true } },
+                            adOrder: { include: { adType: true } },
                             downstreams: {
                                 include: { downstream: true },
                             },

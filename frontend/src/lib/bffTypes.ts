@@ -271,6 +271,7 @@ export interface AdvertiserEntryRow {
   advertiserId: number;
   adOrder: string;
   adOrderId: number | null;
+  adOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
   type: EntryType;
   adId: string;
   adIdNum: number;
@@ -288,6 +289,7 @@ export interface MediaEntryRow {
   mediaId: number;
   mediaAdOrder: string;
   mediaAdOrderId: number | null;
+  mediaAdOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
   type: EntryType;
   mediaIdStr: string;
   upstreamAdId: string;

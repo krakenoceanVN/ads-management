@@ -49,6 +49,7 @@ export interface BFFAdvertiserEntryRow {
     advertiserId: number;
     adOrder: string;
     adOrderId: number | null;
+    adOrderCode: string | null;
     type: "CPM" | "RATIO";
     adId: string;
     adIdNum: number;
@@ -66,6 +67,7 @@ export interface BFFMediaEntryRow {
     mediaId: number;
     mediaAdOrder: string;
     mediaAdOrderId: number | null;
+    mediaAdOrderCode: string | null;
     type: "CPM" | "RATIO";
     mediaIdStr: string;
     upstreamAdId: string;
@@ -109,6 +111,7 @@ export function mapDailyInputToAdvertiserEntry(
                 id: number;
                 name: string;
                 orderNumber?: string;
+                adType?: { id: number; code: string; name: string };
             } | null;
         };
     },
@@ -140,6 +143,7 @@ export function mapDailyInputToAdvertiserEntry(
         advertiserId: record.adSite.upstream.id,
         adOrder: record.adSite.adOrder?.name ?? '',
         adOrderId: record.adSite.adOrder?.id ?? null,
+        adOrderCode: record.adSite.adOrder?.adType?.code ?? record.adSite.upstream.adType.code,
         type: billingMethod,
         adId: String(record.adSite.id),
         adIdNum: record.adSite.id,
@@ -155,6 +159,8 @@ export function mapDailyInputToAdvertiserEntry(
  * Maps an AdSite master record to a generated advertiser entry row (no DailyInput yet).
  * Used when there is no existing DailyInput for this adSite on the selected date.
  */
+// adOrder.adType is only available when controller includes it via adOrder: { include: { adType: true } }
+// Otherwise fall back to upstream.adType.code (AdOrder.adTypeId == upstream.adTypeId — same AdType)
 export function mapAdSiteToAdvertiserEntry(
     site: {
         id: number;
@@ -172,6 +178,7 @@ export function mapAdSiteToAdvertiserEntry(
             id: number;
             name: string;
             orderNumber?: string;
+            adType?: { id: number; code: string; name: string };
         } | null;
     },
     dateStr: string
@@ -182,6 +189,7 @@ export function mapAdSiteToAdvertiserEntry(
     } else if (site.billingMethod === "RATIO" || site.billingMethod === "CPA") {
         rate = site.currentRatio != null ? String(Number(site.currentRatio)) : "";
     }
+    const adOrderCode = site.adOrder?.adType?.code ?? site.upstream.adType.code;
     return {
         id: -site.id,
         date: dateStr,
@@ -189,6 +197,7 @@ export function mapAdSiteToAdvertiserEntry(
         advertiserId: site.upstream.id,
         adOrder: site.adOrder?.name ?? '',
         adOrderId: site.adOrder?.id ?? null,
+        adOrderCode,
         type: site.billingMethod as "CPM" | "RATIO",
         adId: String(site.id),
         adIdNum: site.id,
@@ -228,6 +237,7 @@ export function mapDailyInputToMediaEntry(
                 id: number;
                 name: string;
                 orderNumber?: string;
+                adType?: { id: number; code: string; name: string };
             } | null;
         };
     },
@@ -255,6 +265,7 @@ export function mapDailyInputToMediaEntry(
         shareRatio !== null && receivable !== "" && receivable !== 0
             ? Number((Number(record.revenue) * shareRatio).toFixed(3))
             : null;
+    const adOrderCode = record.adSite.adOrder?.adType?.code ?? record.adSite.upstream.adType.code;
 
     return {
         id: record.id,
@@ -264,6 +275,7 @@ export function mapDailyInputToMediaEntry(
         mediaIdStr: String(record.adSite.id),
         mediaAdOrder: record.adSite.adOrder?.name ?? '',
         mediaAdOrderId: record.adSite.adOrder?.id ?? null,
+        mediaAdOrderCode: adOrderCode,
         type: billingMethod,
         upstreamAdId: String(record.adSite.upstreamId),
         upstreamAdIdNum: record.adSite.upstreamId,
@@ -300,6 +312,7 @@ export function mapAdSiteToMediaEntry(
             id: number;
             name: string;
             orderNumber?: string;
+            adType?: { id: number; code: string; name: string };
         } | null;
     },
     dateStr: string,
@@ -311,6 +324,7 @@ export function mapAdSiteToMediaEntry(
     } else if (site.billingMethod === "RATIO" || site.billingMethod === "CPA") {
         rate = site.currentRatio != null ? String(Number(site.currentRatio)) : "";
     }
+    const adOrderCode = site.adOrder?.adType?.code ?? site.upstream.adType.code;
     return {
         id: -site.id, // negative so it's distinguishable from real DailyInput ids
         date: dateStr,
@@ -319,6 +333,7 @@ export function mapAdSiteToMediaEntry(
         mediaIdStr: String(site.id),
         mediaAdOrder: site.adOrder?.name ?? '',
         mediaAdOrderId: site.adOrder?.id ?? null,
+        mediaAdOrderCode: adOrderCode,
         type: site.billingMethod as "CPM" | "RATIO",
         upstreamAdId: String(site.upstreamId),
         upstreamAdIdNum: site.upstreamId,

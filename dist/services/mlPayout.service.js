@@ -17,9 +17,10 @@ function dateRange(dateStr) {
  * Optimized: calculate monthly cost breakdown in 3 queries total (vs 30*7 queries).
  * Uses Prisma groupBy to fetch all daily aggregates in bulk, then computes in-memory.
  */
-async function calculateCostBreakdownMonthly(year, month, adTypeCode, prisma) {
+async function calculateCostBreakdownMonthly(year, month, adTypeCode, prisma, overrideRange) {
     const adTypeId = constants_js_1.AD_TYPE_ID_MAP[adTypeCode];
-    const { gte, lt } = (0, date_js_1.getBusinessMonthRange)(year, month);
+    const defaultRange = (0, date_js_1.getBusinessMonthRange)(year, month);
+    const { gte, lt } = overrideRange ?? defaultRange;
     // 1. Batch: confirmed DailyInput aggregates grouped by date, per adTypeId
     const revenueByDate = await prisma.dailyInput.groupBy({
         by: ["recordDate"],

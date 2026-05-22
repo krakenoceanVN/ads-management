@@ -595,8 +595,10 @@ export function AdvQuery() {
     };
   }, [loadAdvQueryRows]);
 
+  const orderCodeForAdvRow = (row: AdvertiserEntryRow) => row.adOrderCode ?? row.adOrder;
+
   const visibleRows = sortRowsByDate(rows.filter(row =>
-    (!filters.business || row.adOrder === filters.business)
+    (!filters.business || orderCodeForAdvRow(row) === filters.business)
     && (!filters.advertiser || row.advertiser === filters.advertiser)
     && (!filters.adOrder || row.adOrder === filters.adOrder)
     && (!filters.adId || row.adId === filters.adId)
@@ -605,13 +607,13 @@ export function AdvQuery() {
     && matchesStatus(row.status, filters.status)
     && matchesLocalized(displayName, filters.search, [row.advertiser, row.adOrder, row.adId, row.type])
   ), ['advertiser', 'adOrder', 'adId']);
-  const businessRows = filters.business ? rows.filter(row => row.adOrder === filters.business) : rows;
-  const businessOptions = businessOptionsFromRows(rows, row => row.adOrder);
+  const businessRows = filters.business ? rows.filter(row => orderCodeForAdvRow(row) === filters.business) : rows;
+  const businessOptions = businessOptionsFromRows(rows, orderCodeForAdvRow);
 
   const columns: CsvColumn<AdvertiserEntryRow>[] = [
     { label: t('date'), value: row => row.date },
     { label: t('advertiser'), value: row => displayName(row.advertiser) },
-    { label: t('adOrder'), value: row => displayName(row.adOrder) },
+    { label: t('adOrder'), value: row => displayName(orderCodeForAdvRow(row)) },
     { label: t('type'), value: row => row.type },
     { label: t('adId'), value: row => row.adId },
     { label: t('unitPriceRevenueShare'), value: row => row.rate },
@@ -781,8 +783,10 @@ export function MediaQuery() {
     };
   }, [loadMediaQueryRows]);
 
+  const orderCodeForMediaRow = (row: MediaEntryRow) => row.mediaAdOrderCode ?? row.mediaAdOrder;
+
   const visibleRows = sortRowsByDate(rows.filter(row =>
-    (!filters.business || row.mediaAdOrder === filters.business)
+    (!filters.business || orderCodeForMediaRow(row) === filters.business)
     && (!filters.media || row.media === filters.media)
     && (!filters.mediaAdOrder || row.mediaAdOrder === filters.mediaAdOrder)
     && (!filters.mediaId || row.mediaIdStr === filters.mediaId)
@@ -792,13 +796,13 @@ export function MediaQuery() {
     && matchesStatus(row.status, filters.status)
     && matchesLocalized(displayName, filters.search, [row.media, row.mediaAdOrder, row.mediaIdStr, row.type])
   ), ['media', 'mediaAdOrder', 'mediaIdStr']);
-  const businessRows = filters.business ? rows.filter(row => row.mediaAdOrder === filters.business) : rows;
-  const businessOptions = businessOptionsFromRows(rows, row => row.mediaAdOrder);
+  const businessRows = filters.business ? rows.filter(row => orderCodeForMediaRow(row) === filters.business) : rows;
+  const businessOptions = businessOptionsFromRows(rows, orderCodeForMediaRow);
 
   const columns: CsvColumn<MediaEntryRow>[] = [
     { label: t('date'), value: row => row.date },
     { label: t('media'), value: row => displayName(row.media) },
-    { label: t('mediaAdOrder'), value: row => displayName(row.mediaAdOrder) },
+    { label: t('mediaAdOrder'), value: row => displayName(orderCodeForMediaRow(row)) },
     { label: t('type'), value: row => row.type },
     { label: t('mediaId'), value: row => row.mediaIdStr },
     { label: t('unitPriceRevenueShare'), value: row => row.rate },

@@ -1,0 +1,1449 @@
+{
+  "createdAt": "2026-05-22T11:55:18.236Z",
+  "activeAdSitesTotal": 71,
+  "activeAdSitesWithAdOrderId": 0,
+  "activeAdSitesWithoutAdOrderId": 71,
+  "adSites": [
+    {
+      "id": 167,
+      "name": "252 (321768)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 168,
+      "name": "341 (486589)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 169,
+      "name": "342 (869576)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 171,
+      "name": "344 (336956)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 172,
+      "name": "345 (137978)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 173,
+      "name": "23 (468237)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 175,
+      "name": "25 (864542)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 176,
+      "name": "26 (104828)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 73,
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 212,
+      "name": "29 (680903)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 77,
+      "upstream": {
+        "id": 77,
+        "name": "大白",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 214,
+      "name": "31 (197173)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 77,
+      "upstream": {
+        "id": 77,
+        "name": "大白",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 215,
+      "name": "32 (050675)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 77,
+      "upstream": {
+        "id": 77,
+        "name": "大白",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 216,
+      "name": "33 (518912)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 77,
+      "upstream": {
+        "id": 77,
+        "name": "大白",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 217,
+      "name": "42 (269239)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 77,
+      "upstream": {
+        "id": 77,
+        "name": "大白",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 204,
+      "name": "yl58 (655889)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 80,
+      "upstream": {
+        "id": 80,
+        "name": "YL",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 205,
+      "name": "yl59 (920988)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 80,
+      "upstream": {
+        "id": 80,
+        "name": "YL",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 206,
+      "name": "yl142 (076784)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 80,
+      "upstream": {
+        "id": 80,
+        "name": "YL",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 207,
+      "name": "yl163 (529488)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 80,
+      "upstream": {
+        "id": 80,
+        "name": "YL",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 208,
+      "name": "yl164 (075429)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 80,
+      "upstream": {
+        "id": 80,
+        "name": "YL",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 189,
+      "name": "t7 (846801)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 190,
+      "name": "bz1 (043773)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 191,
+      "name": "bz2 (675499)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 192,
+      "name": "bz3 (036639)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 193,
+      "name": "bz4 (875120)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 194,
+      "name": "bz5 (806088)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 199,
+      "name": "bz9 (188401)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 202,
+      "name": "gy339 (389245)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 240,
+      "name": "bz10(941504)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 241,
+      "name": "bz11(724236)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 242,
+      "name": "bz12(740849)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 243,
+      "name": "bz13(589356)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 244,
+      "name": "bz14(483051)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 245,
+      "name": "bz15(421261)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 246,
+      "name": "gy366(254710)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 247,
+      "name": "gy367(505673)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 248,
+      "name": "gy368(943583)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 249,
+      "name": "gy369(964513)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 250,
+      "name": "gy370(959661)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 81,
+      "upstream": {
+        "id": 81,
+        "name": "BZ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 179,
+      "name": "xx5 (886344)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 180,
+      "name": "xx81 (914635)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 181,
+      "name": "xx82 (532789)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 183,
+      "name": "xx84  (467198)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 187,
+      "name": "611 (002626)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 188,
+      "name": "631 (284979)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 235,
+      "name": "149(000840)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 236,
+      "name": "426(091918)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 251,
+      "name": "xx142(223171)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 252,
+      "name": "xx143(276504)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 253,
+      "name": "xx144(830200)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 254,
+      "name": "xx145(213718)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 255,
+      "name": "xx146(931101)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 256,
+      "name": "xx147(349699)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 257,
+      "name": "xx149(018447)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 82,
+      "upstream": {
+        "id": 82,
+        "name": "BB",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 260,
+      "name": "yl58",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 84,
+      "upstream": {
+        "id": 84,
+        "name": "JW",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 209,
+      "name": "308 (693482)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 86,
+      "upstream": {
+        "id": 86,
+        "name": "LJ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 210,
+      "name": "843 (046226 )",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 86,
+      "upstream": {
+        "id": 86,
+        "name": "LJ",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 221,
+      "name": "4-wap(707)",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 89,
+      "upstream": {
+        "id": 89,
+        "name": "BB",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 222,
+      "name": "6wap(716)",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 89,
+      "upstream": {
+        "id": 89,
+        "name": "BB",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 237,
+      "name": "1-wap端(674)",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 89,
+      "upstream": {
+        "id": 89,
+        "name": "BB",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 238,
+      "name": "6(152211)",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 91,
+      "upstream": {
+        "id": 91,
+        "name": "上游测试",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 229,
+      "name": "H5-4",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 92,
+      "upstream": {
+        "id": 92,
+        "name": "大白",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 239,
+      "name": "H5-3",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 92,
+      "upstream": {
+        "id": 92,
+        "name": "大白",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 258,
+      "name": "753",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 93,
+      "upstream": {
+        "id": 93,
+        "name": "BB (BAIDU_JS)",
+        "adType": {
+          "id": 3,
+          "code": "BAIDU_JS",
+          "name": "BAIDU_JS"
+        }
+      }
+    },
+    {
+      "id": 259,
+      "name": "764",
+      "billingMethod": "RATIO",
+      "adOrderId": null,
+      "upstreamId": 93,
+      "upstream": {
+        "id": 93,
+        "name": "BB (BAIDU_JS)",
+        "adType": {
+          "id": 3,
+          "code": "BAIDU_JS",
+          "name": "BAIDU_JS"
+        }
+      }
+    },
+    {
+      "id": 224,
+      "name": "xpagecn",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 95,
+      "upstream": {
+        "id": 95,
+        "name": "BB",
+        "adType": {
+          "id": 4,
+          "code": "OTHER",
+          "name": "OTHER"
+        }
+      }
+    },
+    {
+      "id": 225,
+      "name": "movetab",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 95,
+      "upstream": {
+        "id": 95,
+        "name": "BB",
+        "adType": {
+          "id": 4,
+          "code": "OTHER",
+          "name": "OTHER"
+        }
+      }
+    },
+    {
+      "id": 226,
+      "name": "2902",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 96,
+      "upstream": {
+        "id": 96,
+        "name": "BZ",
+        "adType": {
+          "id": 4,
+          "code": "OTHER",
+          "name": "OTHER"
+        }
+      }
+    },
+    {
+      "id": 228,
+      "name": "tsbrow",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 96,
+      "upstream": {
+        "id": 96,
+        "name": "BZ",
+        "adType": {
+          "id": 4,
+          "code": "OTHER",
+          "name": "OTHER"
+        }
+      }
+    },
+    {
+      "id": 227,
+      "name": "cshbl",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 100,
+      "upstream": {
+        "id": 100,
+        "name": "小玉",
+        "adType": {
+          "id": 4,
+          "code": "OTHER",
+          "name": "OTHER"
+        }
+      }
+    },
+    {
+      "id": 265,
+      "name": "701(b5b135eff21f9f9b)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 104,
+      "upstream": {
+        "id": 104,
+        "name": "圣乐游-YSLY",
+        "adType": {
+          "id": 5,
+          "code": "iqiyi",
+          "name": "iqiyi"
+        }
+      }
+    },
+    {
+      "id": 266,
+      "name": "610(a188c291bc53df4e)",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 104,
+      "upstream": {
+        "id": 104,
+        "name": "圣乐游-YSLY",
+        "adType": {
+          "id": 5,
+          "code": "iqiyi",
+          "name": "iqiyi"
+        }
+      }
+    },
+    {
+      "id": 267,
+      "name": "sieucap",
+      "billingMethod": "CPM",
+      "adOrderId": null,
+      "upstreamId": 105,
+      "upstream": {
+        "id": 105,
+        "name": "olo",
+        "adType": {
+          "id": 6,
+          "code": "yolo",
+          "name": "yolo"
+        }
+      }
+    }
+  ],
+  "adOrders": [
+    {
+      "id": 1,
+      "name": "Test AdOrder Updated",
+      "status": "inactive",
+      "upstreamId": 73,
+      "adTypeId": 1,
+      "createdAt": "2026-05-22T03:54:51.519Z",
+      "updatedAt": "2026-05-22T03:56:15.577Z",
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Bobo",
+      "status": "active",
+      "upstreamId": 89,
+      "adTypeId": 1,
+      "createdAt": "2026-05-22T04:04:38.049Z",
+      "updatedAt": "2026-05-22T04:04:38.049Z",
+      "upstream": {
+        "id": 89,
+        "name": "BB",
+        "adType": {
+          "id": 2,
+          "code": "360",
+          "name": "360"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Duplicate Test",
+      "status": "active",
+      "upstreamId": 73,
+      "adTypeId": 1,
+      "createdAt": "2026-05-22T04:29:21.196Z",
+      "updatedAt": "2026-05-22T04:29:21.196Z",
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Another Duplicate",
+      "status": "active",
+      "upstreamId": 73,
+      "adTypeId": 1,
+      "createdAt": "2026-05-22T04:31:41.443Z",
+      "updatedAt": "2026-05-22T04:31:41.443Z",
+      "upstream": {
+        "id": 73,
+        "name": "SLY",
+        "adType": {
+          "id": 1,
+          "code": "SM",
+          "name": "SM"
+        }
+      }
+    }
+  ],
+  "plannedCreatePayloads": [
+    {
+      "advertiserId": 77,
+      "adTypeCode": "SM",
+      "name": "大白 - SM"
+    },
+    {
+      "advertiserId": 80,
+      "adTypeCode": "SM",
+      "name": "YL - SM"
+    },
+    {
+      "advertiserId": 81,
+      "adTypeCode": "SM",
+      "name": "BZ - SM"
+    },
+    {
+      "advertiserId": 82,
+      "adTypeCode": "SM",
+      "name": "BB - SM"
+    },
+    {
+      "advertiserId": 84,
+      "adTypeCode": "SM",
+      "name": "JW - SM"
+    },
+    {
+      "advertiserId": 86,
+      "adTypeCode": "SM",
+      "name": "LJ - SM"
+    },
+    {
+      "advertiserId": 73,
+      "adTypeCode": "SM",
+      "name": "SLY - SM"
+    },
+    {
+      "advertiserId": 91,
+      "adTypeCode": "360",
+      "name": "上游测试 - 360"
+    },
+    {
+      "advertiserId": 92,
+      "adTypeCode": "360",
+      "name": "大白 - 360"
+    },
+    {
+      "advertiserId": 93,
+      "adTypeCode": "BAIDU_JS",
+      "name": "BB - BAIDU_JS"
+    },
+    {
+      "advertiserId": 95,
+      "adTypeCode": "OTHER",
+      "name": "BB - OTHER"
+    },
+    {
+      "advertiserId": 96,
+      "adTypeCode": "OTHER",
+      "name": "BZ - OTHER"
+    },
+    {
+      "advertiserId": 100,
+      "adTypeCode": "OTHER",
+      "name": "小玉 - OTHER"
+    },
+    {
+      "advertiserId": 104,
+      "adTypeCode": "iqiyi",
+      "name": "圣乐游-YSLY - iqiyi"
+    },
+    {
+      "advertiserId": 105,
+      "adTypeCode": "yolo",
+      "name": "olo - yolo"
+    }
+  ],
+  "plannedLinkMapping": {
+    "SLY - SM": {
+      "expectedId": null,
+      "siteIds": [
+        167,
+        168,
+        169,
+        171,
+        172,
+        173,
+        175,
+        176
+      ]
+    },
+    "大白 - SM": {
+      "expectedId": null,
+      "siteIds": [
+        212,
+        214,
+        215,
+        216,
+        217
+      ]
+    },
+    "YL - SM": {
+      "expectedId": null,
+      "siteIds": [
+        204,
+        205,
+        206,
+        207,
+        208
+      ]
+    },
+    "BZ - SM": {
+      "expectedId": null,
+      "siteIds": [
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        199,
+        202,
+        240,
+        241,
+        242,
+        243,
+        244,
+        245,
+        246,
+        247,
+        248,
+        249,
+        250
+      ]
+    },
+    "BB - SM": {
+      "expectedId": null,
+      "siteIds": [
+        179,
+        180,
+        181,
+        183,
+        187,
+        188,
+        235,
+        236,
+        251,
+        252,
+        253,
+        254,
+        255,
+        256,
+        257
+      ]
+    },
+    "JW - SM": {
+      "expectedId": null,
+      "siteIds": [
+        260
+      ]
+    },
+    "LJ - SM": {
+      "expectedId": null,
+      "siteIds": [
+        209,
+        210
+      ]
+    },
+    "Bobo": {
+      "expectedId": 2,
+      "siteIds": [
+        221,
+        222,
+        237
+      ]
+    },
+    "上游测试 - 360": {
+      "expectedId": null,
+      "siteIds": [
+        238
+      ]
+    },
+    "大白 - 360": {
+      "expectedId": null,
+      "siteIds": [
+        229,
+        239
+      ]
+    },
+    "BB - BAIDU_JS": {
+      "expectedId": null,
+      "siteIds": [
+        258,
+        259
+      ]
+    },
+    "BB - OTHER": {
+      "expectedId": null,
+      "siteIds": [
+        224,
+        225
+      ]
+    },
+    "BZ - OTHER": {
+      "expectedId": null,
+      "siteIds": [
+        226,
+        228
+      ]
+    },
+    "小玉 - OTHER": {
+      "expectedId": null,
+      "siteIds": [
+        227
+      ]
+    },
+    "圣乐游-YSLY - iqiyi": {
+      "expectedId": null,
+      "siteIds": [
+        265,
+        266
+      ]
+    },
+    "olo - yolo": {
+      "expectedId": null,
+      "siteIds": [
+        267
+      ]
+    }
+  },
+  "note": "All site IDs and current adOrderId values preserved for rollback"
+}

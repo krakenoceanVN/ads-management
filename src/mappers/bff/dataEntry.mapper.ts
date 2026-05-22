@@ -154,6 +154,8 @@ export function mapAdSiteToAdvertiserEntry(
         id: number;
         name: string;
         billingMethod: string;
+        currentUnitPrice?: unknown;
+        currentRatio?: unknown;
         upstream: {
             id: number;
             name: string;
@@ -162,6 +164,13 @@ export function mapAdSiteToAdvertiserEntry(
     },
     dateStr: string
 ): BFFAdvertiserEntryRow {
+    let rate = "";
+    if (site.billingMethod === "CPM") {
+        rate = site.currentUnitPrice != null ? String(Number(site.currentUnitPrice)) : "";
+    } else if (site.billingMethod === "RATIO" || site.billingMethod === "CPA") {
+        // CPA create flow stores ratio in currentRatio field (ratio param maps to currentRatio)
+        rate = site.currentRatio != null ? String(Number(site.currentRatio)) : "";
+    }
     return {
         id: -site.id, // negative so it's distinguishable from real DailyInput ids
         date: dateStr,
@@ -172,7 +181,7 @@ export function mapAdSiteToAdvertiserEntry(
         type: site.billingMethod as "CPM" | "RATIO",
         adId: String(site.id),
         adIdNum: site.id,
-        rate: "",
+        rate,
         traffic: "",
         settlement: "",
         receivable: "",
@@ -263,6 +272,8 @@ export function mapAdSiteToMediaEntry(
         id: number;
         name: string;
         billingMethod: string;
+        currentUnitPrice?: unknown;
+        currentRatio?: unknown;
         upstreamId: number;
         upstream: {
             id: number;
@@ -273,6 +284,12 @@ export function mapAdSiteToMediaEntry(
     dateStr: string,
     shareRatio: number | null
 ): BFFMediaEntryRow {
+    let rate = "";
+    if (site.billingMethod === "CPM") {
+        rate = site.currentUnitPrice != null ? String(Number(site.currentUnitPrice)) : "";
+    } else if (site.billingMethod === "RATIO" || site.billingMethod === "CPA") {
+        rate = site.currentRatio != null ? String(Number(site.currentRatio)) : "";
+    }
     return {
         id: -site.id, // negative so it's distinguishable from real DailyInput ids
         date: dateStr,
@@ -284,7 +301,7 @@ export function mapAdSiteToMediaEntry(
         type: site.billingMethod as "CPM" | "RATIO",
         upstreamAdId: String(site.upstreamId),
         upstreamAdIdNum: site.upstreamId,
-        rate: "",
+        rate,
         traffic: "",
         settlement: "",
         dataCoefficient: "1",

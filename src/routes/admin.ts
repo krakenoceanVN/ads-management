@@ -1590,7 +1590,8 @@ router.get(
         where.date = { ...where.date, gte: new Date(req.query.start_date as string) }
       }
       if (req.query.end_date) {
-        where.date = { ...where.date, lte: new Date(req.query.end_date as string) }
+        // end_date is inclusive — use lt(nextDay) to include the full day
+        where.date = { ...where.date, lt: getBusinessDayRange(req.query.end_date as string).lt }
       }
 
       const rates = await prisma.dailyDownstreamRate.findMany({

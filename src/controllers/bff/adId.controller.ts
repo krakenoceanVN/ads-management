@@ -15,7 +15,7 @@ import { Router, Request, Response } from "express";
 import { body, param, query, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth, AuthRequest } from "../../middleware/auth.js";
+import { requireAuth, requirePermission, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 
 const router = Router();
@@ -53,6 +53,7 @@ function mapAdSiteToAdId(adSite: any): any {
 router.get(
     "/",
     requireAuth,
+    requirePermission("adId.read"),
     [
         query("advertiserId").optional().isInt().toInt(),
         query("adOrderId").optional().isInt().toInt(),
@@ -103,6 +104,7 @@ router.get(
 router.get(
     "/:id",
     requireAuth,
+    requirePermission("adId.read"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {
@@ -133,6 +135,7 @@ router.get(
 router.post(
     "/",
     requireAuth,
+    requirePermission("adId.create"),
     [
         body("advertiserId").notEmpty().withMessage("advertiserId is required").isInt(),
         body("adOrderId").notEmpty().withMessage("adOrderId is required").isInt(),
@@ -216,6 +219,7 @@ router.post(
 router.put(
     "/:id",
     requireAuth,
+    requirePermission("adId.update"),
     [
         param("id").isInt().toInt(),
         body("adOrderId").optional().isInt(),
@@ -294,6 +298,7 @@ router.put(
 router.delete(
     "/:id",
     requireAuth,
+    requirePermission("adId.delete"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {

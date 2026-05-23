@@ -60,7 +60,7 @@ export function Sidebar() {
   return (
     <nav id="sidebar">
       <div className="sb-logo">
-        <div className="sb-logo-icon">🦑</div>
+        <div className="sb-logo-icon"><img src="/logo.jpg" alt="KrakenOcean logo" /></div>
         <div className="sb-logo-name">KrakenOcean</div>
       </div>
       <div className="sb-nav">

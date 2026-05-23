@@ -13,7 +13,7 @@
 import { Router, Request, Response } from "express";
 import { body, param, validationResult } from "express-validator";
 import prisma from "../../prisma.js";
-import { requireAuth, AuthRequest } from "../../middleware/auth.js";
+import { requireAuth, requirePermission, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 import {
     mapUpstreamToAdvertiser,
@@ -38,6 +38,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/",
     requireAuth,
+    requirePermission("advertiser.read"),
     async (_req: Request, res: Response) => {
         try {
             const upstreams = await prisma.upstream.findMany({
@@ -58,6 +59,7 @@ router.get(
 router.get(
     "/:id",
     requireAuth,
+    requirePermission("advertiser.read"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {
@@ -86,6 +88,7 @@ router.get(
 router.post(
     "/",
     requireAuth,
+    requirePermission("advertiser.create"),
     [
         body("name").notEmpty().withMessage("name is required").isLength({ max: 200 }),
         body("adTypeCode").notEmpty().withMessage("adTypeCode is required (no default)"),
@@ -148,6 +151,7 @@ router.post(
 router.put(
     "/:id",
     requireAuth,
+    requirePermission("advertiser.update"),
     [
         param("id").isInt().toInt(),
         body("name").optional().isLength({ max: 200 }),
@@ -221,6 +225,7 @@ router.put(
 router.delete(
     "/:id",
     requireAuth,
+    requirePermission("advertiser.delete"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {

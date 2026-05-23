@@ -14,7 +14,7 @@ import { Router, Request, Response } from "express";
 import { param, query, body, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth, AuthRequest } from "../../middleware/auth.js";
+import { requireAuth, requirePermission, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 import {
     mapDailyInputToMediaEntry,
@@ -44,6 +44,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/",
     requireAuth,
+    requirePermission("dataEntry.read"),
     [
         query("date").notEmpty().withMessage("date is required").isISO8601(),
         query("mediaId").optional().isInt().toInt(),
@@ -151,6 +152,7 @@ router.get(
 router.post(
     "/batch",
     requireAuth,
+    requirePermission("dataEntry.create"),
     [
         body("date").notEmpty().withMessage("date is required").isISO8601(),
         body("adTypeCode").notEmpty().withMessage("adTypeCode is required"),
@@ -238,6 +240,7 @@ router.post(
 router.post(
     "/confirm-batch",
     requireAuth,
+    requirePermission("dataEntry.confirm"),
     [
         body("ids").isArray({ min: 1 }).withMessage("ids must be a non-empty array"),
         body("ids.*").isInt().toInt().withMessage("all ids must be integers"),
@@ -281,6 +284,7 @@ router.post(
 router.put(
     "/:id/unconfirm",
     requireAuth,
+    requirePermission("dataEntry.update"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {

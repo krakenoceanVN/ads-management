@@ -6,8 +6,35 @@ import type { Permission, Role } from '../lib/bffTypes';
 
 const MODULES = ['user', 'role', 'advertiser', 'adOrder', 'adId', 'media', 'dataEntry', 'report', 'settlement', 'auditLog', 'system'];
 
+const ROLE_DESCRIPTIONS: Record<string, { zh: string; vi: string; en: string }> = {
+  SUPER_ADMIN: {
+    zh: '系统所有者，拥有全部权限，不可修改',
+    vi: 'Chủ sở hữu hệ thống, có tất cả quyền, không thể sửa đổi',
+    en: 'System owner, full access, cannot be modified',
+  },
+  ADMIN: {
+    zh: '系统管理员，管理大部分模块和用户',
+    vi: 'Quản trị viên, quản lý hầu hết các module và người dùng',
+    en: 'System administrator, manages most modules and users',
+  },
+  OPERATOR: {
+    zh: '运营人员，输入和确认数据，查看报表',
+    vi: 'Nhân viên vận hành, nhập và xác nhận dữ liệu, xem báo cáo',
+    en: 'Operator, enters and confirms data, views reports',
+  },
+  VIEWER: {
+    zh: '只读用户，可查看被允许的数据和报表',
+    vi: 'Người chỉ đọc, có thể xem dữ liệu và báo cáo được phép',
+    en: 'Read-only user, can view allowed data and reports',
+  },
+};
+
+function getRoleDescription(code: string, lang: 'zh' | 'vi' | 'en'): string {
+  return ROLE_DESCRIPTIONS[code]?.[lang] ?? '';
+}
+
 export function RoleManagement() {
-  const { t, can } = useAppContext();
+  const { t, can, lang: appLang } = useAppContext();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(false);
@@ -92,23 +119,35 @@ export function RoleManagement() {
             { key: 'id', label: 'ID' },
             { key: 'code', label: t('roleCode') },
             { key: 'name', label: t('roleName') },
+            {
+              key: 'name',
+              label: t('description'),
+              render: (r) => <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>{getRoleDescription(r.code, appLang as 'zh' | 'vi' | 'en')}</span>,
+            },
             { key: 'isSystem', label: 'System', render: (r) => r.isSystem ? '✓' : '—' },
             { key: '__count__', label: t('permissions'), render: () => null },
             {
               key: '__actions__',
               label: t('actions'),
-              render: (r) => (
-                <button
-                  className="btn-outline btn-xs"
-                  onClick={() => openEdit(r)}
-                  disabled={r.code === 'SUPER_ADMIN' || !canEdit}
-                >
-                  {t('edit')}
-                </button>
-              ),
+              render: (r) => {
+                if (r.code === 'SUPER_ADMIN') {
+                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>🔒 {t('locked')}</span>;
+                }
+                if (!canEdit) {
+                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>{t('noPermission')}</span>;
+                }
+                return (
+                  <button
+                    className="btn-outline btn-xs"
+                    onClick={() => openEdit(r)}
+                  >
+                    {t('edit')}
+                  </button>
+                );
+              },
             },
           ]}
-          data={roles}
+          data={roles.filter(r => !['MANAGER', 'EDITOR'].includes(r.code))}
           emptyText={loading ? '...' : t('search') + '...'}
         />
       </div>

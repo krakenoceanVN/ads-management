@@ -12,8 +12,12 @@ import type { Role, UserManagementUser, CreateUserInput, UpdateUserInput } from 
 
 type ModalMode = 'create' | 'edit' | 'resetPw' | null;
 
+async function disableUser(userId: number): Promise<void> {
+  await updateUser(userId, { status: 'inactive' });
+}
+
 export function UserManagement() {
-  const { t, can } = useAppContext();
+  const { t, can, currentUser } = useAppContext();
   const [rows, setRows] = useState<UserManagementUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
@@ -122,6 +126,7 @@ export function UserManagement() {
   const canCreate = can('user.create');
   const canEdit = can('user.update');
   const canResetPw = can('user.resetPassword');
+  const canDisable = can('user.disable');
 
   return (
     <div className="page active">
@@ -143,12 +148,39 @@ export function UserManagement() {
             {
               key: '__actions__',
               label: t('actions'),
-              render: (r) => (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {canEdit && <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>}
-                  {canResetPw && <button className="btn-outline btn-xs" onClick={() => openResetPw(r)}>{t('resetPassword')}</button>}
-                </div>
-              ),
+              render: (r) => {
+                const isSelf = r.id === currentUser?.id;
+                if (!canEdit && !canResetPw && !canDisable) {
+                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>{t('noPermission')}</span>;
+                }
+                return (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {canEdit && <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>}
+                    {canResetPw && <button className="btn-outline btn-xs" onClick={() => openResetPw(r)}>{t('resetPassword')}</button>}
+                    {canDisable && r.status === 'active' && !isSelf && (
+                      <button
+                        className="btn-outline btn-xs"
+                        style={{ color: 'var(--danger)' }}
+                        onClick={async () => {
+                          if (!window.confirm(t('confirmDisable') + '?')) return;
+                          setSaving(true);
+                          try {
+                            await disableUser(r.id);
+                            void loadUsers();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : t('errorOccurred'));
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      >{t('disable')}</button>
+                    )}
+                    {canDisable && r.status === 'active' && isSelf && (
+                      <span style={{ color: 'var(--text-sub)', fontSize: '11px' }}>{t('cannotDisableSelf')}</span>
+                    )}
+                  </div>
+                );
+              },
             },
           ]}
           data={rows}
@@ -206,7 +238,7 @@ export function UserManagement() {
                   value={formData.roleId}
                   onChange={e => setFormData(prev => ({ ...prev, roleId: Number(e.target.value) }))}
                 >
-                  {roles.map(r => (
+                  {roles.filter(r => !['MANAGER', 'EDITOR'].includes(r.code)).map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>

@@ -12,7 +12,7 @@ import { Router, Request, Response } from "express";
 import { query, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { AdTypeCode } from "../../types/index.js";
 import { getBusinessDayRange, getBusinessMonthRange, getBusinessDateRange, getDaysInMonth, getDaysInRange } from "../../utils/date.js";
 import { calculateCostBreakdown, calculateCostBreakdownMonthly } from "../../services/mlPayout.service.js";
@@ -38,6 +38,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/advertisers",
     requireAuth,
+    requirePermission("report.read"),
     [
         query("date").optional().isISO8601(),
         query("startDate").optional().isISO8601(),
@@ -140,6 +141,7 @@ router.get(
 router.get(
     "/media",
     requireAuth,
+    requirePermission("report.read"),
     [
         query("date").optional().isISO8601(),
         query("startDate").optional().isISO8601(),
@@ -251,6 +253,7 @@ router.get(
 router.get(
     "/total-profit",
     requireAuth,
+    requirePermission("report.read"),
     [
         query("date").optional().isISO8601(),
         query("startDate").optional().isISO8601(),
@@ -443,6 +446,7 @@ router.get(
 router.get(
     "/order-profit",
     requireAuth,
+    requirePermission("report.read"),
     [
         query("date").optional().isISO8601(),
         query("startDate").optional().isISO8601(),

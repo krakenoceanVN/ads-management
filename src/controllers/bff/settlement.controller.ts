@@ -11,7 +11,7 @@ import { Router, Request, Response } from "express";
 import { query, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { getBusinessMonthRange } from "../../utils/date.js";
 
 const router = Router();
@@ -33,6 +33,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/advertisers",
     requireAuth,
+    requirePermission("settlement.read"),
     [
         query("period").notEmpty().withMessage("period is required (YYYY-MM)"),
         query("advertiserId").optional().isInt().toInt(),
@@ -132,6 +133,7 @@ router.get(
 router.get(
     "/media",
     requireAuth,
+    requirePermission("settlement.read"),
     [
         query("period").notEmpty().withMessage("period is required (YYYY-MM)"),
         query("mediaId").optional().isInt().toInt(),

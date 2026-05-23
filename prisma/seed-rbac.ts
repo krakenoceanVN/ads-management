@@ -30,20 +30,10 @@ async function main() {
     update: {},
     create: { code: 'ADMIN', name: 'Administrator', isSystem: true },
   })
-  const managerRole = await prisma.role.upsert({
-    where: { code: 'MANAGER' },
-    update: {},
-    create: { code: 'MANAGER', name: 'Manager', isSystem: true },
-  })
   const operatorRole = await prisma.role.upsert({
     where: { code: 'OPERATOR' },
     update: {},
     create: { code: 'OPERATOR', name: 'Operator', isSystem: true },
-  })
-  const editorRole = await prisma.role.upsert({
-    where: { code: 'EDITOR' },
-    update: {},
-    create: { code: 'EDITOR', name: 'Editor', isSystem: true },
   })
   const viewerRole = await prisma.role.upsert({
     where: { code: 'VIEWER' },
@@ -123,8 +113,8 @@ async function main() {
     { roleId: superAdminRole.id, permKeys: permissionDefs.map(p => p.key) },
     // ADMIN: all except system.config
     { roleId: adminRole.id, permKeys: permissionDefs.filter(p => p.key !== 'system.config').map(p => p.key) },
-    // MANAGER
-    { roleId: managerRole.id, permKeys: [
+    // OPERATOR: data entry + limited workflow
+    { roleId: operatorRole.id, permKeys: [
       'advertiser.read', 'advertiser.create', 'advertiser.update',
       'adOrder.read', 'adOrder.create', 'adOrder.update',
       'adId.read', 'adId.create', 'adId.update',
@@ -133,24 +123,6 @@ async function main() {
       'report.read', 'report.export',
       'settlement.read',
       'auditLog.read',
-    ]},
-    // OPERATOR
-    { roleId: operatorRole.id, permKeys: [
-      'advertiser.read',
-      'adOrder.read',
-      'adId.read',
-      'media.read',
-      'dataEntry.read', 'dataEntry.create', 'dataEntry.update',
-      'report.read', 'report.export',
-    ]},
-    // EDITOR
-    { roleId: editorRole.id, permKeys: [
-      'advertiser.read',
-      'adOrder.read',
-      'adId.read',
-      'media.read',
-      'dataEntry.read', 'dataEntry.create', 'dataEntry.update',
-      'report.read', 'report.export',
     ]},
     // VIEWER
     { roleId: viewerRole.id, permKeys: [
@@ -184,6 +156,26 @@ async function main() {
   if (adminUser && !adminUser.roleId) {
     await prisma.user.update({ where: { username: 'admin' }, data: { roleId: superAdminRole.id } })
     console.log('✓ admin user linked to SUPER_ADMIN')
+  }
+
+  // Migrate any MANAGER users to OPERATOR
+  const managerRoleData = await prisma.role.findUnique({ where: { code: 'MANAGER' } })
+  if (managerRoleData) {
+    await prisma.user.updateMany({
+      where: { roleId: managerRoleData.id },
+      data: { roleId: operatorRole.id },
+    })
+    console.log('✓ MANAGER users migrated to OPERATOR')
+  }
+
+  // Migrate any EDITOR users to OPERATOR
+  const editorRoleData = await prisma.role.findUnique({ where: { code: 'EDITOR' } })
+  if (editorRoleData) {
+    await prisma.user.updateMany({
+      where: { roleId: editorRoleData.id },
+      data: { roleId: operatorRole.id },
+    })
+    console.log('✓ EDITOR users migrated to OPERATOR')
   }
 
   const editorUser = await prisma.user.findUnique({ where: { username: 'editor' } })

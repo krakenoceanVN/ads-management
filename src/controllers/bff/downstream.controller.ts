@@ -15,7 +15,7 @@
 import { Router, Request, Response } from "express";
 import { query, param, validationResult } from "express-validator";
 import prisma from "../../prisma.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 
 const router = Router();
 
@@ -32,6 +32,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/",
     requireAuth,
+    requirePermission("media.read"),
     [
         query("adTypeCode").optional().isString(),
         query("status").optional().isIn(["active", "inactive"]),
@@ -80,6 +81,7 @@ router.get(
 router.get(
     "/:id",
     requireAuth,
+    requirePermission("media.read"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {

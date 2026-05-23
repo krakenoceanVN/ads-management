@@ -36,7 +36,7 @@ import { Router, Request, Response } from "express";
 import { body, param, query, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth, AuthRequest } from "../../middleware/auth.js";
+import { requireAuth, requirePermission, AuthRequest } from "../../middleware/auth.js";
 import { createOperationLog } from "../../services/operationLog.service.js";
 import {
     mapAdSitesToMediaIds,
@@ -59,6 +59,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
     "/",
     requireAuth,
+    requirePermission("media.read"),
     [
         query("mediaId").optional().isInt().toInt(),
         query("adTypeCode").optional().isString(),
@@ -118,6 +119,7 @@ router.get(
 router.get(
     "/:id",
     requireAuth,
+    requirePermission("media.read"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {
@@ -156,6 +158,7 @@ router.get(
 router.post(
     "/",
     requireAuth,
+    requirePermission("media.create"),
     [
         body("adSiteId").notEmpty().withMessage("adSiteId is required").isInt(),
         body("downstreamId").notEmpty().withMessage("downstreamId is required").isInt(),
@@ -265,6 +268,7 @@ router.post(
 router.put(
     "/:id",
     requireAuth,
+    requirePermission("media.update"),
     [
         param("id").isInt().toInt(),
         body("customPrice").optional({ nullable: true }).isNumeric(),
@@ -333,6 +337,7 @@ router.put(
 router.delete(
     "/:id",
     requireAuth,
+    requirePermission("media.delete"),
     [param("id").isInt().toInt()],
     handleValidation,
     async (req: Request, res: Response) => {

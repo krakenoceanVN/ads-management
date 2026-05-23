@@ -7,7 +7,7 @@ import { Router, Request, Response } from "express";
 import { query, validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 
 const router = Router();
 
@@ -27,6 +27,7 @@ const handleValidation = (req: Request, res: Response, next: Function) => {
 router.get(
   "/",
   requireAuth,
+  requirePermission("auditLog.read"),
   [
     query("startDate").optional().isISO8601(),
     query("endDate").optional().isISO8601(),

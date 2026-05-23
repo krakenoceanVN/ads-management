@@ -30,7 +30,7 @@ export function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
     <main className="login-page">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <div className="login-logo">K</div>
+          <div className="login-logo"><img src="/logo.jpg" alt="KrakenOcean logo" /></div>
           <div>
             <h1>KrakenOcean</h1>
             <p>Ads Management</p>

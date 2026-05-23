@@ -38,11 +38,20 @@ export function getBusinessDayRange(dateStr: string): { gte: Date; lt: Date } {
   }
 }
 
+/**
+ * Build a half-open date range [gte, lt) for a user-facing inclusive date range.
+ * e.g. startDate=2026-01-01, endDate=2026-01-31 → gte=2026-01-01 00:00, lt=2026-02-01 00:00
+ * This avoids midnight time-of-day bugs when endDate is stored as midnight.
+ */
+export function buildInclusiveDateRange(startDateStr: string, endDateStr: string): { gte: Date; lt: Date } {
+    return {
+        gte: getBusinessDayStart(startDateStr),
+        lt: new Date(getBusinessDayStart(endDateStr).getTime() + 24 * 60 * 60 * 1000),
+    };
+}
+
 export function getBusinessDateRange(startDateStr: string, endDateStr: string): { gte: Date; lt: Date } {
-  return {
-    gte: getBusinessDayStart(startDateStr),
-    lt: new Date(getBusinessDayStart(endDateStr).getTime() + 24 * 60 * 60 * 1000),
-  }
+    return buildInclusiveDateRange(startDateStr, endDateStr);
 }
 
 export function getBusinessMonthRange(year: number, month: number): { gte: Date; lt: Date } {

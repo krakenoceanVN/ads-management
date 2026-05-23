@@ -42,12 +42,15 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete }:
             <tr key={rowIndex}>
               {columns.map((c, colIndex) => {
                 if (c.key === '__no__') return <td key={colIndex} className="td-no">{rowIndex + 1}</td>;
-                if (c.key === '__actions__') return (
-                  <td key={colIndex}>
-                    {onEdit && <button className="action-btn" title={t('edit')} onClick={() => onEdit(row)}>✏️</button>}
-                    {onDelete && <button className="action-btn action-btn-delete" title={t('delete')} onClick={() => onDelete(row)}>🗑️</button>}
-                  </td>
-                );
+                if (c.key === '__actions__') {
+                  if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;
+                  return (
+                    <td key={colIndex}>
+                      {onEdit && <button className="action-btn" title={t('edit')} onClick={() => onEdit(row)}>✏️</button>}
+                      {onDelete && <button className="action-btn action-btn-delete" title={t('delete')} onClick={() => onDelete(row)}>🗑️</button>}
+                    </td>
+                  );
+                }
                 if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;
                 return <td key={colIndex}>{String((row as any)[c.key as any] || '')}</td>;
               })}

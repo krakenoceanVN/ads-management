@@ -34,27 +34,6 @@ const loginRateLimiter = (0, rateLimit_js_1.createMemoryRateLimiter)({
     },
     errorMessage: "Too many login attempts. Please try again later.",
 });
-function resolveUserRole(user) {
-    if (user.role === "VIEWER")
-        return "VIEWER";
-    if (user.permAdmin || user.role === "ADMIN")
-        return "ADMIN";
-    return "EDITOR";
-}
-function toUserPublic(user) {
-    const resolvedRole = resolveUserRole(user);
-    return {
-        id: user.id,
-        username: user.username,
-        role: resolvedRole,
-        perm_data_input: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataInput),
-        perm_data_confirm: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataConfirm),
-        perm_admin: resolvedRole === "ADMIN",
-        status: user.status,
-        last_login_at: user.lastLoginAt ?? undefined,
-        created_at: user.createdAt,
-    };
-}
 async function createAdSiteEvent(adSiteId, eventType, input = {}) {
     return prisma_js_1.default.adSiteEvent.create({
         data: {
@@ -1286,7 +1265,8 @@ router.get("/admin/downstream-rates", auth_js_1.requireAuth, [
             where.date = { ...where.date, gte: new Date(req.query.start_date) };
         }
         if (req.query.end_date) {
-            where.date = { ...where.date, lte: new Date(req.query.end_date) };
+            // end_date is inclusive — use lt(nextDay) to include the full day
+            where.date = { ...where.date, lt: (0, date_js_1.getBusinessDayRange)(req.query.end_date).lt };
         }
         const rates = await prisma_js_1.default.dailyDownstreamRate.findMany({
             where,
@@ -1306,18 +1286,49 @@ router.get("/admin/downstream-rates", auth_js_1.requireAuth, [
     }
 });
 // ============================================================
-// DELETE /api/users/:id
+// DELETE /api/users/:id — SOFT DISABLE only
 // ============================================================
-router.delete("/users/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
+router.delete("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("user.disable"), [(0, express_validator_1.param)("id").isInt().toInt()], handleValidation, async (req, res) => {
     try {
         const userId = Number(req.params.id);
-        const existing = await prisma_js_1.default.user.findUnique({ where: { id: userId } });
+        const existing = await prisma_js_1.default.user.findUnique({
+            where: { id: userId },
+            include: { roleRef: true },
+        });
         if (!existing) {
             res.status(404).json({ success: false, error: "User not found" });
             return;
         }
-        await prisma_js_1.default.user.delete({ where: { id: userId } });
-        res.json({ success: true, message: "User deleted" });
+        // Cannot disable self
+        if (req.user.id === userId) {
+            res.status(400).json({ success: false, error: "Cannot disable yourself" });
+            return;
+        }
+        // Cannot disable the last SUPER_ADMIN
+        if (existing.roleRef?.code === 'SUPER_ADMIN') {
+            const superAdminCount = await prisma_js_1.default.user.count({
+                where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+            });
+            if (superAdminCount <= 1) {
+                res.status(400).json({ success: false, error: "Cannot disable the last SUPER_ADMIN" });
+                return;
+            }
+        }
+        // Soft disable: set status = inactive
+        await prisma_js_1.default.user.update({
+            where: { id: userId },
+            data: { status: 'inactive' },
+        });
+        (0, operationLog_service_js_1.createOperationLog)({
+            userId: req.user.id,
+            username: req.user.username,
+            action: "DISABLE",
+            module: "User",
+            targetType: "User",
+            targetId: String(userId),
+            detail: `User ${existing.username} disabled`,
+        });
+        res.json({ success: true, message: "User disabled" });
     }
     catch (err) {
         console.error("DELETE /api/users/:id error:", err);
@@ -1551,7 +1562,7 @@ router.post("/downstream/:id/periods", auth_js_1.requireAuth, auth_js_1.requireW
 // ============================================================
 // GET /api/users
 // ============================================================
-router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("perm_admin"), async (_req, res) => {
+router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("user.read"), async (_req, res) => {
     try {
         const users = await prisma_js_1.default.user.findMany({
             select: {
@@ -1564,10 +1575,15 @@ router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("pe
                 status: true,
                 lastLoginAt: true,
                 createdAt: true,
+                roleRef: {
+                    include: {
+                        permissions: { include: { permission: true } },
+                    },
+                },
             },
             orderBy: { id: "asc" },
         });
-        res.json({ success: true, data: users.map(toUserPublic) });
+        res.json({ success: true, data: users.map(u => (0, auth_js_1.toUserPublic)(u, u.roleRef?.permissions.map(rp => rp.permission.key) ?? [])) });
     }
     catch (err) {
         console.error("GET /api/users error:", err);
@@ -1577,33 +1593,30 @@ router.get("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("pe
 // ============================================================
 // POST /api/users
 // ============================================================
-router.post("/users", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.post("/users", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("user.create"), [
     (0, express_validator_1.body)("username").notEmpty().withMessage("username required").isLength({ max: 100 }),
-    (0, express_validator_1.body)("password").notEmpty().withMessage("password required").isLength({ min: 6 }),
-    (0, express_validator_1.body)("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
-    (0, express_validator_1.body)("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
-    (0, express_validator_1.body)("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
-    (0, express_validator_1.body)("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
+    (0, express_validator_1.body)("password").notEmpty().withMessage("password required").isLength({ min: 8 }),
+    (0, express_validator_1.body)("roleId").isInt({ min: 1 }).toInt(),
 ], handleValidation, async (req, res) => {
     try {
-        const { username, password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body;
-        const normalizedRole = role;
-        const isViewerRole = normalizedRole === "VIEWER";
-        const isAdminRole = normalizedRole === "ADMIN";
+        const { username, password, roleId, status } = req.body;
         const existing = await prisma_js_1.default.user.findUnique({ where: { username } });
         if (existing) {
             res.status(409).json({ success: false, error: "Username already exists" });
+            return;
+        }
+        const role = await prisma_js_1.default.role.findUnique({ where: { id: roleId } });
+        if (!role) {
+            res.status(400).json({ success: false, error: "Invalid roleId" });
             return;
         }
         const passwordHash = await bcrypt_1.default.hash(password, 10);
         const user = await prisma_js_1.default.user.create({
             data: {
                 username,
-                passwordHash: passwordHash,
-                role: normalizedRole,
-                permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
-                permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
-                permAdmin: isAdminRole,
+                passwordHash,
+                role: role.code,
+                roleId,
                 status: status ?? "active",
             },
             select: {
@@ -1615,9 +1628,15 @@ router.post("/users", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
                 permAdmin: true,
                 status: true,
                 createdAt: true,
+                roleRef: {
+                    include: {
+                        permissions: { include: { permission: true } },
+                    },
+                },
             },
         });
-        res.status(201).json({ success: true, data: toUserPublic(user) });
+        const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? [];
+        res.status(201).json({ success: true, data: (0, auth_js_1.toUserPublic)(user, permissions) });
     }
     catch (err) {
         console.error("POST /api/users error:", err);
@@ -1627,33 +1646,66 @@ router.post("/users", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, a
 // ============================================================
 // PUT /api/users/:id
 // ============================================================
-router.put("/users/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0, auth_js_1.requirePermission)("perm_admin"), [
+router.put("/users/:id", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("user.update"), [
     (0, express_validator_1.param)("id").isInt().toInt(),
-    (0, express_validator_1.body)("password").optional().isLength({ min: 6 }),
-    (0, express_validator_1.body)("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
-    (0, express_validator_1.body)("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
-    (0, express_validator_1.body)("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
-    (0, express_validator_1.body)("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
-    (0, express_validator_1.body)("status").isIn(["active", "inactive"]),
+    (0, express_validator_1.body)("password").optional().isLength({ min: 8 }),
+    (0, express_validator_1.body)("roleId").optional({ nullable: true }).isInt({ min: 1 }).toInt(),
+    (0, express_validator_1.body)("status").optional().isIn(["active", "inactive"]),
 ], handleValidation, async (req, res) => {
     try {
         const userId = Number(req.params.id);
-        const { password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body;
-        const normalizedRole = role;
-        const isViewerRole = normalizedRole === "VIEWER";
-        const isAdminRole = normalizedRole === "ADMIN";
-        const existing = await prisma_js_1.default.user.findUnique({ where: { id: userId } });
+        const { password, roleId, status } = req.body;
+        const existing = await prisma_js_1.default.user.findUnique({
+            where: { id: userId },
+            include: { roleRef: true },
+        });
         if (!existing) {
             res.status(404).json({ success: false, error: "User not found" });
             return;
         }
-        const updateData = {
-            role: normalizedRole,
-            permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
-            permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
-            permAdmin: isAdminRole ? true : (isViewerRole ? false : Boolean(perm_admin)),
-            status,
-        };
+        // Self-protection: cannot modify self if you're the last SUPER_ADMIN
+        if (req.user.id === userId) {
+            const superAdminCount = await prisma_js_1.default.user.count({
+                where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+            });
+            if (superAdminCount <= 1 && existing.roleRef?.code === 'SUPER_ADMIN') {
+                res.status(400).json({ success: false, error: "Cannot modify the last SUPER_ADMIN" });
+                return;
+            }
+        }
+        // Check if trying to disable the last SUPER_ADMIN
+        if (status === 'inactive' && existing.roleRef?.code === 'SUPER_ADMIN') {
+            const superAdminCount = await prisma_js_1.default.user.count({
+                where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+            });
+            if (superAdminCount <= 1) {
+                res.status(400).json({ success: false, error: "Cannot disable the last SUPER_ADMIN" });
+                return;
+            }
+        }
+        // Check if demoting the last SUPER_ADMIN to another role
+        if (roleId !== undefined && existing.roleRef?.code === 'SUPER_ADMIN') {
+            const superAdminCount = await prisma_js_1.default.user.count({
+                where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+            });
+            if (superAdminCount <= 1) {
+                res.status(400).json({ success: false, error: "Cannot demote the last SUPER_ADMIN" });
+                return;
+            }
+        }
+        const updateData = {};
+        if (roleId !== undefined) {
+            const role = await prisma_js_1.default.role.findUnique({ where: { id: roleId } });
+            if (!role) {
+                res.status(400).json({ success: false, error: "Invalid roleId" });
+                return;
+            }
+            updateData.role = role.code;
+            updateData.roleId = roleId;
+        }
+        if (status !== undefined) {
+            updateData.status = status;
+        }
         if (password) {
             updateData.passwordHash = await bcrypt_1.default.hash(password, 10);
         }
@@ -1670,9 +1722,15 @@ router.put("/users/:id", auth_js_1.requireAuth, auth_js_1.requireWriteAccess, (0
                 status: true,
                 lastLoginAt: true,
                 createdAt: true,
+                roleRef: {
+                    include: {
+                        permissions: { include: { permission: true } },
+                    },
+                },
             },
         });
-        res.json({ success: true, data: toUserPublic(user) });
+        const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? [];
+        res.json({ success: true, data: (0, auth_js_1.toUserPublic)(user, permissions) });
     }
     catch (err) {
         console.error("PUT /api/users/:id error:", err);
@@ -1688,7 +1746,16 @@ router.post("/auth/login", [
 ], handleValidation, loginRateLimiter.middleware, async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await prisma_js_1.default.user.findUnique({ where: { username } });
+        const user = await prisma_js_1.default.user.findUnique({
+            where: { username },
+            include: {
+                roleRef: {
+                    include: {
+                        permissions: { include: { permission: true } },
+                    },
+                },
+            },
+        });
         if (!user || user.status === "inactive") {
             (0, operationLog_service_js_1.createOperationLog)({
                 userId: null,
@@ -1722,17 +1789,8 @@ router.post("/auth/login", [
             where: { id: user.id },
             data: { lastLoginAt: new Date() },
         });
-        const payload = {
-            id: user.id,
-            username: user.username,
-            role: resolveUserRole(user),
-            perm_data_input: user.permDataInput,
-            perm_data_confirm: user.permDataConfirm,
-            perm_admin: user.permAdmin,
-            status: user.status,
-            last_login_at: user.lastLoginAt ?? undefined,
-            created_at: user.createdAt,
-        };
+        const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? [];
+        const payload = (0, auth_js_1.toUserPublic)(user, permissions);
         const token = jsonwebtoken_1.default.sign(payload, (0, env_js_1.getRequiredEnv)("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN });
         (0, operationLog_service_js_1.createOperationLog)({
             userId: user.id,
@@ -1767,16 +1825,139 @@ router.get("/auth/me", auth_js_1.requireAuth, async (req, res) => {
                 status: true,
                 lastLoginAt: true,
                 createdAt: true,
+                roleRef: {
+                    include: {
+                        permissions: { include: { permission: true } },
+                    },
+                },
             },
         });
         if (!user) {
             res.status(404).json({ success: false, error: "User not found" });
             return;
         }
-        res.json({ success: true, data: toUserPublic(user) });
+        const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? [];
+        res.json({ success: true, data: (0, auth_js_1.toUserPublic)(user, permissions) });
     }
     catch (err) {
         console.error("GET /api/auth/me error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// GET /api/roles
+// ============================================================
+router.get("/roles", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("role.read"), async (_req, res) => {
+    try {
+        const roles = await prisma_js_1.default.role.findMany({
+            include: {
+                permissions: { include: { permission: true } },
+            },
+            orderBy: { id: "asc" },
+        });
+        res.json({ success: true, data: roles });
+    }
+    catch (err) {
+        console.error("GET /api/roles error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// GET /api/permissions
+// ============================================================
+router.get("/permissions", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("permission.read"), async (_req, res) => {
+    try {
+        const permissions = await prisma_js_1.default.permission.findMany({
+            orderBy: [{ module: "asc" }, { action: "asc" }],
+        });
+        res.json({ success: true, data: permissions });
+    }
+    catch (err) {
+        console.error("GET /api/permissions error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// PUT /api/roles/:id/permissions
+// ============================================================
+router.put("/roles/:id/permissions", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("role.update"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("permissionKeys").isArray(),
+    (0, express_validator_1.body)("permissionKeys.*").isString(),
+], handleValidation, async (req, res) => {
+    try {
+        const roleId = Number(req.params.id);
+        const { permissionKeys } = req.body;
+        const role = await prisma_js_1.default.role.findUnique({ where: { id: roleId } });
+        if (!role) {
+            res.status(404).json({ success: false, error: "Role not found" });
+            return;
+        }
+        // Only block SUPER_ADMIN from modification
+        if (role.code === 'SUPER_ADMIN') {
+            res.status(400).json({ success: false, error: "Cannot modify SUPER_ADMIN role permissions" });
+            return;
+        }
+        // Resolve permission keys to IDs
+        const permissions = await prisma_js_1.default.permission.findMany({
+            where: { key: { in: permissionKeys } },
+        });
+        // Transaction: delete existing and recreate with resolved IDs
+        await prisma_js_1.default.$transaction([
+            prisma_js_1.default.rolePermission.deleteMany({ where: { roleId } }),
+            ...permissions.map(p => prisma_js_1.default.rolePermission.create({
+                data: { roleId, permissionId: p.id },
+            })),
+        ]);
+        const updated = await prisma_js_1.default.role.findUnique({
+            where: { id: roleId },
+            include: { permissions: { include: { permission: true } } },
+        });
+        res.json({ success: true, data: updated });
+    }
+    catch (err) {
+        console.error("PUT /api/roles/:id/permissions error:", err);
+        res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+// ============================================================
+// POST /api/users/:id/reset-password
+// ============================================================
+router.post("/users/:id/reset-password", auth_js_1.requireAuth, (0, auth_js_1.requirePermission)("user.resetPassword"), [
+    (0, express_validator_1.param)("id").isInt().toInt(),
+    (0, express_validator_1.body)("password").notEmpty().isLength({ min: 8 }),
+], handleValidation, async (req, res) => {
+    try {
+        const userId = Number(req.params.id);
+        const { password } = req.body;
+        const user = await prisma_js_1.default.user.findUnique({
+            where: { id: userId },
+            include: { roleRef: true },
+        });
+        if (!user) {
+            res.status(404).json({ success: false, error: "User not found" });
+            return;
+        }
+        // Note: reset-password is safe — does not remove privileges. SUPER_ADMIN can always reset own password.
+        // Self-protection for demotion/deletion is handled in PUT /api/users/:id and DELETE.
+        const passwordHash = await bcrypt_1.default.hash(password, 10);
+        await prisma_js_1.default.user.update({
+            where: { id: userId },
+            data: { passwordHash },
+        });
+        (0, operationLog_service_js_1.createOperationLog)({
+            userId: req.user.id,
+            username: req.user.username,
+            action: "RESET_PASSWORD",
+            module: "User",
+            targetType: "User",
+            targetId: String(userId),
+            detail: `Password reset for user ${user.username}`,
+        });
+        res.json({ success: true, message: "Password updated successfully" });
+    }
+    catch (err) {
+        console.error("POST /api/users/:id/reset-password error:", err);
         res.status(500).json({ success: false, error: "Internal server error" });
     }
 });

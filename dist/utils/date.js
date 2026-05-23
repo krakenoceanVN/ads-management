@@ -5,6 +5,7 @@ exports.formatBusinessDate = formatBusinessDate;
 exports.getBusinessDayStart = getBusinessDayStart;
 exports.getBusinessDateAtHour = getBusinessDateAtHour;
 exports.getBusinessDayRange = getBusinessDayRange;
+exports.buildInclusiveDateRange = buildInclusiveDateRange;
 exports.getBusinessDateRange = getBusinessDateRange;
 exports.getBusinessMonthRange = getBusinessMonthRange;
 exports.getDaysInMonth = getDaysInMonth;
@@ -42,11 +43,19 @@ function getBusinessDayRange(dateStr) {
         lt: new Date(Date.UTC(year, month - 1, day + 1, -BUSINESS_UTC_OFFSET_HOURS, 0, 0)),
     };
 }
-function getBusinessDateRange(startDateStr, endDateStr) {
+/**
+ * Build a half-open date range [gte, lt) for a user-facing inclusive date range.
+ * e.g. startDate=2026-01-01, endDate=2026-01-31 → gte=2026-01-01 00:00, lt=2026-02-01 00:00
+ * This avoids midnight time-of-day bugs when endDate is stored as midnight.
+ */
+function buildInclusiveDateRange(startDateStr, endDateStr) {
     return {
         gte: getBusinessDayStart(startDateStr),
         lt: new Date(getBusinessDayStart(endDateStr).getTime() + 24 * 60 * 60 * 1000),
     };
+}
+function getBusinessDateRange(startDateStr, endDateStr) {
+    return buildInclusiveDateRange(startDateStr, endDateStr);
 }
 function getBusinessMonthRange(year, month) {
     const startDate = `${year}-${String(month).padStart(2, "0")}-01`;

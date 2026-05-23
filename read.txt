@@ -1,0 +1,9 @@
+Backend
+npx prisma generate
+npx prisma db push
+npm run seed:rbac
+npm run dev
+
+Frontend:
+cd frontend
+npm run dev

@@ -123,26 +123,39 @@ export function UserManagement() {
     <span className={`status-badge ${status === 'active' ? 'active' : 'inactive'}`}>{t(status)}</span>
   );
 
+  const roleBadge = (roleName: string, roleCode: string) => {
+    const code = roleCode.toLowerCase();
+    let cls = 'role-badge default';
+    if (code === 'super_admin') cls = 'role-badge super_admin';
+    else if (code === 'admin') cls = 'role-badge admin';
+    else if (code === 'operator') cls = 'role-badge operator';
+    else if (code === 'viewer') cls = 'role-badge viewer';
+    return <span className={cls}>{roleName}</span>;
+  };
+
   const canCreate = can('user.create');
   const canEdit = can('user.update');
   const canResetPw = can('user.resetPassword');
   const canDisable = can('user.disable');
 
   return (
-    <div className="page active">
-      <div className="page-header">
-        <h1 className="page-title">{t('pUserManagement')}</h1>
+    <div className="page active user-mgmt-page">
+      <div className="page-header user-mgmt-header">
+        <div className="user-mgmt-title-wrap">
+          <h1 className="page-title">{t('pUserManagement')}</h1>
+          <span className="user-count-badge">{rows.length} {t('user') || 'users'}</span>
+        </div>
         {canCreate && (
           <button className="btn-primary btn-sm" onClick={openCreate}>{t('new')}</button>
         )}
       </div>
-      <div className="card">
-        {error && <div className="form-error" style={{ margin: '8px 0' }}>{error}</div>}
+      <div className="card user-card">
+        {error && <div className="user-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
         <Table
           columns={[
             { key: 'id', label: 'ID' },
-            { key: 'username', label: t('username') },
-            { key: 'roleName', label: t('role') },
+            { key: 'username', label: t('username'), render: (r) => <span style={{ fontWeight: 600 }}>{r.username}</span> },
+            { key: 'roleName', label: t('role'), render: (r) => roleBadge(r.roleName ?? r.role, r.roleCode ?? '') },
             { key: 'status', label: t('status'), render: (r) => statusBadge(r.status) },
             { key: 'created_at', label: t('createdAt'), render: (r) => new Date(r.created_at).toLocaleDateString() },
             {
@@ -151,16 +164,16 @@ export function UserManagement() {
               render: (r) => {
                 const isSelf = r.id === currentUser?.id;
                 if (!canEdit && !canResetPw && !canDisable) {
-                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>{t('noPermission')}</span>;
+                  return <span className="no-perm-text">{t('noPermission')}</span>;
                 }
                 return (
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="admin-actions-cell">
                     {canEdit && <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>}
                     {canResetPw && <button className="btn-outline btn-xs" onClick={() => openResetPw(r)}>{t('resetPassword')}</button>}
                     {canDisable && r.status === 'active' && !isSelf && (
                       <button
                         className="btn-outline btn-xs"
-                        style={{ color: 'var(--danger)' }}
+                        style={{ color: 'var(--color-danger)' }}
                         onClick={async () => {
                           if (!window.confirm(t('confirmDisable') + '?')) return;
                           setSaving(true);
@@ -176,7 +189,7 @@ export function UserManagement() {
                       >{t('disable')}</button>
                     )}
                     {canDisable && r.status === 'active' && isSelf && (
-                      <span style={{ color: 'var(--text-sub)', fontSize: '11px' }}>{t('cannotDisableSelf')}</span>
+                      <span className="admin-locked-text">🔒 {t('cannotDisableSelf')}</span>
                     )}
                   </div>
                 );

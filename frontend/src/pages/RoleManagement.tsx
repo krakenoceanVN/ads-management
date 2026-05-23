@@ -108,33 +108,34 @@ export function RoleManagement() {
   const canEdit = can('role.update');
 
   return (
-    <div className="page active">
-      <div className="page-header">
-        <h1 className="page-title">{t('pRoleManagement')}</h1>
+    <div className="page active role-mgmt-page">
+      <div className="page-header role-mgmt-header">
+        <div className="role-mgmt-title-wrap">
+          <h1 className="page-title">{t('pRoleManagement')}</h1>
+        </div>
       </div>
-      <div className="card">
-        {error && <div className="form-error" style={{ margin: '8px 0' }}>{error}</div>}
+      <div className="card role-card">
+        {error && <div className="user-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
         <Table
           columns={[
             { key: 'id', label: 'ID' },
-            { key: 'code', label: t('roleCode') },
+            { key: 'code', label: t('roleCode'), render: (r) => <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700 }}>{r.code}</span> },
             { key: 'name', label: t('roleName') },
             {
               key: 'name',
               label: t('description'),
-              render: (r) => <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>{getRoleDescription(r.code, appLang as 'zh' | 'vi' | 'en')}</span>,
+              render: (r) => <span className="role-desc-text">{getRoleDescription(r.code, appLang as 'zh' | 'vi' | 'en')}</span>,
             },
-            { key: 'isSystem', label: 'System', render: (r) => r.isSystem ? '✓' : '—' },
-            { key: '__count__', label: t('permissions'), render: () => null },
+            { key: 'isSystem', label: 'System', render: (r) => r.isSystem ? <span style={{ color: 'var(--color-success)' }}>✓</span> : <span style={{ color: 'var(--text-muted)' }}>—</span> },
             {
               key: '__actions__',
               label: t('actions'),
               render: (r) => {
                 if (r.code === 'SUPER_ADMIN') {
-                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>🔒 {t('locked')}</span>;
+                  return <span className="admin-locked-text">🔒 {t('locked')}</span>;
                 }
                 if (!canEdit) {
-                  return <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>{t('noPermission')}</span>;
+                  return <span className="no-perm-text">{t('noPermission')}</span>;
                 }
                 return (
                   <button
@@ -160,26 +161,18 @@ export function RoleManagement() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-              {saveMsg && <div className="form-info" style={{ marginBottom: '8px' }}>{saveMsg}</div>}
+              {saveMsg && <div className="form-info">{saveMsg}</div>}
               {MODULES.filter(mod => permByModule[mod]?.length > 0).map(mod => (
-                <div key={mod} style={{ marginBottom: '16px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '6px', textTransform: 'capitalize' }}>{mod}</div>
+                <div key={mod} className="perm-module">
+                  <div className="perm-module-header">
+                    <span className="perm-module-name">{mod}</span>
+                    <span className="perm-module-count">{permByModule[mod].length}</span>
+                  </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {permByModule[mod].map(p => (
                       <label
                         key={p.key}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          border: '1px solid var(--border)',
-                          cursor: editRole.code === 'SUPER_ADMIN' ? 'not-allowed' : 'pointer',
-                          opacity: editRole.code === 'SUPER_ADMIN' ? 0.5 : 1,
-                          background: selectedPermKeys.has(p.key) ? 'var(--primary-btn)' : 'transparent',
-                          color: selectedPermKeys.has(p.key) ? '#fff' : 'inherit',
-                        }}
+                        className={`perm-chip ${selectedPermKeys.has(p.key) ? 'selected' : ''} ${editRole.code === 'SUPER_ADMIN' ? 'locked' : ''}`}
                       >
                         <input
                           type="checkbox"
@@ -187,7 +180,7 @@ export function RoleManagement() {
                           onChange={() => togglePerm(p.key)}
                           disabled={editRole.code === 'SUPER_ADMIN'}
                         />
-                        <span style={{ fontSize: '12px' }}>{permLabel(p)}</span>
+                        <span className="perm-chip-label">{permLabel(p)}</span>
                       </label>
                     ))}
                   </div>

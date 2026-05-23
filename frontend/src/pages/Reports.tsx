@@ -192,61 +192,43 @@ function ReportDateRangeField({
   onStartChange,
   onEndChange,
   placeholder,
+  validation,
+  onClear,
 }: {
   startValue: string;
   endValue: string;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
   placeholder: string;
+  validation?: string;
+  onClear?: () => void;
 }) {
-  const startRef = React.useRef<HTMLInputElement>(null);
-  const endRef = React.useRef<HTMLInputElement>(null);
-
-  const openStartPicker = () => {
-    const input = startRef.current;
-    if (!input) return;
-    input.focus();
-    try {
-      (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-    } catch {}
-  };
-
-  const openEndPicker = () => {
-    const input = endRef.current;
-    if (!input) return;
-    input.focus();
-    try {
-      (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-    } catch {}
-  };
-
-  const label = startValue && endValue ? `${startValue} — ${endValue}` : placeholder;
-
   return (
-    <div className="report-date-range-field" onClick={openStartPicker}>
-      <span className={`report-date-text ${startValue && endValue ? '' : 'placeholder'}`}>{label}</span>
-      <CalendarDays className="report-date-icon" size={15} strokeWidth={1.8} />
+    <div className="report-date-range-field">
+      <span className="report-date-range-label">{placeholder}</span>
       <div className="report-date-range-inputs">
         <input
-          ref={startRef}
           type="date"
-          className="report-date-native"
           value={startValue}
           aria-label={`${placeholder} start`}
           onChange={event => onStartChange(event.target.value)}
-          onClick={e => e.stopPropagation()}
         />
         <span className="report-date-range-sep">—</span>
         <input
-          ref={endRef}
           type="date"
-          className="report-date-native"
           value={endValue}
           aria-label={`${placeholder} end`}
           onChange={event => onEndChange(event.target.value)}
-          onClick={e => e.stopPropagation()}
         />
       </div>
+      {onClear && (startValue || endValue) && (
+        <button type="button" className="report-date-range-clear" onClick={onClear} title="Clear dates">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      )}
+      {validation && (
+        <span className="report-date-range-validation">{validation}</span>
+      )}
     </div>
   );
 }
@@ -300,8 +282,17 @@ export function TotalProfit() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  const dateValidation = startDate && endDate && startDate > endDate
+    ? 'Từ ngày không được lớn hơn Đến ngày'
+    : undefined;
+
+  const handleClearDates = () => {
+    setStartDate('');
+    setEndDate('');
+  };
+
   React.useEffect(() => {
-    if (!startDate || !endDate) {
+    if (!startDate || !endDate || dateValidation) {
       setRows([]);
       return;
     }
@@ -321,7 +312,7 @@ export function TotalProfit() {
     return () => {
       cancelled = true;
     };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, dateValidation]);
 
   const totalRow = rows.find(row => row.date.endsWith('-total'));
   const dailyRows = rows.filter(row => !row.date.endsWith('-total'));
@@ -355,6 +346,8 @@ export function TotalProfit() {
               onStartChange={setStartDate}
               onEndChange={setEndDate}
               placeholder={t('date')}
+              validation={dateValidation}
+              onClear={handleClearDates}
             />
           </div>
           <div className="report-toolbar-right">
@@ -425,8 +418,17 @@ export function OrderProfit() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  const dateValidation = startDate && endDate && startDate > endDate
+    ? 'Từ ngày không được lớn hơn Đến ngày'
+    : undefined;
+
+  const handleClearDates = () => {
+    setStartDate('');
+    setEndDate('');
+  };
+
   React.useEffect(() => {
-    if (!startDate || !endDate) {
+    if (!startDate || !endDate || dateValidation) {
       setRows([]);
       return;
     }
@@ -446,7 +448,7 @@ export function OrderProfit() {
     return () => {
       cancelled = true;
     };
-  }, [startDate, endDate, business]);
+  }, [startDate, endDate, business, dateValidation]);
 
   const visibleRows = rows.filter(row =>
     matchesLocalized(displayName, search, [row.advertiser, row.adTypeCode, row.adTypeName])
@@ -474,6 +476,8 @@ export function OrderProfit() {
               onStartChange={setStartDate}
               onEndChange={setEndDate}
               placeholder={t('date')}
+              validation={dateValidation}
+              onClear={handleClearDates}
             />
           </div>
           <div className="report-toolbar-right">
@@ -541,6 +545,10 @@ export function AdvQuery() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  const dateValidation = filters.startDate && filters.endDate && filters.startDate > filters.endDate
+    ? 'Từ ngày không được lớn hơn Đến ngày'
+    : undefined;
+
   // Use ref to keep latest rows available for deriving filter params
   // without causing unnecessary effect re-runs
   const rowsRef = React.useRef<AdvertiserEntryRow[]>([]);
@@ -573,7 +581,7 @@ export function AdvQuery() {
   }, [getReportParams]);
 
   React.useEffect(() => {
-    if (!filters.startDate || !filters.endDate) {
+    if (!filters.startDate || !filters.endDate || dateValidation) {
       setRows([]);
       return;
     }
@@ -593,7 +601,7 @@ export function AdvQuery() {
     return () => {
       cancelled = true;
     };
-  }, [loadAdvQueryRows]);
+  }, [loadAdvQueryRows, dateValidation]);
 
   const orderCodeForAdvRow = (row: AdvertiserEntryRow) => row.adOrderCode ?? row.adOrder;
 
@@ -625,8 +633,11 @@ export function AdvQuery() {
 
   const update = (key: keyof typeof filters, value: string) => setFilters(prev => {
     if (key === 'business') return { ...prev, business: value, advertiser: '', adOrder: '', adId: '', type: '', rate: '' };
+    if (key === 'startDate' || key === 'endDate') return { ...prev, [key]: value };
     return { ...prev, [key]: value };
   });
+
+  const handleClearDates = () => setFilters(prev => ({ ...prev, startDate: '', endDate: '' }));
 
   return (
     <div className="page active">
@@ -640,6 +651,8 @@ export function AdvQuery() {
               onStartChange={value => update('startDate', value)}
               onEndChange={value => update('endDate', value)}
               placeholder={t('date')}
+              validation={dateValidation}
+              onClear={handleClearDates}
             />
           </div>
           <div className="report-toolbar-right">
@@ -729,6 +742,10 @@ export function MediaQuery() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  const dateValidation = filters.startDate && filters.endDate && filters.startDate > filters.endDate
+    ? 'Từ ngày không được lớn hơn Đến ngày'
+    : undefined;
+
   // Use ref to keep latest rows available for deriving filter params
   // without causing unnecessary effect re-runs
   const rowsRef = React.useRef<MediaEntryRow[]>([]);
@@ -761,7 +778,7 @@ export function MediaQuery() {
   }, [getReportParams]);
 
   React.useEffect(() => {
-    if (!filters.startDate || !filters.endDate) {
+    if (!filters.startDate || !filters.endDate || dateValidation) {
       setRows([]);
       return;
     }
@@ -781,7 +798,7 @@ export function MediaQuery() {
     return () => {
       cancelled = true;
     };
-  }, [loadMediaQueryRows]);
+  }, [loadMediaQueryRows, dateValidation]);
 
   const orderCodeForMediaRow = (row: MediaEntryRow) => row.mediaAdOrderCode ?? row.mediaAdOrder;
 
@@ -817,8 +834,11 @@ export function MediaQuery() {
 
   const update = (key: keyof typeof filters, value: string) => setFilters(prev => {
     if (key === 'business') return { ...prev, business: value, media: '', mediaAdOrder: '', mediaId: '', type: '', rate: '', shareRatio: '' };
+    if (key === 'startDate' || key === 'endDate') return { ...prev, [key]: value };
     return { ...prev, [key]: value };
   });
+
+  const handleClearDates = () => setFilters(prev => ({ ...prev, startDate: '', endDate: '' }));
 
   return (
     <div className="page active">
@@ -832,6 +852,8 @@ export function MediaQuery() {
               onStartChange={value => update('startDate', value)}
               onEndChange={value => update('endDate', value)}
               placeholder={t('date')}
+              validation={dateValidation}
+              onClear={handleClearDates}
             />
           </div>
           <div className="report-toolbar-right">

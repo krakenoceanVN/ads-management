@@ -104,20 +104,34 @@ export function AdvSettlement() {
   ];
 
   return (
-    <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pAdvSettlement')}</h1></div>
-      <div className="card">
-        <div className="report-filters">
-          <input type="month" className="search-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
-          <select className="filter-select" value={advertiserId} onChange={event => setAdvertiserId(event.target.value)}>
-            <option value="">{t('selectAdvertiser')}</option>
-            {advertisers.map(advertiser => <option key={advertiser.id} value={advertiser.id}>{displayName(advertiser.name)}</option>)}
-          </select>
-          <button className="btn-primary" onClick={loadRows}>{t('query')}</button>
-          <button className="btn-outline" onClick={() => downloadCsv('广告主结算单.csv', columns, visibleRows)}>{t('export')}</button>
+    <div className="page active settlement-page">
+      <div className="page-header settlement-page-header">
+        <div className="settlement-page-title-wrap">
+          <h1 className="page-title">{t('pAdvSettlement')}</h1>
+          <span className="settlement-period-badge">{period || '--'}</span>
         </div>
-        {error && <div className="form-error">{error}</div>}
-        {loading ? <div className="empty-state"><div className="empty-state-text">Loading...</div></div> : (
+      </div>
+      <div className="card settlement-card">
+        <div className="report-filters settlement-toolbar">
+          <div className="settlement-toolbar-left">
+            <input type="month" className="search-input settlement-period-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
+            <select className="filter-select settlement-select" value={advertiserId} onChange={event => setAdvertiserId(event.target.value)}>
+              <option value="">{t('selectAdvertiser')}</option>
+              {advertisers.map(advertiser => <option key={advertiser.id} value={advertiser.id}>{displayName(advertiser.name)}</option>)}
+            </select>
+            <button className="btn-primary settlement-query-btn" onClick={loadRows}>{t('query')}</button>
+          </div>
+          <div className="report-filter-spacer" />
+          <div className="settlement-toolbar-right">
+            <button className="btn-outline settlement-export-btn" onClick={() => downloadCsv('广告主结算单.csv', columns, visibleRows)}>{t('export')}</button>
+          </div>
+        </div>
+        {error && <div className="settlement-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {loading ? (
+          <div className="entry-loading-row"><span className="entry-loading-icon" aria-hidden="true" /><span>Đang tải...</span></div>
+        ) : visibleRows.length === 0 ? (
+          <div className="entry-empty-row"><span>Không có dữ liệu</span></div>
+        ) : (
           <Table
             columns={[
               { key: 'period', label: t('period') },
@@ -180,20 +194,34 @@ export function MediaSettlement() {
   ];
 
   return (
-    <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pMediaSettlement')}</h1></div>
-      <div className="card">
-        <div className="report-filters">
-          <input type="month" className="search-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
-          <select className="filter-select" value={mediaId} onChange={event => setMediaId(event.target.value)}>
-            <option value="">{t('selectMedia')}</option>
-            {mediaOptions.map(media => <option key={media.id} value={media.id}>{displayName(media.name)}</option>)}
-          </select>
-          <button className="btn-primary" onClick={loadRows}>{t('query')}</button>
-          <button className="btn-outline" onClick={() => downloadCsv('媒体结算单.csv', columns, visibleRows)}>{t('export')}</button>
+    <div className="page active settlement-page">
+      <div className="page-header settlement-page-header">
+        <div className="settlement-page-title-wrap">
+          <h1 className="page-title">{t('pMediaSettlement')}</h1>
+          <span className="settlement-period-badge">{period || '--'}</span>
         </div>
-        {error && <div className="form-error">{error}</div>}
-        {loading ? <div className="empty-state"><div className="empty-state-text">Loading...</div></div> : (
+      </div>
+      <div className="card settlement-card">
+        <div className="report-filters settlement-toolbar">
+          <div className="settlement-toolbar-left">
+            <input type="month" className="search-input settlement-period-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
+            <select className="filter-select settlement-select" value={mediaId} onChange={event => setMediaId(event.target.value)}>
+              <option value="">{t('selectMedia')}</option>
+              {mediaOptions.map(media => <option key={media.id} value={media.id}>{displayName(media.name)}</option>)}
+            </select>
+            <button className="btn-primary settlement-query-btn" onClick={loadRows}>{t('query')}</button>
+          </div>
+          <div className="report-filter-spacer" />
+          <div className="settlement-toolbar-right">
+            <button className="btn-outline settlement-export-btn" onClick={() => downloadCsv('媒体结算单.csv', columns, visibleRows)}>{t('export')}</button>
+          </div>
+        </div>
+        {error && <div className="settlement-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {loading ? (
+          <div className="entry-loading-row"><span className="entry-loading-icon" aria-hidden="true" /><span>Đang tải...</span></div>
+        ) : visibleRows.length === 0 ? (
+          <div className="entry-empty-row"><span>Không có dữ liệu</span></div>
+        ) : (
           <Table
             columns={[
               { key: 'period', label: t('period') },

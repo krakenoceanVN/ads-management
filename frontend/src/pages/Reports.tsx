@@ -130,11 +130,11 @@ function StatusBadge({ status }: { status: 'pending' | 'confirmed' }) {
 }
 
 function LoadingRow({ colSpan }: { colSpan: number }) {
-  return <tr className="loading-row"><td colSpan={colSpan} className="empty-state-text">Loading...</td></tr>;
+  return <tr><td colSpan={colSpan} className="empty-state-text">Loading...</td></tr>;
 }
 
 function EmptyRow({ colSpan, text = '—' }: { colSpan: number; text?: string }) {
-  return <tr className="empty-row"><td colSpan={colSpan} className="empty-state-text">{text}</td></tr>;
+  return <tr><td colSpan={colSpan} className="empty-state-text">{text}</td></tr>;
 }
 
 function DownloadButton({ onClick }: { onClick: () => void }) {
@@ -362,7 +362,7 @@ export function TotalProfit() {
             <DownloadButton onClick={() => downloadCsv('总利润表.csv', columns, exportRows)} />
           </div>
         </div>
-        {error && <div className="report-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table">
             <thead>
@@ -482,7 +482,7 @@ export function OrderProfit() {
             <DownloadButton onClick={() => downloadCsv('广告单利润表.csv', columns, visibleRows)} />
           </div>
         </div>
-        {error && <div className="report-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table">
             <thead>
@@ -662,7 +662,7 @@ export function AdvQuery() {
             <DownloadButton onClick={() => downloadCsv('广告主数据查询.csv', columns, visibleRows)} />
           </div>
         </div>
-        {error && <div className="report-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table query-report-table">
             <thead>
@@ -858,7 +858,7 @@ export function MediaQuery() {
             <DownloadButton onClick={() => downloadCsv('媒体数据查询.csv', columns, visibleRows)} />
           </div>
         </div>
-        {error && <div className="report-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table media-query-table">
             <thead>

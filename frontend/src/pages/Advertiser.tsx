@@ -299,17 +299,12 @@ export function AdvertiserList() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pAdvertiserList')}</h1>
-          <span className="mgmt-count-badge">{rows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdvertiser')}</button></div>
-          <div className="mgmt-toolbar-right">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pAdvertiserList')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdvertiser')}</button></div>
+          <div className="toolbar-right">
             <select className="filter-select" value={advFilter} onChange={e => setAdvFilter(e.target.value)}>
               <option value="">{t('all') || 'Tất cả'}</option>
               {rows.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
@@ -322,7 +317,7 @@ export function AdvertiserList() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('advertiser'), render: r => <span className="mgmt-name-cell">{displayName(r.name)}</span> },
+              { key: 'name', label: t('advertiser'), render: r => displayName(r.name) },
               { key: 'adTypeCode', label: t('adOrder') },
               { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-') },
               { key: 'phone', label: t('phone'), render: r => r.phone ?? '-' },
@@ -343,7 +338,7 @@ export function AdvertiserList() {
               <span className="modal-title">{editing ? t('editAdvertiser') : t('newAdvertiser')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('advertiserName')}</label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
               <div className="form-group"><label>{t('adOrder')}</label>
                 <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
@@ -601,17 +596,12 @@ export function AdOrderMgmt() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pAdOrderMgmt')}</h1>
-          <span className="mgmt-count-badge">{visibleRows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdOrder')}</button></div>
-          <div className="mgmt-toolbar-right">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pAdOrderMgmt')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdOrder')}</button></div>
+          <div className="toolbar-right">
             <select className="filter-select" value={advFilter} onChange={e => setAdvFilter(e.target.value)}><option value="">{t('selectAdvertiser')}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('ad-orders.csv', adOrderColumns, visibleRows)}>{t('export')}</button>
@@ -621,8 +611,8 @@ export function AdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'advId', label: t('advertiser'), render: r => <span className="mgmt-name-cell">{advertiserName(r.advId)}</span> },
-              { key: 'name', label: t('adOrder'), render: r => <span className="mgmt-name-cell">{displayName(r.name)}{r.isVirtual ? <span className="mgmt-virtual-badge">🔄 {t('notSynced') || 'Chưa đồng bộ'}</span> : ''}</span> },
+              { key: 'advId', label: t('advertiser'), render: r => advertiserName(r.advId) },
+              { key: 'name', label: t('adOrder'), render: r => displayName(r.name) + (r.isVirtual ? ` (${t('notSynced') || 'Chưa đồng bộ'})` : '') },
               { key: 'adTypeCode', label: 'Code' },
               {
                 key: '__count__',
@@ -650,7 +640,7 @@ export function AdOrderMgmt() {
               <span className="modal-title">{editing ? t('editAdOrder') : t('newAdOrder')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('advertiser')}</label>
                 <select value={form.advertiserId} onChange={e => setForm(prev => ({ ...prev, advertiserId: e.target.value }))}>
                   <option value="">-</option>
@@ -863,17 +853,12 @@ export function AdIdMgmt() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pAdIdMgmt')}</h1>
-          <span className="mgmt-count-badge">{visibleRows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
-          <div className="mgmt-toolbar-right">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pAdIdMgmt')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
+          <div className="toolbar-right">
             <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
             <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{orderOptions.map(o => <option key={o.id} value={o.id}>{displayName(o.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
@@ -884,7 +869,7 @@ export function AdIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'advertiserName', label: t('advertiser'), render: r => <span className="mgmt-name-cell">{displayName(r.advertiserName)}</span> },
+              { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName) },
               { key: 'adTypeCode', label: t('adOrder'), render: r => displayName(orderNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               { key: 'slot', label: t('adId') },
               { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} /> },
@@ -904,7 +889,7 @@ export function AdIdMgmt() {
               <span className="modal-title">{editing ? t('editAdId') : t('newAdId')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('advertiser')}</label>
                 <select value={form.advertiserId} onChange={e => setForm(prev => ({ ...prev, advertiserId: e.target.value, adOrderId: '' }))}>
                   <option value="">-</option>

@@ -299,17 +299,12 @@ export function MediaMgmt() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pMediaMgmt')}</h1>
-          <span className="mgmt-count-badge">{rows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newMedia')}</button></div>
-          <div className="mgmt-toolbar-right">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pMediaMgmt')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newMedia')}</button></div>
+          <div className="toolbar-right">
             <select className="filter-select" value={upstreamFilter} onChange={e => setUpstreamFilter(e.target.value)}>
               <option value="">{t('all') || 'Tất cả'}</option>
               {advertisers.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}
@@ -322,9 +317,9 @@ export function MediaMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('media'), render: r => <span className="mgmt-name-cell">{displayName(r.name)}</span> },
+              { key: 'name', label: t('media'), render: r => displayName(r.name) },
               { key: 'upstreamId', label: t('advertiser'), render: r => advertiserName(r.upstreamId) },
-              { key: 'billingMethod', label: t('type'), render: r => <TypeTag tp={r.billingMethod} /> },
+              { key: 'billingMethod', label: t('type') },
               { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-') },
               { key: 'phone', label: t('phone'), render: r => r.phone ?? '-' },
               { key: 'email', label: t('email'), render: r => r.email ?? '-' },
@@ -344,7 +339,7 @@ export function MediaMgmt() {
               <span className="modal-title">{editing ? t('editMedia') : t('newMedia')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('mediaName')}</label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
               <div className="form-group"><label>{t('selectAdvertiser')}</label>
                 <select value={form.upstreamId} onChange={e => setForm(prev => ({ ...prev, upstreamId: e.target.value }))}>
@@ -505,19 +500,14 @@ export function MediaAdOrderMgmt() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pMediaAdOrderMgmt')}</h1>
-          <span className="mgmt-count-badge">{visibleRows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pMediaAdOrderMgmt')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left">
             <button className="btn-primary" onClick={openCreate}>{t('newMediaAdOrder')}</button>
           </div>
-          <div className="mgmt-toolbar-right">
+          <div className="toolbar-right">
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media-ad-orders.csv', mediaAdOrderColumns, visibleRows)}>{t('export')}</button>
           </div>
@@ -526,7 +516,7 @@ export function MediaAdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('mediaAdOrder'), render: r => <span className="mgmt-name-cell">{displayName(r.name)}</span> },
+              { key: 'name', label: t('mediaAdOrder'), render: r => displayName(r.name) },
               { key: 'adTypeCode', label: 'Code' },
               { key: '__count__', label: t('mediaAdIdCount'), render: r => <span className={countMediaIds(r) ? '' : 'count-zero'}>{countMediaIds(r)}</span> },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
@@ -544,7 +534,7 @@ export function MediaAdOrderMgmt() {
               <span className="modal-title">{editing ? t('editMediaAdOrder') : t('newMediaAdOrder')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('selectAdvertiser')}</label>
                 <select value={form.upstreamId} onChange={e => setForm(prev => ({ ...prev, upstreamId: e.target.value }))}>
                   <option value="">-</option>
@@ -799,19 +789,14 @@ export function MediaIdMgmt() {
   };
 
   return (
-    <div className="page active mgmt-page">
-      <div className="page-header mgmt-page-header">
-        <div className="mgmt-title-wrap">
-          <h1 className="page-title">{t('pMediaIdMgmt')}</h1>
-          <span className="mgmt-count-badge">{visibleRows.length}</span>
-        </div>
-      </div>
-      <div className="card mgmt-card">
-        <div className="toolbar mgmt-toolbar">
-          <div className="mgmt-toolbar-left">
+    <div className="page active">
+      <div className="page-header"><h1 className="page-title">{t('pMediaIdMgmt')}</h1></div>
+      <div className="card">
+        <div className="toolbar">
+          <div className="toolbar-left">
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
-          <div className="mgmt-toolbar-right">
+          <div className="toolbar-right">
             <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{orderOptions.map(o => <option key={o.id} value={o.id}>{displayName(o.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
@@ -823,7 +808,7 @@ export function MediaIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'mediaName', label: t('media'), render: r => <span className="mgmt-name-cell">{displayName(r.mediaName)}</span> },
+              { key: 'mediaName', label: t('media'), render: r => displayName(r.mediaName) },
               { key: 'adTypeCode', label: t('mediaAdOrder'), render: r => displayName(orderNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               { key: 'slot', label: t('mediaId') },
               { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} /> },
@@ -844,7 +829,7 @@ export function MediaIdMgmt() {
               <span className="modal-title">{editing ? t('editMediaId') : t('newMediaId')}</span>
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
-            <div className="modal-body mgmt-modal-body">
+            <div className="modal-body">
               <div className="form-group"><label>{t('selectDownstream')}</label>
                 <select value={form.downstreamId} onChange={e => setForm(prev => ({ ...prev, downstreamId: e.target.value }))} disabled={downstreamLoading}>
                   <option value="">-</option>

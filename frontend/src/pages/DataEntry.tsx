@@ -360,7 +360,7 @@ export function AdvEntry() {
           {/* ADV CSV DOWNLOAD */}
           <button className="btn-primary input-sm data-download-btn" onClick={() => downloadAdvertiserCsv()}>{t('dataDownload')}</button>
         </div>
-        {error && <div className="de-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>{error}</span></div>}
+        {error && <div className="form-error">{error}</div>}
 
         <div className="table-wrap entry-table-wrap entry-table-scroll">
           <table className="entry-table">
@@ -381,7 +381,7 @@ export function AdvEntry() {
             </thead>
             <tbody>
               {loading ? (
-                <tr className="entry-loading-row"><td colSpan={11} className="empty-state-text">Loading...</td></tr>
+                <tr><td colSpan={11} className="empty-state-text">Loading...</td></tr>
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;
@@ -655,7 +655,7 @@ export function MediaDataMgmt() {
             </thead>
             <tbody>
               {loading ? (
-                <tr className="entry-loading-row"><td colSpan={14} className="empty-state-text">Loading...</td></tr>
+                <tr><td colSpan={14} className="empty-state-text">Loading...</td></tr>
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;

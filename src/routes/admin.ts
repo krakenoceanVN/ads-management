@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express"
 import { body, param, query, validationResult } from "express-validator"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
-import { requirePermission, requireAuth, requireWriteAccess, AuthRequest } from "../middleware/auth.js"
+import { requirePermission, requireAuth, requireWriteAccess, hasPermission, AuthRequest, toUserPublic, resolveUserRole, UserApiShape } from "../middleware/auth.js"
 import { UserPublic, UserRole, UserStatus } from "../types/index.js"
 import prisma from "../prisma.js"
 import { formatBusinessDate, getBusinessDayRange, getBusinessDayStart, getBusinessMonthRange } from "../utils/date.js"
@@ -35,28 +35,6 @@ const loginRateLimiter = createMemoryRateLimiter({
 })
 
 type AdSiteEventType = "CREATED" | "PAUSED" | "RESUMED" | "DIED" | "NOTE"
-type UserWithRoleShape = {
-  role: string
-  permAdmin: boolean
-}
-
-function resolveUserRole(user: UserWithRoleShape): UserRole {
-  if (user.role === "VIEWER") return "VIEWER"
-  if (user.permAdmin || user.role === "ADMIN") return "ADMIN"
-  return "EDITOR"
-}
-
-type UserApiShape = {
-  id: number
-  username: string
-  role: string
-  permDataInput: boolean
-  permDataConfirm: boolean
-  permAdmin: boolean
-  status: string
-  lastLoginAt?: Date | null
-  createdAt: Date
-}
 
 type AdSiteEventCreateInput = {
   eventDate?: Date
@@ -67,22 +45,6 @@ type RebateWindow = {
   id: string
   startDate: Date
   endDate: Date | null
-}
-
-function toUserPublic(user: UserApiShape): UserPublic {
-  const resolvedRole = resolveUserRole(user)
-
-  return {
-    id: user.id,
-    username: user.username,
-    role: resolvedRole,
-    perm_data_input: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataInput),
-    perm_data_confirm: resolvedRole === "VIEWER" ? false : resolvedRole === "ADMIN" ? true : Boolean(user.permDataConfirm),
-    perm_admin: resolvedRole === "ADMIN",
-    status: user.status as UserStatus,
-    last_login_at: user.lastLoginAt ?? undefined,
-    created_at: user.createdAt,
-  }
 }
 
 async function createAdSiteEvent(
@@ -183,7 +145,7 @@ router.get(
   requireAuth,
   [query("archived").optional().isIn(["0", "1"])],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const archivedMode = req.query.archived === "1"
       const sites = await prisma.adSite.findMany({
@@ -504,7 +466,7 @@ router.post(
     body("status").optional().isIn(["active", "inactive"]),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { name, ad_type_id, status } = req.body
       const existing = await prisma.adType.findUnique({ where: { id: ad_type_id } })
@@ -535,7 +497,7 @@ router.put(
     body("status").optional().isIn(["active", "inactive"]),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const { name, ad_type_id, status } = req.body
@@ -568,7 +530,7 @@ router.delete(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const sites = await prisma.adSite.findMany({ where: { upstreamId: id }, take: 1 })
@@ -591,7 +553,7 @@ router.get(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const adSiteId = Number(req.params.id)
       const adSiteResult = await ensureSmAdSite(adSiteId)
@@ -636,7 +598,7 @@ router.post(
     body("end_date").optional({ nullable: true }).isISO8601(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const adSiteId = Number(req.params.id)
       const adSiteResult = await ensureSmAdSite(adSiteId)
@@ -699,7 +661,7 @@ router.put(
     body("end_date").optional({ nullable: true }).isISO8601(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const adSiteId = Number(req.params.id)
       const rebateId = String(req.params.rebateId)
@@ -771,7 +733,7 @@ router.delete(
     param("rebateId").notEmpty().isString(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const adSiteId = Number(req.params.id)
       const rebateId = String(req.params.rebateId)
@@ -808,7 +770,7 @@ router.post(
     body("include_confirmed").optional().isBoolean(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const adSiteId = Number(req.params.id)
       const adSiteResult = await ensureSmAdSite(adSiteId)
@@ -930,7 +892,7 @@ router.post(
     body("name").notEmpty().withMessage("name required").isLength({ max: 200 }),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { code, name } = req.body
 
@@ -966,7 +928,7 @@ router.put(
     body("name").optional().isLength({ max: 200 }),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = parseInt(req.params.id as string)
       const { code, name } = req.body
@@ -1008,7 +970,7 @@ router.delete(
   requireAuth,
   requireWriteAccess,
   requirePermission("perm_admin"),
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = parseInt(req.params.id as string)
 
@@ -1056,7 +1018,7 @@ router.post(
     body("downstream_ids").optional().isArray(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { name, upstream_id, billing_method, current_unit_price, current_ratio, status, downstream_ids } = req.body
       const upstream = await prisma.upstream.findUnique({ where: { id: upstream_id } })
@@ -1114,7 +1076,7 @@ router.put(
     body("downstream_ids").optional().isArray(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const { name, upstream_id, billing_method, current_unit_price, current_ratio, status, downstream_ids } = req.body
@@ -1163,7 +1125,7 @@ router.put(
     body("note").optional().isLength({ max: 1000 }),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const eventDate = typeof req.body.eventDate === "string" ? getBusinessDayStart(req.body.eventDate) : undefined
@@ -1219,7 +1181,7 @@ router.put(
     body("note").optional().isLength({ max: 1000 }),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const eventDate = typeof req.body.eventDate === "string" ? getBusinessDayStart(req.body.eventDate) : undefined
@@ -1271,7 +1233,7 @@ router.delete(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const force = req.query.force === '1'
@@ -1300,7 +1262,7 @@ router.get(
   requireAuth,
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const site = await prisma.adSite.findUnique({
@@ -1347,7 +1309,7 @@ router.post(
     body("eventDate").optional().isISO8601().withMessage("eventDate must be YYYY-MM-DD"),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const note = String(req.body.note ?? "").trim()
@@ -1392,7 +1354,7 @@ router.put(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt(), body("prices").isObject()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const { prices } = req.body as { prices: Record<string, number> }
@@ -1442,7 +1404,7 @@ router.post(
     body("status").optional().isIn(["active", "inactive"]),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { ad_type_id, downstream_type, payout_rate, status } = req.body
       const adType = await prisma.adType.findUnique({ where: { id: ad_type_id } })
@@ -1469,7 +1431,7 @@ router.put(
     body("status").optional().isIn(["active", "inactive"]),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const { payout_rate, status } = req.body
@@ -1492,7 +1454,7 @@ router.delete(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       await prisma.downstream.delete({ where: { id } })
@@ -1520,7 +1482,7 @@ router.put(
     body("note").optional().isString(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       const { pct_hal, unit_price, end_date, note } = req.body
@@ -1547,7 +1509,7 @@ router.delete(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const id = Number(req.params.id)
       await prisma.downstreamPeriod.delete({ where: { id } })
@@ -1574,7 +1536,7 @@ router.post(
     body("effective_rate").isDecimal().toFloat(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { downstream_id, date, effective_rate } = req.body
       const downstream = await prisma.downstream.findUnique({ where: { id: downstream_id } })
@@ -1619,7 +1581,7 @@ router.get(
     query("end_date").optional().isISO8601(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const downstreamId = Number(req.query.downstream_id)
       const where: any = { downstreamId }
@@ -1652,25 +1614,61 @@ router.get(
 )
 
 // ============================================================
-// DELETE /api/users/:id
+// DELETE /api/users/:id — SOFT DISABLE only
 // ============================================================
 router.delete(
   "/users/:id",
   requireAuth,
-  requireWriteAccess,
-  requirePermission("perm_admin"),
+  requirePermission("user.disable"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const userId = Number(req.params.id)
-      const existing = await prisma.user.findUnique({ where: { id: userId } })
+
+      const existing = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { roleRef: true },
+      })
       if (!existing) {
         res.status(404).json({ success: false, error: "User not found" })
         return
       }
-      await prisma.user.delete({ where: { id: userId } })
-      res.json({ success: true, message: "User deleted" })
+
+      // Cannot disable self
+      if (req.user!.id === userId) {
+        res.status(400).json({ success: false, error: "Cannot disable yourself" })
+        return
+      }
+
+      // Cannot disable the last SUPER_ADMIN
+      if (existing.roleRef?.code === 'SUPER_ADMIN') {
+        const superAdminCount = await prisma.user.count({
+          where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+        })
+        if (superAdminCount <= 1) {
+          res.status(400).json({ success: false, error: "Cannot disable the last SUPER_ADMIN" })
+          return
+        }
+      }
+
+      // Soft disable: set status = inactive
+      await prisma.user.update({
+        where: { id: userId },
+        data: { status: 'inactive' },
+      })
+
+      createOperationLog({
+        userId: req.user!.id,
+        username: req.user!.username,
+        action: "DISABLE",
+        module: "User",
+        targetType: "User",
+        targetId: String(userId),
+        detail: `User ${existing.username} disabled`,
+      })
+
+      res.json({ success: true, message: "User disabled" })
     } catch (err: any) {
       console.error("DELETE /api/users/:id error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -1692,7 +1690,7 @@ router.put(
     body("new_ratio").optional().isDecimal().toFloat(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const siteId = Number(req.params.id)
       const { new_unit_price, new_ratio } = req.body
@@ -1761,7 +1759,7 @@ router.get(
     }),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const siteId = Number(req.params.id)
       const monthStr = typeof req.query.month === "string" ? req.query.month : undefined
@@ -1861,7 +1859,7 @@ router.get(
   requirePermission("perm_admin"),
   [param("id").isInt().toInt()],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const downstreamId = Number(req.params.id)
 
@@ -1959,7 +1957,7 @@ router.post(
 router.get(
   "/users",
   requireAuth,
-  requirePermission("perm_admin"),
+  requirePermission("user.read"),
   async (_req: Request, res: Response) => {
     try {
       const users = await prisma.user.findMany({
@@ -1973,10 +1971,15 @@ router.get(
           status: true,
           lastLoginAt: true,
           createdAt: true,
+          roleRef: {
+            include: {
+              permissions: { include: { permission: true } },
+            },
+          },
         },
         orderBy: { id: "asc" },
       })
-      res.json({ success: true, data: users.map(toUserPublic) })
+      res.json({ success: true, data: users.map(u => toUserPublic(u, u.roleRef?.permissions.map(rp => rp.permission.key) ?? [])) })
     } catch (err: any) {
       console.error("GET /api/users error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -1990,23 +1993,16 @@ router.get(
 router.post(
   "/users",
   requireAuth,
-  requireWriteAccess,
-  requirePermission("perm_admin"),
+  requirePermission("user.create"),
   [
     body("username").notEmpty().withMessage("username required").isLength({ max: 100 }),
-    body("password").notEmpty().withMessage("password required").isLength({ min: 6 }),
-    body("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
-    body("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
-    body("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
-    body("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
+    body("password").notEmpty().withMessage("password required").isLength({ min: 8 }),
+    body("roleId").isInt({ min: 1 }).toInt(),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
-      const { username, password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body
-      const normalizedRole = role as UserRole
-      const isViewerRole = normalizedRole === "VIEWER"
-      const isAdminRole = normalizedRole === "ADMIN"
+      const { username, password, roleId, status } = req.body
 
       const existing = await prisma.user.findUnique({ where: { username } })
       if (existing) {
@@ -2014,15 +2010,19 @@ router.post(
         return
       }
 
+      const role = await prisma.role.findUnique({ where: { id: roleId } })
+      if (!role) {
+        res.status(400).json({ success: false, error: "Invalid roleId" })
+        return
+      }
+
       const passwordHash = await bcrypt.hash(password, 10)
       const user = await prisma.user.create({
         data: {
           username,
-          passwordHash: passwordHash,
-          role: normalizedRole,
-          permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
-          permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
-          permAdmin: isAdminRole,
+          passwordHash,
+          role: role.code as UserRole,
+          roleId,
           status: status ?? "active",
         },
         select: {
@@ -2034,10 +2034,16 @@ router.post(
           permAdmin: true,
           status: true,
           createdAt: true,
+          roleRef: {
+            include: {
+              permissions: { include: { permission: true } },
+            },
+          },
         },
       })
 
-      res.status(201).json({ success: true, data: toUserPublic(user) })
+      const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? []
+      res.status(201).json({ success: true, data: toUserPublic(user, permissions) })
     } catch (err: any) {
       console.error("POST /api/users error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -2051,38 +2057,73 @@ router.post(
 router.put(
   "/users/:id",
   requireAuth,
-  requireWriteAccess,
-  requirePermission("perm_admin"),
+  requirePermission("user.update"),
   [
     param("id").isInt().toInt(),
-    body("password").optional().isLength({ min: 6 }),
-    body("role").notEmpty().withMessage("role required").isIn(["ADMIN", "EDITOR", "VIEWER"]),
-    body("perm_data_input").isInt({ min: 0, max: 1 }).toInt(),
-    body("perm_data_confirm").isInt({ min: 0, max: 1 }).toInt(),
-    body("perm_admin").isInt({ min: 0, max: 1 }).toInt(),
-    body("status").isIn(["active", "inactive"]),
+    body("password").optional().isLength({ min: 8 }),
+    body("roleId").optional({ nullable: true }).isInt({ min: 1 }).toInt(),
+    body("status").optional().isIn(["active", "inactive"]),
   ],
   handleValidation,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const userId = Number(req.params.id)
-      const { password, role, perm_data_input, perm_data_confirm, perm_admin, status } = req.body
-      const normalizedRole = role as UserRole
-      const isViewerRole = normalizedRole === "VIEWER"
-      const isAdminRole = normalizedRole === "ADMIN"
+      const { password, roleId, status } = req.body
 
-      const existing = await prisma.user.findUnique({ where: { id: userId } })
+      const existing = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { roleRef: true },
+      })
       if (!existing) {
         res.status(404).json({ success: false, error: "User not found" })
         return
       }
 
-      const updateData: Parameters<typeof prisma.user.update>[0]["data"] = {
-        role: normalizedRole,
-        permDataInput: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_input)),
-        permDataConfirm: isViewerRole ? false : (isAdminRole ? true : Boolean(perm_data_confirm)),
-        permAdmin: isAdminRole ? true : (isViewerRole ? false : Boolean(perm_admin)),
-        status,
+      // Self-protection: cannot modify self if you're the last SUPER_ADMIN
+      if (req.user!.id === userId) {
+        const superAdminCount = await prisma.user.count({
+          where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+        })
+        if (superAdminCount <= 1 && existing.roleRef?.code === 'SUPER_ADMIN') {
+          res.status(400).json({ success: false, error: "Cannot modify the last SUPER_ADMIN" })
+          return
+        }
+      }
+
+      // Check if trying to disable the last SUPER_ADMIN
+      if (status === 'inactive' && existing.roleRef?.code === 'SUPER_ADMIN') {
+        const superAdminCount = await prisma.user.count({
+          where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+        })
+        if (superAdminCount <= 1) {
+          res.status(400).json({ success: false, error: "Cannot disable the last SUPER_ADMIN" })
+          return
+        }
+      }
+
+      // Check if demoting the last SUPER_ADMIN to another role
+      if (roleId !== undefined && existing.roleRef?.code === 'SUPER_ADMIN') {
+        const superAdminCount = await prisma.user.count({
+          where: { status: 'active', roleRef: { code: 'SUPER_ADMIN' } },
+        })
+        if (superAdminCount <= 1) {
+          res.status(400).json({ success: false, error: "Cannot demote the last SUPER_ADMIN" })
+          return
+        }
+      }
+
+      const updateData: Parameters<typeof prisma.user.update>[0]["data"] = {}
+      if (roleId !== undefined) {
+        const role = await prisma.role.findUnique({ where: { id: roleId } })
+        if (!role) {
+          res.status(400).json({ success: false, error: "Invalid roleId" })
+          return
+        }
+        updateData.role = role.code as UserRole
+        updateData.roleId = roleId
+      }
+      if (status !== undefined) {
+        updateData.status = status
       }
 
       if (password) {
@@ -2102,10 +2143,16 @@ router.put(
           status: true,
           lastLoginAt: true,
           createdAt: true,
+          roleRef: {
+            include: {
+              permissions: { include: { permission: true } },
+            },
+          },
         },
       })
 
-      res.json({ success: true, data: toUserPublic(user) })
+      const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? []
+      res.json({ success: true, data: toUserPublic(user, permissions) })
     } catch (err: any) {
       console.error("PUT /api/users/:id error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
@@ -2124,11 +2171,20 @@ router.post(
   ],
   handleValidation,
   loginRateLimiter.middleware,
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     try {
       const { username, password } = req.body
 
-      const user = await prisma.user.findUnique({ where: { username } })
+      const user = await prisma.user.findUnique({
+        where: { username },
+        include: {
+          roleRef: {
+            include: {
+              permissions: { include: { permission: true } },
+            },
+          },
+        },
+      })
       if (!user || user.status === "inactive") {
         createOperationLog({
           userId: null,
@@ -2166,17 +2222,9 @@ router.post(
         data: { lastLoginAt: new Date() },
       })
 
-      const payload: UserPublic = {
-        id: user.id,
-        username: user.username,
-        role: resolveUserRole(user),
-        perm_data_input: user.permDataInput,
-        perm_data_confirm: user.permDataConfirm,
-        perm_admin: user.permAdmin,
-        status: user.status as UserStatus,
-        last_login_at: user.lastLoginAt ?? undefined,
-        created_at: user.createdAt,
-      }
+      const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? []
+
+      const payload = toUserPublic(user, permissions)
 
       const token = jwt.sign(payload, getRequiredEnv("JWT_SECRET"), { expiresIn: JWT_EXPIRES_IN })
 
@@ -2218,15 +2266,170 @@ router.get(
           status: true,
           lastLoginAt: true,
           createdAt: true,
+          roleRef: {
+            include: {
+              permissions: { include: { permission: true } },
+            },
+          },
         },
       })
       if (!user) {
         res.status(404).json({ success: false, error: "User not found" })
         return
       }
-      res.json({ success: true, data: toUserPublic(user) })
+      const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? []
+      res.json({ success: true, data: toUserPublic(user, permissions) })
     } catch (err: any) {
       console.error("GET /api/auth/me error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// GET /api/roles
+// ============================================================
+router.get(
+  "/roles",
+  requireAuth,
+  requirePermission("role.read"),
+  async (_req: Request, res: Response) => {
+    try {
+      const roles = await prisma.role.findMany({
+        include: {
+          permissions: { include: { permission: true } },
+        },
+        orderBy: { id: "asc" },
+      })
+      res.json({ success: true, data: roles })
+    } catch (err: any) {
+      console.error("GET /api/roles error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// GET /api/permissions
+// ============================================================
+router.get(
+  "/permissions",
+  requireAuth,
+  requirePermission("permission.read"),
+  async (_req: Request, res: Response) => {
+    try {
+      const permissions = await prisma.permission.findMany({
+        orderBy: [{ module: "asc" }, { action: "asc" }],
+      })
+      res.json({ success: true, data: permissions })
+    } catch (err: any) {
+      console.error("GET /api/permissions error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// PUT /api/roles/:id/permissions
+// ============================================================
+router.put(
+  "/roles/:id/permissions",
+  requireAuth,
+  requirePermission("role.update"),
+  [
+    param("id").isInt().toInt(),
+    body("permissionKeys").isArray(),
+    body("permissionKeys.*").isString(),
+  ],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const roleId = Number(req.params.id)
+      const { permissionKeys } = req.body
+
+      const role = await prisma.role.findUnique({ where: { id: roleId } })
+      if (!role) {
+        res.status(404).json({ success: false, error: "Role not found" })
+        return
+      }
+      // Only block SUPER_ADMIN from modification
+      if (role.code === 'SUPER_ADMIN') {
+        res.status(400).json({ success: false, error: "Cannot modify SUPER_ADMIN role permissions" })
+        return
+      }
+
+      // Resolve permission keys to IDs
+      const permissions = await prisma.permission.findMany({
+        where: { key: { in: permissionKeys } },
+      })
+
+      // Transaction: delete existing and recreate with resolved IDs
+      await prisma.$transaction([
+        prisma.rolePermission.deleteMany({ where: { roleId } }),
+        ...permissions.map(p => prisma.rolePermission.create({
+          data: { roleId, permissionId: p.id },
+        })),
+      ])
+
+      const updated = await prisma.role.findUnique({
+        where: { id: roleId },
+        include: { permissions: { include: { permission: true } } },
+      })
+      res.json({ success: true, data: updated })
+    } catch (err: any) {
+      console.error("PUT /api/roles/:id/permissions error:", err)
+      res.status(500).json({ success: false, error: "Internal server error" })
+    }
+  }
+)
+
+// ============================================================
+// POST /api/users/:id/reset-password
+// ============================================================
+router.post(
+  "/users/:id/reset-password",
+  requireAuth,
+  requirePermission("user.resetPassword"),
+  [
+    param("id").isInt().toInt(),
+    body("password").notEmpty().isLength({ min: 8 }),
+  ],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = Number(req.params.id)
+      const { password } = req.body
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { roleRef: true },
+      })
+      if (!user) {
+        res.status(404).json({ success: false, error: "User not found" })
+        return
+      }
+      // Note: reset-password is safe — does not remove privileges. SUPER_ADMIN can always reset own password.
+      // Self-protection for demotion/deletion is handled in PUT /api/users/:id and DELETE.
+
+      const passwordHash = await bcrypt.hash(password, 10)
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      })
+
+      createOperationLog({
+        userId: req.user!.id,
+        username: req.user!.username,
+        action: "RESET_PASSWORD",
+        module: "User",
+        targetType: "User",
+        targetId: String(userId),
+        detail: `Password reset for user ${user.username}`,
+      })
+
+      res.json({ success: true, message: "Password updated successfully" })
+    } catch (err: any) {
+      console.error("POST /api/users/:id/reset-password error:", err)
       res.status(500).json({ success: false, error: "Internal server error" })
     }
   }

@@ -110,5 +110,8 @@ export const menu = [
   { key: 'mSettlement', icon: '🧾', children: [
     { key: 'pAdvSettlement' }, { key: 'pMediaSettlement' }
   ] },
-  { key: 'mOpLog', icon: '📋', single: true }
+  { key: 'mOpLog', icon: '📋', single: true },
+  { key: 'mSystemAdmin', icon: '⚙️', children: [
+    { key: 'pUserManagement' }, { key: 'pRoleManagement' }
+  ] }
 ];

@@ -49,7 +49,11 @@ export interface LoginResponse {
   user?: {
     id: number;
     username: string;
-    role: string;
+    role: UserRole;
+    roleId?: number;
+    roleCode?: string;
+    roleName?: string;
+    permissions?: string[];
     perm_data_input: boolean;
     perm_data_confirm: boolean;
     perm_admin: boolean;
@@ -474,4 +478,60 @@ export interface OperationLogResponse {
   total: number;
   page: number;
   pageSize: number;
+}
+
+// ============================================================
+// RBAC types
+// ============================================================
+export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER' | 'SUPER_ADMIN' | 'MANAGER' | 'OPERATOR';
+
+export interface Permission {
+  id: number;
+  key: string;
+  module: string;
+  action: string;
+  name: string;
+  description?: string;
+}
+
+export interface Role {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  isSystem: boolean;
+  permissions?: Permission[];
+}
+
+export interface UserManagementUser {
+  id: number;
+  username: string;
+  role: UserRole;
+  roleId: number;
+  roleCode: string;
+  roleName: string;
+  permissions?: string[];
+  perm_data_input: boolean;
+  perm_data_confirm: boolean;
+  perm_admin: boolean;
+  status: EntityStatus;
+  last_login_at?: string;
+  created_at: string;
+}
+
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  roleId: number;
+  status?: EntityStatus;
+}
+
+export interface UpdateUserInput {
+  password?: string;
+  roleId?: number;
+  status?: EntityStatus;
+}
+
+export interface ResetPasswordInput {
+  password: string;
 }

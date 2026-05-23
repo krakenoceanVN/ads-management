@@ -16,12 +16,13 @@ type JwtPayloadShape = {
   id?: number
 }
 
-type UserWithRoleShape = {
+export type UserWithRoleShape = {
   role: string
   permAdmin: boolean
+  roleRef?: { id: number; code: string; name: string } | null
 }
 
-type UserApiShape = {
+export type UserApiShape = {
   id: number
   username: string
   role: string
@@ -31,27 +32,57 @@ type UserApiShape = {
   status: string
   lastLoginAt?: Date | null
   createdAt: Date
+  roleRef?: { id: number; code: string; name: string } | null
 }
 
-function resolveUserRole(user: UserWithRoleShape): UserRole {
+export function resolveUserRole(user: UserWithRoleShape): UserRole {
+  // If user has a proper role code from RBAC, use it directly
+  if (user.roleRef?.code) {
+    return user.roleRef.code as UserRole
+  }
+  // Fallback to legacy resolution
   if (user.role === 'VIEWER') return 'VIEWER'
   if (user.permAdmin || user.role === 'ADMIN') return 'ADMIN'
   return 'EDITOR'
 }
 
-function toUserPublic(user: UserApiShape): UserPublic {
+export function toUserPublic(user: UserApiShape, permissions: string[] = []): UserPublic {
   const resolvedRole = resolveUserRole(user)
 
   return {
     id: user.id,
     username: user.username,
     role: resolvedRole,
+    roleId: user.roleRef?.id,
+    roleCode: user.roleRef?.code,
+    roleName: user.roleRef?.name,
+    permissions,
     perm_data_input: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataInput),
     perm_data_confirm: resolvedRole === 'VIEWER' ? false : resolvedRole === 'ADMIN' ? true : Boolean(user.permDataConfirm),
     perm_admin: resolvedRole === 'ADMIN',
     status: user.status as UserStatus,
     last_login_at: user.lastLoginAt ?? undefined,
     created_at: user.createdAt,
+  }
+}
+
+export function hasPermission(user: UserPublic | undefined, permissionKey: string): boolean {
+  if (!user) return false
+  if (user.role === 'SUPER_ADMIN') return true
+  return user.permissions?.includes(permissionKey) ?? false
+}
+
+export function requireRole(...roles: UserRole[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
+    if (!roles.includes(req.user.role)) {
+      res.status(403).json({ success: false, error: 'Insufficient role' })
+      return
+    }
+    next()
   }
 }
 
@@ -92,6 +123,13 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
         status: true,
         lastLoginAt: true,
         createdAt: true,
+        roleRef: {
+          include: {
+            permissions: {
+              include: { permission: true },
+            },
+          },
+        },
       },
     })
 
@@ -100,22 +138,33 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return
     }
 
-    req.user = toUserPublic(user)
+    const permissions = user.roleRef?.permissions.map(rp => rp.permission.key) ?? []
+    req.user = toUserPublic(user, permissions)
     next()
   } catch {
     res.status(401).json({ success: false, error: 'Invalid or expired token' })
   }
 }
 
-export function requirePermission(perm: 'perm_data_input' | 'perm_data_confirm' | 'perm_admin') {
+export function requirePermission(perm: 'perm_data_input' | 'perm_data_confirm' | 'perm_admin' | string) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       res.status(401).json({ success: false, error: 'Unauthorized' })
       return
     }
-    if (!req.user[perm]) {
-      res.status(403).json({ success: false, error: 'Permission denied' })
-      return
+    // Legacy boolean flags
+    if (perm in req.user && typeof req.user[perm as keyof UserPublic] === 'boolean') {
+      if (!req.user[perm as keyof UserPublic]) {
+        res.status(403).json({ success: false, error: 'Permission denied' })
+        return
+      }
+    }
+    // Permission key check (RBAC)
+    else {
+      if (!hasPermission(req.user, perm)) {
+        res.status(403).json({ success: false, error: 'Permission denied' })
+        return
+      }
     }
     next()
   }

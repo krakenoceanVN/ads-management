@@ -8,13 +8,31 @@ import { AdvertiserList, AdOrderMgmt, AdIdMgmt } from './pages/Advertiser';
 import { TotalProfit, OrderProfit, AdvQuery, MediaQuery } from './pages/Reports';
 import { AdvSettlement, MediaSettlement } from './pages/Settlement';
 import { OpLog } from './pages/System';
+import { UserManagement } from './pages/UserManagement';
+import { RoleManagement } from './pages/RoleManagement';
 import { FALLBACK_PAGE, FEATURE_FLAGS, isPageEnabled } from './lib/featureFlags';
 import { LoginPage } from './pages/Login';
 import {
   BFF_AUTH_TOKEN_CHANGED_EVENT,
   BFF_AUTH_TOKEN_INVALID_EVENT,
   BFF_AUTH_TOKEN_STORAGE_KEY,
+  getCurrentUser,
+  clearAuthToken,
 } from './lib/bffApi';
+import type { UserRole } from './lib/bffTypes';
+
+interface CurrentUserInfo {
+  id: number;
+  username: string;
+  role: UserRole;
+  roleId?: number;
+  roleCode?: string;
+  roleName?: string;
+  permissions?: string[];
+  perm_data_input: boolean;
+  perm_data_confirm: boolean;
+  perm_admin: boolean;
+}
 
 function MainContent({ onLogout }: { onLogout: () => void }) {
   const { currentPage, setCurrentPage } = useAppContext();
@@ -42,6 +60,8 @@ function MainContent({ onLogout }: { onLogout: () => void }) {
       case 'pAdvSettlement': return FEATURE_FLAGS.settlement ? <AdvSettlement /> : <AdvertiserList />;
       case 'pMediaSettlement': return FEATURE_FLAGS.settlement ? <MediaSettlement /> : <AdvertiserList />;
       case 'mOpLog': return <OpLog />;
+      case 'pUserManagement': return <UserManagement />;
+      case 'pRoleManagement': return <RoleManagement />;
       default: return <div className="empty-state"><div className="empty-state-icon">🚧</div><div className="empty-state-text">{currentPage}</div></div>;
     }
   };
@@ -61,11 +81,27 @@ function MainContent({ onLogout }: { onLogout: () => void }) {
 
 export default function App() {
   const [token, setToken] = React.useState(() => window.localStorage.getItem(BFF_AUTH_TOKEN_STORAGE_KEY));
+  const [initialCurrentUser, setInitialCurrentUser] = React.useState<CurrentUserInfo | null>(null);
 
   const logout = React.useCallback(() => {
-    window.localStorage.removeItem(BFF_AUTH_TOKEN_STORAGE_KEY);
+    clearAuthToken();
     setToken(null);
+    setInitialCurrentUser(null);
   }, []);
+
+  // Fetch currentUser from /api/auth/me when token is available
+  React.useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getCurrentUser()
+      .then(user => {
+        if (!cancelled) setInitialCurrentUser(user as unknown as CurrentUserInfo);
+      })
+      .catch(() => {
+        if (!cancelled) logout();
+      });
+    return () => { cancelled = true; };
+  }, [token, logout]);
 
   React.useEffect(() => {
     const syncToken = (event: StorageEvent) => {
@@ -88,7 +124,7 @@ export default function App() {
   if (!token) return <LoginPage onLogin={handleLogin} />;
 
   return (
-    <AppProvider>
+    <AppProvider initialCurrentUser={initialCurrentUser}>
       <MainContent onLogout={logout} />
     </AppProvider>
   );

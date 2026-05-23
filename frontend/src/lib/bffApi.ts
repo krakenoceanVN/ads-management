@@ -14,6 +14,7 @@ import type {
   CreateAdvertiserInput,
   CreateMediaInput,
   CreateMediaIdInput,
+  CreateUserInput,
   DownstreamDto,
   ListAdIdsParams,
   ListAdOrdersParams,
@@ -33,6 +34,9 @@ import type {
   OperationLogResponse,
   OrderProfitReportParams,
   OrderProfitReportRow,
+  Permission,
+  ResetPasswordInput,
+  Role,
   SaveAdvertiserEntryBatchPayload,
   SaveEntryBatchResult,
   SaveMediaEntryBatchPayload,
@@ -44,6 +48,8 @@ import type {
   UpdateAdvertiserInput,
   UpdateMediaInput,
   UpdateMediaIdInput,
+  UpdateUserInput,
+  UserManagementUser,
 } from './bffTypes';
 import { uiTypeToApiType, apiTypeToUiType, type EntryType } from './bffTypes';
 
@@ -74,7 +80,7 @@ export class BffApiError extends Error {
   }
 }
 
-function getAuthToken() {
+export function getAuthToken() {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem(BFF_AUTH_TOKEN_STORAGE_KEY);
 }
@@ -378,6 +384,39 @@ export async function listOperationLogs(params: ListOperationLogsParams) {
   return unwrapData(await request<BffDataResponse<OperationLogResponse>>('/api/bff/operation-logs', { params }));
 }
 
+export async function getUsers() {
+  return unwrapData(await request<BffDataResponse<UserManagementUser[]>>('/api/users'));
+}
+
+export async function createUser(data: CreateUserInput) {
+  return unwrapData(await request<BffDataResponse<UserManagementUser>>('/api/users', { method: 'POST', body: data }));
+}
+
+export async function updateUser(id: number, data: UpdateUserInput) {
+  return unwrapData(await request<BffDataResponse<UserManagementUser>>(`/api/users/${id}`, { method: 'PUT', body: data }));
+}
+
+export async function resetUserPassword(id: number, data: ResetPasswordInput) {
+  return request<BffMutationResponse>(`/api/users/${id}/reset-password`, { method: 'POST', body: data });
+}
+
+export async function getRoles() {
+  return unwrapData(await request<BffDataResponse<Role[]>>('/api/roles'));
+}
+
+export async function getCurrentUser() {
+  const data = await request<BffDataResponse<UserManagementUser>>('/api/auth/me');
+  return data;
+}
+
+export async function getPermissions() {
+  return unwrapData(await request<BffDataResponse<Permission[]>>('/api/permissions'));
+}
+
+export async function updateRolePermissions(roleId: number, permissionKeys: string[]) {
+  return unwrapData(await request<BffDataResponse<Role>>(`/api/roles/${roleId}/permissions`, { method: 'PUT', body: { permissionKeys } }));
+}
+
 export const bffApi = {
   login,
   listAdvertisers,
@@ -421,4 +460,12 @@ export const bffApi = {
   getAdvertiserSettlement,
   getMediaSettlement,
   listOperationLogs,
+  getUsers,
+  createUser,
+  updateUser,
+  resetUserPassword,
+  getRoles,
+  getPermissions,
+  updateRolePermissions,
+  getCurrentUser,
 };

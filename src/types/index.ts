@@ -3,7 +3,7 @@ export type BillingMethod = "CPM" | "RATIO" | "CPA"
 export type InputStatus = "unconfirmed" | "confirmed"
 export type DownstreamType = "ML" | "LE" | "YIYI"
 export type UserStatus = "active" | "inactive"
-export type UserRole = "ADMIN" | "EDITOR" | "VIEWER"
+export type UserRole = "ADMIN" | "EDITOR" | "VIEWER" | "SUPER_ADMIN" | "MANAGER" | "OPERATOR"
 export type UpstreamStatus = "active" | "inactive"
 
 // ============================================================
@@ -196,6 +196,10 @@ export interface UserPublic {
   id: number
   username: string
   role: UserRole
+  roleId?: number
+  roleCode?: string
+  roleName?: string
+  permissions?: string[]
   perm_data_input: boolean
   perm_data_confirm: boolean
   perm_admin: boolean
@@ -212,6 +216,41 @@ export interface LoginPayload {
 export interface AuthToken {
   token: string
   user: UserPublic
+}
+
+// ============================================================
+// RBAC types
+// ============================================================
+export interface Permission {
+  id: number
+  key: string
+  module: string
+  action: string
+  name: string
+  description?: string
+  created_at: Date
+}
+
+export interface Role {
+  id: number
+  code: string
+  name: string
+  description?: string
+  isSystem: boolean
+  created_at: Date
+  updated_at: Date
+  permissions?: Permission[]
+}
+
+export interface RolePermission {
+  roleId: number
+  permissionId: number
+}
+
+export interface UserManagementUser extends UserPublic {
+  roleId: number
+  roleCode: string
+  roleName: string
 }
 
 // ============================================================

@@ -6,7 +6,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../prisma.js";
 
-export type LogModule = "Advertiser" | "Media" | "DataEntry" | "Auth" | "AdOrder" | "AdId";
+export type LogModule = "Advertiser" | "Media" | "DataEntry" | "Auth" | "AdOrder" | "AdId" | "User" | "Role";
 export type LogAction =
   | "CREATE"
   | "UPDATE"
@@ -15,7 +15,9 @@ export type LogAction =
   | "CONFIRM"
   | "UNCONFIRM"
   | "LOGIN_SUCCESS"
-  | "LOGIN_FAILED";
+  | "LOGIN_FAILED"
+  | "RESET_PASSWORD"
+  | "DISABLE";
 
 interface CreateLogParams {
   userId?: number | null;

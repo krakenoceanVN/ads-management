@@ -1,0 +1,237 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useAppContext } from '../AppContext';
+import { Table } from '../components/Table';
+import {
+  createUser,
+  getRoles,
+  getUsers,
+  resetUserPassword,
+  updateUser,
+} from '../lib/bffApi';
+import type { Role, UserManagementUser, CreateUserInput, UpdateUserInput } from '../lib/bffTypes';
+
+type ModalMode = 'create' | 'edit' | 'resetPw' | null;
+
+export function UserManagement() {
+  const { t, can } = useAppContext();
+  const [rows, setRows] = useState<UserManagementUser[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [editUser, setEditUser] = useState<UserManagementUser | null>(null);
+  const [formData, setFormData] = useState<CreateUserInput & { password2?: string }>({
+    username: '',
+    password: '',
+    password2: '',
+    roleId: 0,
+    status: 'active',
+  });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [users, roleList] = await Promise.all([getUsers(), getRoles()]);
+      setRows(users);
+      setRoles(roleList);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  const openCreate = () => {
+    setFormData({ username: '', password: '', password2: '', roleId: roles[0]?.id ?? 0, status: 'active' });
+    setFormError('');
+    setModalMode('create');
+  };
+
+  const openEdit = (user: UserManagementUser) => {
+    setEditUser(user);
+    setFormData({ username: user.username, password: '', password2: '', roleId: user.roleId, status: user.status as 'active' | 'inactive' });
+    setFormError('');
+    setModalMode('edit');
+  };
+
+  const openResetPw = (user: UserManagementUser) => {
+    setEditUser(user);
+    setFormData({ username: user.username, password: '', password2: '', roleId: user.roleId });
+    setFormError('');
+    setModalMode('resetPw');
+  };
+
+  const closeModal = () => {
+    setModalMode(null);
+    setEditUser(null);
+    setFormError('');
+  };
+
+  const handleSave = async () => {
+    setFormError('');
+    if (!formData.username.trim()) { setFormError(t('username') + ' required'); return; }
+    if (modalMode === 'create' && formData.password.length < 8) { setFormError('Password min 8 chars'); return; }
+    if (modalMode !== 'create' && formData.password && formData.password.length < 8) { setFormError('Password min 8 chars'); return; }
+    if (modalMode === 'resetPw') {
+      if (formData.password.length < 8) { setFormError('Password min 8 chars'); return; }
+      setSaving(true);
+      try {
+        await resetUserPassword(editUser!.id, { password: formData.password });
+        closeModal();
+        void loadUsers();
+      } catch (err) {
+        setFormError(err instanceof Error ? err.message : 'Failed to reset password');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    setSaving(true);
+    try {
+      const updateData: UpdateUserInput = {};
+      if (formData.roleId) updateData.roleId = formData.roleId;
+      if (formData.status) updateData.status = formData.status;
+      if (formData.password) updateData.password = formData.password;
+
+      if (modalMode === 'create') {
+        await createUser({ username: formData.username, password: formData.password, roleId: formData.roleId, status: formData.status });
+      } else {
+        await updateUser(editUser!.id, updateData);
+      }
+      closeModal();
+      void loadUsers();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const statusBadge = (status: string) => (
+    <span className={`status-badge ${status === 'active' ? 'active' : 'inactive'}`}>{t(status)}</span>
+  );
+
+  const canCreate = can('user.create');
+  const canEdit = can('user.update');
+  const canResetPw = can('user.resetPassword');
+
+  return (
+    <div className="page active">
+      <div className="page-header">
+        <h1 className="page-title">{t('pUserManagement')}</h1>
+        {canCreate && (
+          <button className="btn-primary btn-sm" onClick={openCreate}>{t('new')}</button>
+        )}
+      </div>
+      <div className="card">
+        {error && <div className="form-error" style={{ margin: '8px 0' }}>{error}</div>}
+        <Table
+          columns={[
+            { key: 'id', label: 'ID' },
+            { key: 'username', label: t('username') },
+            { key: 'roleName', label: t('role') },
+            { key: 'status', label: t('status'), render: (r) => statusBadge(r.status) },
+            { key: 'created_at', label: t('createdAt'), render: (r) => new Date(r.created_at).toLocaleDateString() },
+            {
+              key: '__actions__',
+              label: t('actions'),
+              render: (r) => (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {canEdit && <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>}
+                  {canResetPw && <button className="btn-outline btn-xs" onClick={() => openResetPw(r)}>{t('resetPassword')}</button>}
+                </div>
+              ),
+            },
+          ]}
+          data={rows}
+          emptyText={loading ? '...' : t('search') + '...'}
+        />
+      </div>
+
+      {modalMode && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{modalMode === 'create' ? t('createUser') : modalMode === 'edit' ? t('editUser') : t('resetPassword')}</h3>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="modal-body">
+              {formError && <div className="form-error" style={{ marginBottom: '8px' }}>{formError}</div>}
+              <div className="form-group">
+                <label>{t('username')}</label>
+                <input
+                  className="form-input"
+                  value={formData.username}
+                  onChange={e => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                  disabled={modalMode !== 'create'}
+                  placeholder={t('username')}
+                />
+              </div>
+              {modalMode !== 'edit' && (
+                <div className="form-group">
+                  <label>{t('password')}</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={formData.password}
+                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder={modalMode === 'create' ? t('password') : t('newPassword')}
+                  />
+                </div>
+              )}
+              {modalMode === 'edit' && (
+                <div className="form-group">
+                  <label>{t('password')}</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={formData.password}
+                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder={t('newPassword') + ' (' + t('optional') + ')'}
+                  />
+                </div>
+              )}
+              <div className="form-group">
+                <label>{t('role')}</label>
+                <select
+                  className="form-select"
+                  value={formData.roleId}
+                  onChange={e => setFormData(prev => ({ ...prev, roleId: Number(e.target.value) }))}
+                >
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              {modalMode !== 'resetPw' && (
+                <div className="form-group">
+                  <label>{t('status')}</label>
+                  <select
+                    className="form-select"
+                    value={formData.status}
+                    onChange={e => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                  >
+                    <option value="active">{t('active')}</option>
+                    <option value="inactive">{t('inactive')}</option>
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-outline" onClick={closeModal}>{t('cancel')}</button>
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? '...' : t('save')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

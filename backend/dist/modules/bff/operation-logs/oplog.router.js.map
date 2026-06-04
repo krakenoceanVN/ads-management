@@ -1,0 +1,1 @@
+{"version":3,"file":"oplog.router.js","sourceRoot":"","sources":["../../../../src/modules/bff/operation-logs/oplog.router.ts"],"names":[],"mappings":";;AAKA,kCAEC;AAND,yDAAsD;AACtD,iEAA8D;AAC9D,6EAA0E;AAE1E,SAAgB,WAAW,CAAC,MAAc;IACxC,MAAM,CAAC,GAAG,CAAC,iBAAiB,EAAE,yBAAW,EAAE,IAAA,qCAAiB,EAAC,YAAY,CAAC,EAAE,mCAAgB,CAAC,CAAC;AAChG,CAAC"}

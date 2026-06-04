@@ -1,0 +1,1 @@
+{"version":3,"file":"downstream.service.d.ts","sourceRoot":"","sources":["../../../../src/modules/bff/downstreams/downstream.service.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,cAAc,CAAC;AAEjD,MAAM,WAAW,sBAAsB;IACrC,UAAU,CAAC,EAAE,MAAM,CAAC;IACpB,MAAM,CAAC,EAAE,YAAY,CAAC;IACtB,OAAO,CAAC,EAAE,MAAM,CAAC;CAClB;AAED,wBAAsB,eAAe,CAAC,OAAO,CAAC,EAAE,sBAAsB,mDAsBrE"}

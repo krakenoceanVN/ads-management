@@ -3,6 +3,7 @@ import { listMedia, getMedia } from './media.service';
 import { createMedia, updateMedia, deleteMedia } from './media.write.service';
 import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
+import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
 import type { CreateMediaInput, UpdateMediaInput } from './media.write.service';
 
 export async function getAll(_req: Request, res: Response) {
@@ -42,6 +43,7 @@ export async function create(req: Request, res: Response) {
     currentUnitPrice: body.currentUnitPrice ?? null,
     currentRatio: body.currentRatio ?? null,
   });
+  await recordMasterDataOperation(req, 'CREATE_MEDIA', 'media', media.id, media.name);
   res.status(201).json(bffData(media));
 }
 
@@ -64,12 +66,14 @@ export async function update(req: Request, res: Response) {
     currentRatio: body.currentRatio,
     isArchived: body.isArchived,
   });
+  await recordMasterDataOperation(req, 'UPDATE_MEDIA', 'media', media.id, media.name);
   res.json(bffData(media));
 }
 
 export async function remove(req: Request, res: Response) {
   const id = parseInt(req.params['id'] as string, 10);
   if (isNaN(id)) throw new NotFoundError('Invalid media id');
-  await deleteMedia(id);
+  const media = await deleteMedia(id);
+  await recordMasterDataOperation(req, 'DELETE_MEDIA', 'media', id, media.name);
   res.json(bffData({ deleted: true }));
 }

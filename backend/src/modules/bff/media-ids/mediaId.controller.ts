@@ -3,6 +3,7 @@ import { listMediaIds, getMediaId } from './mediaId.service';
 import { createMediaId, updateMediaId, deleteMediaId } from './mediaId.write.service';
 import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
+import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
 import type { CreateMediaIdInput, UpdateMediaIdInput } from './mediaId.write.service';
 
 export async function getAll(req: Request, res: Response) {
@@ -42,6 +43,7 @@ export async function create(req: Request, res: Response) {
     downstreamId: body.downstreamId,
     customPrice: body.customPrice ?? null,
   });
+  await recordMasterDataOperation(req, 'CREATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
   res.status(201).json(bffData(mediaId));
 }
 
@@ -59,6 +61,7 @@ export async function update(req: Request, res: Response) {
     customPrice: body.customPrice,
     status: (body as any).status,
   });
+  await recordMasterDataOperation(req, 'UPDATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
   res.json(bffData(mediaId));
 }
 

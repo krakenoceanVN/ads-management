@@ -3,6 +3,7 @@ import { listAdvertisers, getAdvertiser } from './advertiser.service';
 import { createAdvertiser, updateAdvertiser, deleteAdvertiser } from './advertiser.write.service';
 import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
+import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
 import type { CreateAdvertiserInput, UpdateAdvertiserInput } from './advertiser.write.service';
 
 export async function getAll(_req: Request, res: Response) {
@@ -31,6 +32,7 @@ export async function create(req: Request, res: Response) {
     status: body.status ?? 'active',
     adTypeCode: body.adTypeCode.trim(),
   });
+  await recordMasterDataOperation(req, 'CREATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.status(201).json(bffData(advertiser));
 }
 
@@ -47,12 +49,14 @@ export async function update(req: Request, res: Response) {
     status: body.status,
     adTypeCode: body.adTypeCode?.trim(),
   });
+  await recordMasterDataOperation(req, 'UPDATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.json(bffData(advertiser));
 }
 
 export async function remove(req: Request, res: Response) {
   const id = parseInt(req.params['id'] as string, 10);
   if (isNaN(id)) throw new NotFoundError('Invalid advertiser id');
-  await deleteAdvertiser(id);
+  const advertiser = await deleteAdvertiser(id);
+  await recordMasterDataOperation(req, 'DELETE_ADVERTISER', 'advertiser', id, advertiser.name);
   res.json(bffData({ deleted: true }));
 }

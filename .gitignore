@@ -1,0 +1,18 @@
+@"
+backend/node_modules/
+frontend/node_modules/
+backend/dist/
+frontend/dist/
+
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+*.rar
+*.zip
+*.tar.gz
+*.log
+.vscode/
+.DS_Store
+"@ | Out-File -Encoding utf8 .gitignore

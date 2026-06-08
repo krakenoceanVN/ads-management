@@ -78,6 +78,10 @@ function isNeutralDataCoefficient(value: unknown) {
   return normalized === '1' || normalized === '100';
 }
 
+function formatBatchErrors(errors: unknown[]) {
+  return errors.map(item => typeof item === 'string' ? item : String((item as { message?: unknown })?.message ?? item)).join('; ');
+}
+
 function datesBetween(startDate: string, endDate: string) {
   const start = normalizeDate(startDate);
   const end = normalizeDate(endDate || startDate);
@@ -164,7 +168,22 @@ export function AdvEntry() {
   const [adOrders, setAdOrders] = useState<AdOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const draftRowsRef = React.useRef(new Map<string, Pick<AdvertiserEntryRow, 'rate' | 'traffic' | 'settlement'>>());
+
+  const draftKeyForRow = (row: AdvertiserEntryRow) => `${row.adIdNum}:${normalizeDate(row.date) ?? row.date}`;
+
+  const clearDrafts = (targetRows: AdvertiserEntryRow[]) => {
+    targetRows.forEach(row => draftRowsRef.current.delete(draftKeyForRow(row)));
+  };
+
+  const mergeAdvertiserDrafts = React.useCallback((serverRows: AdvertiserEntryRow[]) => serverRows.map(row => {
+    const draft = draftRowsRef.current.get(draftKeyForRow(row));
+    return draft && row.status !== 'confirmed'
+      ? { ...row, ...draft, status: 'pending' as DataEntryStatus }
+      : row;
+  }), []);
 
   const loadRows = React.useCallback(async () => {
     const date = normalizeDate(filters.startDate);
@@ -177,13 +196,14 @@ export function AdvEntry() {
         listAdvertiserEntries({ date }),
       ]);
       setAdOrders(orders);
-      setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
+      const nextRows = (Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type));
+      setRows(mergeAdvertiserDrafts(nextRows));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate]);
+  }, [filters.startDate, mergeAdvertiserDrafts]);
 
   React.useEffect(() => {
     void loadRows();
@@ -222,20 +242,47 @@ export function AdvEntry() {
       || '';
   };
 
+  const adOrderDisplayForRow = (row: AdvertiserEntryRow) => adTypeCodeForRow(row) || row.adOrder;
+
+  const getAdvertiserRowKey = (row: AdvertiserEntryRow) => `${row.advertiser} / ${adOrderDisplayForRow(row)} / ${row.adId}`;
+
+  const hasAnyAdvertiserInput = (row: AdvertiserEntryRow) => {
+    if (row.type === 'CPS') return hasValue(row.traffic) || hasValue(row.settlement);
+    return hasValue(row.traffic);
+  };
+
+  const getAdvertiserRowValidationError = (row: AdvertiserEntryRow) => {
+    if (!isAllowedEntryType(row.type)) return 'Only CPM, CPS, and CPA are supported.';
+    if (row.type === 'CPS') {
+      if (!row.traffic.trim() || !row.settlement.trim()) return 'RATIO requires amount values.';
+      if (Number(row.rate) <= 0) return t('ratioMustBePositive');
+      return '';
+    }
+    if (!row.traffic.trim()) return t('requiredFields');
+    if (Number(row.rate) <= 0) return t('unitPriceRequired') || t('requiredFields');
+    return '';
+  };
+
+  const isAdvertiserRowComplete = (row: AdvertiserEntryRow) => hasAnyAdvertiserInput(row) && !getAdvertiserRowValidationError(row);
+
   const updateRow = (uiKey: string, field: keyof Pick<AdvertiserEntryRow, 'rate' | 'traffic' | 'settlement'>, value: string) => {
-    setRows(prev => prev.map(row => row.uiKey === uiKey ? { ...row, [field]: value, status: 'pending' as DataEntryStatus } : row));
+    setMessage('');
+    setRows(prev => prev.map(row => {
+      if (row.uiKey !== uiKey) return row;
+      const nextRow = { ...row, [field]: value, status: 'pending' as DataEntryStatus };
+      draftRowsRef.current.set(draftKeyForRow(nextRow), {
+        rate: nextRow.rate,
+        traffic: nextRow.traffic,
+        settlement: nextRow.settlement,
+      });
+      return nextRow;
+    }));
   };
 
   const saveRows = async (targetRows: AdvertiserEntryRow[]) => {
     for (const row of targetRows) {
-      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM, CPS, and CPA are supported.');
-      if (row.type === 'CPS') {
-        if (!row.traffic.trim() && !row.settlement.trim()) throw new Error('RATIO requires amount values.');
-        if (Number(row.rate) <= 0) throw new Error(t('ratioMustBePositive'));
-      } else {
-        // CPM and CPA both require qty (traffic field)
-        if (!row.traffic.trim()) throw new Error(t('requiredFields'));
-      }
+      const validationError = getAdvertiserRowValidationError(row);
+      if (validationError) throw new Error(`${getAdvertiserRowKey(row)}: ${validationError}`);
     }
     const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ adId: number; type: EntryType; rate: string; traffic: string; settlement: string; recordDate: string }> }>();
     for (const row of targetRows) {
@@ -257,15 +304,18 @@ export function AdvEntry() {
 
     const results = await Promise.all(Array.from(groups.values()).map(group => saveAdvertiserEntryBatch(group)));
     const failures = results.flatMap(result => result.errors ?? []);
-    if (failures.length) throw new Error(failures.map(item => item.message).join('; '));
+    if (failures.length) throw new Error(formatBatchErrors(failures));
   };
 
   const saveRow = async (row: AdvertiserEntryRow) => {
     setBusy(true);
     setError('');
+    setMessage('');
     try {
       await saveRows([row]);
+      clearDrafts([row]);
       await loadRows();
+      setMessage('Saved row successfully.');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -276,10 +326,13 @@ export function AdvEntry() {
   const confirmRow = async (row: AdvertiserEntryRow) => {
     setBusy(true);
     setError('');
+    setMessage('');
     try {
       await saveRows([row]);
       await confirmAdvertiserEntryBatch({ recordDate: normalizeDate(row.date) ?? row.date, adSiteIds: [row.adIdNum] });
+      clearDrafts([row]);
       await loadRows();
+      setMessage('Confirmed row successfully.');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -291,8 +344,10 @@ export function AdvEntry() {
     if (row.id <= 0) return; // cannot unconfirm a generated (unsaved) row
     setBusy(true);
     setError('');
+    setMessage('');
     try {
       await unconfirmAdvertiserEntry(row.id);
+      clearDrafts([row]);
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -303,14 +358,35 @@ export function AdvEntry() {
 
   const confirmAllRows = async () => {
     const pendingRows = visibleRows.filter(row => row.status !== 'confirmed');
-    if (!pendingRows.length) return;
+    const emptyRows = pendingRows.filter(row => !hasAnyAdvertiserInput(row));
+    const inputRows = pendingRows.filter(hasAnyAdvertiserInput);
+    const invalidRows = inputRows
+      .map(row => ({ row, error: getAdvertiserRowValidationError(row) }))
+      .filter(item => item.error);
+    const eligibleRows = inputRows.filter(isAdvertiserRowComplete);
+
+    if (!eligibleRows.length) {
+      const invalidSummary = invalidRows.length
+        ? ` Invalid rows: ${invalidRows.map(item => `${getAdvertiserRowKey(item.row)}: ${item.error}`).join('; ')}`
+        : '';
+      setError(`${emptyRows.length} empty row(s) skipped; no eligible rows to confirm.${invalidSummary}`);
+      return;
+    }
+
     setBusy(true);
     setError('');
+    setMessage('');
     try {
-      await saveRows(pendingRows);
-      const date = normalizeDate(pendingRows[0].date) ?? pendingRows[0].date;
-      await confirmAdvertiserEntryBatch({ recordDate: date, adSiteIds: pendingRows.map(r => r.adIdNum) });
+      await saveRows(eligibleRows);
+      const date = normalizeDate(eligibleRows[0].date) ?? eligibleRows[0].date;
+      const result = await confirmAdvertiserEntryBatch({ recordDate: date, adSiteIds: eligibleRows.map(r => r.adIdNum) });
+      clearDrafts(eligibleRows);
       await loadRows();
+      const invalidSummary = invalidRows.length
+        ? ` Invalid ${invalidRows.length}: ${invalidRows.map(item => `${getAdvertiserRowKey(item.row)}: ${item.error}`).join('; ')}`
+        : '';
+      const backendErrors = result.errors.length ? ` Errors: ${formatBatchErrors(result.errors)}` : '';
+      setMessage(`Confirmed ${result.confirmed} row(s); skipped ${emptyRows.length} empty row(s); invalid ${invalidRows.length}.${invalidSummary}${backendErrors}`);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -323,7 +399,7 @@ export function AdvEntry() {
     const body = visibleRows.map(row => [
       row.date,
       row.advertiser,
-      row.adOrder,
+      adOrderDisplayForRow(row),
       row.type,
       row.adId,
       row.rate,
@@ -365,6 +441,7 @@ export function AdvEntry() {
           <button className="btn-primary input-sm data-download-btn" onClick={() => downloadAdvertiserCsv()}>{t('dataDownload')}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
+        {message && <div style={{ color: 'var(--success, #16a34a)', fontSize: '13px', marginBottom: '8px' }}>{message}</div>}
 
         <div className="table-wrap entry-table-wrap entry-table-scroll">
           <table className="entry-table">
@@ -393,7 +470,7 @@ export function AdvEntry() {
                   <tr key={row.uiKey} className={isConfirmed ? 'entry-row-confirmed' : ''}>
                     <td>{row.date}</td>
                     <td>{displayName(row.advertiser)}</td>
-                    <td>{displayName(row.adOrder)}</td>
+                    <td>{displayName(adOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.adId}</td>
                     <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.rate} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'rate', e.target.value)} /></td>
@@ -539,7 +616,7 @@ export function MediaDataMgmt() {
 
     const results = await Promise.all(Array.from(groups.values()).map(group => saveMediaEntryBatch(group)));
     const failures = results.flatMap(result => result.errors ?? []);
-    if (failures.length) throw new Error(failures.map(item => item.message).join('; '));
+    if (failures.length) throw new Error(formatBatchErrors(failures));
   };
 
   const saveRow = async (row: MediaEntryRow) => {

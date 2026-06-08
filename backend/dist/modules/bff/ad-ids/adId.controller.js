@@ -9,6 +9,7 @@ const adId_service_1 = require("./adId.service");
 const adId_write_service_1 = require("./adId.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(req, res) {
     const { advertiserId, adOrderId, adTypeCode, type, archived } = req.query;
     const filters = {
@@ -56,6 +57,7 @@ async function create(req, res) {
         ratio: body.ratio ?? null,
         status: body.status ?? 'active',
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_AD_ID', 'adId', adId.id, adId.slot);
     res.status(201).json((0, success_1.bffData)(adId));
 }
 async function update(req, res) {
@@ -73,13 +75,15 @@ async function update(req, res) {
         ratio: body.ratio,
         status: body.status,
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_AD_ID', 'adId', adId.id, adId.slot);
     res.json((0, success_1.bffData)(adId));
 }
 async function remove(req, res) {
     const id = parseInt(req.params['id'], 10);
     if (isNaN(id))
         throw new AppError_1.NotFoundError('Invalid ad id');
-    await (0, adId_write_service_1.deleteAdId)(id);
+    const adId = await (0, adId_write_service_1.deleteAdId)(id);
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_AD_ID', 'adId', id, adId.slot);
     res.json((0, success_1.bffData)({ deleted: true }));
 }
 //# sourceMappingURL=adId.controller.js.map

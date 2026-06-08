@@ -84,7 +84,7 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
 function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (AdOrder & { adType?: AdType }) | null }, recordDate: Date, di: Prisma.DailyInputGetPayload<{}> | null): AdvertiserEntryRow {
   const upstream = site.upstream;
   const adOrder = site.adOrder;
-  const adType = adOrder?.adType;
+  const adType = upstream.adType;
 
   // Rate: CPM and CPA use unitPriceSnapshot;
   // RATIO and CPS use ratioSnapshot

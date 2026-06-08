@@ -6,7 +6,7 @@ import type { UserRole } from './lib/bffTypes';
 
 type DetailPresetFilter = {
   ownerId: string;
-  orderId: string;
+  adTypeCode: string;
 } | null;
 
 type ModalState = {
@@ -44,8 +44,8 @@ interface AppState {
   renderLog: (log: OperationLog) => string;
   adIdPresetFilter: DetailPresetFilter;
   mediaIdPresetFilter: DetailPresetFilter;
-  navigateToAdIds: (advId: number, orderId: number) => void;
-  navigateToMediaIds: (mediaId: number, orderId: number) => void;
+  navigateToAdIds: (advId: number, adTypeCode: string) => void;
+  navigateToMediaIds: (mediaId: number, adTypeCode: string) => void;
   clearAdIdPresetFilter: () => void;
   clearMediaIdPresetFilter: () => void;
   currentUser: CurrentUserInfo | null;
@@ -108,13 +108,13 @@ export function AppProvider({ children, initialCurrentUser }: AppProviderProps) 
   const displayName = (value: string | number | undefined | null) => localizeName(value, lang);
   const renderLog = (log: OperationLog) => renderOperationLog(log, lang);
 
-  const navigateToAdIds = (advId: number, orderId: number) => {
-    setAdIdPresetFilter({ ownerId: String(advId), orderId: String(orderId) });
+  const navigateToAdIds = (advId: number, adTypeCode: string) => {
+    setAdIdPresetFilter({ ownerId: String(advId), adTypeCode });
     setCurrentPage('pAdIdMgmt');
   };
 
-  const navigateToMediaIds = (mediaId: number, orderId: number) => {
-    setMediaIdPresetFilter({ ownerId: String(mediaId), orderId: String(orderId) });
+  const navigateToMediaIds = (mediaId: number, adTypeCode: string) => {
+    setMediaIdPresetFilter({ ownerId: String(mediaId), adTypeCode });
     setCurrentPage('pMediaIdMgmt');
   };
 

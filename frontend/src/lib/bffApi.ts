@@ -371,10 +371,10 @@ export async function saveAdvertiserEntryBatch(payload: SaveAdvertiserEntryBatch
 }
 
 export async function confirmAdvertiserEntryBatch(payload: { recordDate: string; adSiteIds: number[] }) {
-  return request<ConfirmEntryBatchResult>('/api/bff/data-entry/advertisers/confirm-batch', {
+  return unwrapData(await request<BffDataResponse<ConfirmEntryBatchResult>>('/api/bff/data-entry/advertisers/confirm-batch', {
     method: 'POST',
     body: payload,
-  });
+  }));
 }
 
 export async function unconfirmAdvertiserEntry(id: number) {
@@ -427,10 +427,10 @@ export async function saveMediaEntryBatch(payload: SaveMediaEntryBatchPayload) {
 }
 
 export async function confirmMediaEntryBatch(payload: { recordDate: string; adSiteIds: number[] }) {
-  return request<ConfirmEntryBatchResult>('/api/bff/data-entry/media/confirm-batch', {
+  return unwrapData(await request<BffDataResponse<ConfirmEntryBatchResult>>('/api/bff/data-entry/media/confirm-batch', {
     method: 'POST',
     body: payload,
-  });
+  }));
 }
 
 export async function unconfirmMediaEntry(id: number) {

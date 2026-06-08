@@ -60,8 +60,8 @@ function mapAdOrder(order) {
 }
 function mapAdId(site) {
     // slot field — schema has no separate slot column; use adSite.name as slot identifier
-    // rate — currentUnitPrice for CPM, currentRatio for RATIO
-    const rate = site.billingMethod === 'CPM'
+    // rate — currentUnitPrice for CPM/CPA, currentRatio for RATIO
+    const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
         ? decimalToNull(site.currentUnitPrice)
         : decimalToNull(site.currentRatio);
     return {

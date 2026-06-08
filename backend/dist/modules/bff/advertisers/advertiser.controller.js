@@ -9,6 +9,7 @@ const advertiser_service_1 = require("./advertiser.service");
 const advertiser_write_service_1 = require("./advertiser.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(_req, res) {
     const data = await (0, advertiser_service_1.listAdvertisers)();
     res.json((0, success_1.bffData)(data));
@@ -37,6 +38,7 @@ async function create(req, res) {
         status: body.status ?? 'active',
         adTypeCode: body.adTypeCode.trim(),
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
     res.status(201).json((0, success_1.bffData)(advertiser));
 }
 async function update(req, res) {
@@ -53,13 +55,15 @@ async function update(req, res) {
         status: body.status,
         adTypeCode: body.adTypeCode?.trim(),
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
     res.json((0, success_1.bffData)(advertiser));
 }
 async function remove(req, res) {
     const id = parseInt(req.params['id'], 10);
     if (isNaN(id))
         throw new AppError_1.NotFoundError('Invalid advertiser id');
-    await (0, advertiser_write_service_1.deleteAdvertiser)(id);
+    const advertiser = await (0, advertiser_write_service_1.deleteAdvertiser)(id);
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_ADVERTISER', 'advertiser', id, advertiser.name);
     res.json((0, success_1.bffData)({ deleted: true }));
 }
 //# sourceMappingURL=advertiser.controller.js.map

@@ -8,6 +8,7 @@ const downstream_service_1 = require("./downstream.service");
 const downstream_write_service_1 = require("./downstream.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(req, res) {
     const { adTypeCode, status, keyword } = req.query;
     const filters = {
@@ -25,6 +26,7 @@ async function create(req, res) {
     if (!downstreamType)
         throw new AppError_1.BadRequestError('downstreamType is required');
     const result = await (0, downstream_write_service_1.createDownstream)({ adTypeId, downstreamType, payoutRate, status });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_DOWNSTREAM', 'downstream', result.id, result.downstreamType);
     res.status(201).json((0, success_1.bffData)(result));
 }
 async function update(req, res) {
@@ -33,6 +35,7 @@ async function update(req, res) {
         throw new AppError_1.NotFoundError('Invalid downstream id');
     const { downstreamType, payoutRate, status } = req.body;
     const result = await (0, downstream_write_service_1.updateDownstream)(id, { downstreamType, payoutRate, status });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_DOWNSTREAM', 'downstream', result.id, result.downstreamType);
     res.json((0, success_1.bffData)(result));
 }
 async function remove(req, res) {
@@ -40,6 +43,7 @@ async function remove(req, res) {
     if (isNaN(id))
         throw new AppError_1.NotFoundError('Invalid downstream id');
     const result = await (0, downstream_write_service_1.deleteDownstream)(id);
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_DOWNSTREAM', 'downstream', id, result.mode);
     res.json((0, success_1.bffData)(result));
 }
 //# sourceMappingURL=downstream.controller.js.map

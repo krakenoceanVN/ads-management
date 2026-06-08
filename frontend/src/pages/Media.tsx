@@ -780,7 +780,7 @@ export function MediaIdMgmt() {
   React.useEffect(() => {
     if (!mediaIdPresetFilter) return;
     setMediaFilter(mediaIdPresetFilter.ownerId);
-    setOrderFilter(mediaIdPresetFilter.orderId);
+    setOrderFilter(mediaIdPresetFilter.adTypeCode);
     setTypeFilter('');
     setSearch('');
     clearMediaIdPresetFilter();

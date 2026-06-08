@@ -62,7 +62,7 @@ async function listAdvertiserEntries(params) {
 function makeAdvertiserRow(site, recordDate, di) {
     const upstream = site.upstream;
     const adOrder = site.adOrder;
-    const adType = adOrder?.adType;
+    const adType = upstream.adType;
     // Rate: CPM and CPA use unitPriceSnapshot;
     // RATIO and CPS use ratioSnapshot
     const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')

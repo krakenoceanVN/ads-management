@@ -9,6 +9,7 @@ const mediaId_service_1 = require("./mediaId.service");
 const mediaId_write_service_1 = require("./mediaId.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(req, res) {
     const { mediaId, adTypeCode, type, archived } = req.query;
     const filters = {
@@ -44,6 +45,7 @@ async function create(req, res) {
         downstreamId: body.downstreamId,
         customPrice: body.customPrice ?? null,
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
     res.status(201).json((0, success_1.bffData)(mediaId));
 }
 async function update(req, res) {
@@ -59,6 +61,7 @@ async function update(req, res) {
         customPrice: body.customPrice,
         status: body.status,
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
     res.json((0, success_1.bffData)(mediaId));
 }
 async function remove(req, res) {

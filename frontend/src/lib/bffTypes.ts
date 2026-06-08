@@ -377,8 +377,8 @@ export interface SaveEntryBatchResult {
 
 export interface ConfirmEntryBatchResult {
   success: boolean;
-  updated: number;
-  error?: string;
+  confirmed: number;
+  errors: string[];
 }
 
 export interface UnconfirmEntryResult {

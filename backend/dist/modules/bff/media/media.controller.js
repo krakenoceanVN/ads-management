@@ -9,6 +9,7 @@ const media_service_1 = require("./media.service");
 const media_write_service_1 = require("./media.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(_req, res) {
     const data = await (0, media_service_1.listMedia)();
     res.json((0, success_1.bffData)(data));
@@ -48,6 +49,7 @@ async function create(req, res) {
         currentUnitPrice: body.currentUnitPrice ?? null,
         currentRatio: body.currentRatio ?? null,
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_MEDIA', 'media', media.id, media.name);
     res.status(201).json((0, success_1.bffData)(media));
 }
 async function update(req, res) {
@@ -71,13 +73,15 @@ async function update(req, res) {
         currentRatio: body.currentRatio,
         isArchived: body.isArchived,
     });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_MEDIA', 'media', media.id, media.name);
     res.json((0, success_1.bffData)(media));
 }
 async function remove(req, res) {
     const id = parseInt(req.params['id'], 10);
     if (isNaN(id))
         throw new AppError_1.NotFoundError('Invalid media id');
-    await (0, media_write_service_1.deleteMedia)(id);
+    const media = await (0, media_write_service_1.deleteMedia)(id);
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_MEDIA', 'media', id, media.name);
     res.json((0, success_1.bffData)({ deleted: true }));
 }
 //# sourceMappingURL=media.controller.js.map

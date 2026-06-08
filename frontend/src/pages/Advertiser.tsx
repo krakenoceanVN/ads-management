@@ -682,7 +682,7 @@ export function AdOrderMgmt() {
                 render: r => {
                   const count = countAdIds(r);
                   if (!count || !advFilter) return <span className={count ? '' : 'count-zero'}>{count}</span>;
-                  return <button type="button" className="count-link" onClick={() => navigateToAdIds(Number(advFilter), r.id)}>{count}</button>;
+                  return <button type="button" className="count-link" onClick={() => navigateToAdIds(Number(advFilter), r.adTypeCode)}>{count}</button>;
                 }
               },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
@@ -757,8 +757,8 @@ function adIdFormFromRecord(record: AdId): AdIdFormState {
     adTypeCode: record.adTypeCode ?? '',
     slot: record.slot ?? '',
     type: record.type as 'CPM' | 'RATIO' | 'CPA',
-    unitPrice: record.type === 'CPM' && record.rate != null ? String(record.rate) : '',
-    ratio: record.type !== 'CPM' && record.rate != null ? String(record.rate) : '',
+    unitPrice: (record.type === 'CPM' || record.type === 'CPA') && record.rate != null ? String(record.rate) : '',
+    ratio: record.type === 'RATIO' && record.rate != null ? String(record.rate) : '',
     notes: '',
     status: record.status,
   };
@@ -781,7 +781,6 @@ export function AdIdMgmt() {
   const [orderFilter, setOrderFilter] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('');
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
-  const [orders, setOrders] = React.useState<AdOrder[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<AdId[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -863,19 +862,17 @@ export function AdIdMgmt() {
   React.useEffect(() => {
     if (!adIdPresetFilter) return;
     setAdvFilter(adIdPresetFilter.ownerId);
-    setOrderFilter(adIdPresetFilter.orderId);
+    setOrderFilter(adIdPresetFilter.adTypeCode);
     setTypeFilter('');
     setSearch('');
     clearAdIdPresetFilter();
   }, [adIdPresetFilter, clearAdIdPresetFilter]);
 
-  const orderById = React.useMemo(() => new Map(orders.map(order => [String(order.id), order])), [orders]);
   const adTypeNameByCode = React.useMemo(() => new Map(adTypes.map(at => [at.code, at.name ?? at.code])), [adTypes]);
   const advertiserOptions = advertisers.filter(advertiser => rows.some(row => row.advertiserId === advertiser.id));
   const advertiserScopedRows = advFilter ? rows.filter(row => row.advertiserId === Number(advFilter)) : rows;
-  const orderOptions = orders.filter(order => advertiserScopedRows.some(row => row.adTypeCode === order.adTypeCode));
-  const selectedOrder = orderFilter ? orderById.get(orderFilter) : undefined;
-  const orderScopedRows = selectedOrder ? advertiserScopedRows.filter(row => row.adTypeCode === selectedOrder.adTypeCode) : advertiserScopedRows;
+  const adTypeOptions = adTypes.filter(adType => advertiserScopedRows.some(row => row.adTypeCode === adType.code));
+  const orderScopedRows = orderFilter ? advertiserScopedRows.filter(row => row.adTypeCode === orderFilter) : advertiserScopedRows;
   const typeOptions = Array.from(new Set(orderScopedRows.map(row => row.type).filter(Boolean)));
   const keyword = normalizeText(search);
   const visibleRows = orderScopedRows.filter(row => {
@@ -993,7 +990,7 @@ export function AdIdMgmt() {
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
           <div className="toolbar-right">
             <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{orderOptions.map(o => <option key={o.id} value={o.id}>{displayName(o.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.code} value={type.code}>{displayName(type.name)} ({type.code})</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
           </div>

@@ -13,6 +13,7 @@ const adType_service_1 = require("./adType.service");
 const adType_write_service_1 = require("./adType.write.service");
 const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
+const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(_req, res) {
     const data = await (0, adType_service_1.listAdTypes)();
     res.json((0, success_1.bffData)(data));
@@ -33,6 +34,7 @@ async function create(req, res) {
     if (!name)
         throw new AppError_1.BadRequestError('name is required');
     const result = await (0, adType_write_service_1.createAdType)({ code, name });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_AD_TYPE', 'adType', result.id, result.name);
     res.status(201).json((0, success_1.bffData)(result));
 }
 async function update(req, res) {
@@ -41,6 +43,7 @@ async function update(req, res) {
         throw new AppError_1.NotFoundError('Invalid adType id');
     const { code, name } = req.body;
     const result = await (0, adType_write_service_1.updateAdType)(id, { code, name });
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_AD_TYPE', 'adType', result.id, result.name);
     res.json((0, success_1.bffData)(result));
 }
 async function remove(req, res) {
@@ -48,6 +51,7 @@ async function remove(req, res) {
     if (isNaN(id))
         throw new AppError_1.NotFoundError('Invalid adType id');
     await (0, adType_write_service_1.deleteAdType)(id);
+    await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_AD_TYPE', 'adType', id, null);
     res.json((0, success_1.bffData)({ deleted: true }));
 }
 //# sourceMappingURL=adType.controller.js.map

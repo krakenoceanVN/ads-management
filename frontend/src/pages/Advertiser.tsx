@@ -76,6 +76,10 @@ function normalizeText(value: unknown) {
   return String(value ?? '').toLowerCase();
 }
 
+function formatBillingMethodLabel(type: string) {
+  return type === 'RATIO' ? 'CPS' : type;
+}
+
 function formatMgmtRate(type: string, rate: unknown) {
   if (rate == null || rate === '') return '';
   const num = Number(rate);
@@ -273,6 +277,12 @@ export function AdvertiserList() {
     ].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
+  }).sort((a, b) => {
+    const statusOrder = Number(b.status === 'active') - Number(a.status === 'active');
+    if (statusOrder !== 0) return statusOrder;
+    const nameOrder = displayName(a.name).localeCompare(displayName(b.name), undefined, { sensitivity: 'base' });
+    if (nameOrder !== 0) return nameOrder;
+    return a.id - b.id;
   });
 
   const openCreate = () => {
@@ -780,6 +790,7 @@ export function AdIdMgmt() {
   const [advFilter, setAdvFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('');
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<AdId[]>([]);
@@ -864,34 +875,43 @@ export function AdIdMgmt() {
     setAdvFilter(adIdPresetFilter.ownerId);
     setOrderFilter(adIdPresetFilter.adTypeCode);
     setTypeFilter('');
+    setStatusFilter('');
     setSearch('');
     clearAdIdPresetFilter();
   }, [adIdPresetFilter, clearAdIdPresetFilter]);
 
   const adTypeNameByCode = React.useMemo(() => new Map(adTypes.map(at => [at.code, at.name ?? at.code])), [adTypes]);
-  const advertiserOptions = advertisers.filter(advertiser => rows.some(row => row.advertiserId === advertiser.id));
-  const advertiserScopedRows = advFilter ? rows.filter(row => row.advertiserId === Number(advFilter)) : rows;
-  const adTypeOptions = adTypes.filter(adType => advertiserScopedRows.some(row => row.adTypeCode === adType.code));
-  const orderScopedRows = orderFilter ? advertiserScopedRows.filter(row => row.adTypeCode === orderFilter) : advertiserScopedRows;
-  const typeOptions = Array.from(new Set(orderScopedRows.map(row => row.type).filter(Boolean)));
+  const adTypeScopedRows = orderFilter ? rows.filter(row => row.adTypeCode === orderFilter) : rows;
+  const advertiserOptions = advertisers.filter(advertiser => adTypeScopedRows.some(row => row.advertiserId === advertiser.id));
+  const advertiserScopedRows = advFilter ? adTypeScopedRows.filter(row => row.advertiserId === Number(advFilter)) : adTypeScopedRows;
+  const adTypeOptions = adTypes.filter(adType => rows.some(row => row.adTypeCode === adType.code));
+  const typeOptions = Array.from(new Set(advertiserScopedRows.map(row => row.type).filter(Boolean)));
   const keyword = normalizeText(search);
-  const visibleRows = orderScopedRows.filter(row => {
+  const visibleRows = advertiserScopedRows.filter(row => {
     if (typeFilter && row.type !== typeFilter) return false;
+    if (statusFilter && row.status !== statusFilter) return false;
     if (!keyword) return true;
     const values = [
       row.advertiserName,
       adTypeNameByCode.get(row.adTypeCode),
       row.slot,
-      row.type,
+      formatBillingMethodLabel(row.type),
       row.rate,
       row.status
     ];
     return values.some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
   });
 
+  React.useEffect(() => {
+    if (!advFilter) return;
+    if (!advertiserOptions.some(advertiser => advertiser.id === Number(advFilter))) {
+      setAdvFilter('');
+    }
+  }, [advFilter, advertiserOptions]);
+
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...defaultAdIdForm(), advertiserId: advFilter });
+    setForm({ ...defaultAdIdForm(), advertiserId: advFilter, adTypeCode: orderFilter });
     setFormError('');
     setFormOpen(true);
   };
@@ -989,9 +1009,10 @@ export function AdIdMgmt() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
           <div className="toolbar-right">
-            <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
             <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.code} value={type.code}>{displayName(type.name)} ({type.code})</option>)}</select>
-            <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
+            <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
+            <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{formatBillingMethodLabel(type)}</option>)}</select>
+            <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
@@ -1020,16 +1041,23 @@ export function AdIdMgmt() {
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
             <div className="modal-body">
-              <div className="form-group"><label>{t('advertiser')}</label>
-                <select value={form.advertiserId} onChange={e => setForm(prev => ({ ...prev, advertiserId: e.target.value, adTypeCode: '' }))}>
-                  <option value="">-</option>
-                  {advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
-                </select>
-              </div>
               <div className="form-group"><label>{t('adType')}</label>
-                <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
+                <select value={form.adTypeCode} onChange={e => setForm(prev => {
+                  const nextAdTypeCode = e.target.value;
+                  const currentAdvertiser = advertisers.find(a => String(a.id) === prev.advertiserId);
+                  return { ...prev, adTypeCode: nextAdTypeCode, advertiserId: currentAdvertiser && nextAdTypeCode && currentAdvertiser.adTypeCode !== nextAdTypeCode ? '' : prev.advertiserId };
+                })}>
                   <option value="">-</option>
                   {adTypes.map(type => <option key={type.code} value={type.code}>{type.name} ({type.code})</option>)}
+                </select>
+              </div>
+              <div className="form-group"><label>{t('advertiser')}</label>
+                <select value={form.advertiserId} onChange={e => setForm(prev => {
+                  const advertiser = advertisers.find(a => String(a.id) === e.target.value);
+                  return { ...prev, advertiserId: e.target.value, adTypeCode: advertiser?.adTypeCode ?? prev.adTypeCode };
+                })}>
+                  <option value="">-</option>
+                  {advertisers.filter(a => !form.adTypeCode || a.adTypeCode === form.adTypeCode).map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('adId')}</label><input type="text" value={form.slot} onChange={e => setForm(prev => ({ ...prev, slot: e.target.value }))} /></div>
@@ -1041,7 +1069,7 @@ export function AdIdMgmt() {
                 </select>
               </div>
               {(form.type === 'CPM' || form.type === 'CPA') && <div className="form-group"><label>{t('unitPrice')}</label><input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setForm(prev => ({ ...prev, unitPrice: e.target.value }))} /></div>}
-              {form.type === 'RATIO' && <div className="form-group"><label>{t('ratio')}</label><input type="number" step="0.0001" min="0" max="1" value={form.ratio} onChange={e => setForm(prev => ({ ...prev, ratio: e.target.value }))} /></div>}
+              {form.type === 'RATIO' && <div className="form-group"><label>{t('revenueShare')}</label><input type="number" step="0.0001" min="0" max="1" value={form.ratio} onChange={e => setForm(prev => ({ ...prev, ratio: e.target.value }))} /></div>}
               <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>
                   <option value="active">{t('online')}</option>

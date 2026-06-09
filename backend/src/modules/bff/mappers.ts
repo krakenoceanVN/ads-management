@@ -3,7 +3,7 @@
 
 import type { Decimal } from '@prisma/client/runtime/library';
 import type { Advertiser, Media, AdOrder, AdId, MediaId, DownstreamDto } from './bff.types';
-import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, AdType } from '../../shared/prisma/client';
+import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, AdType, UpstreamAdType } from '../../shared/prisma/client';
 import type { EntityStatus, EntryType } from './bff.types';
 
 function decimalToNum(d: Decimal | null | undefined): number | undefined {
@@ -18,7 +18,10 @@ function decimalToNull(d: Decimal | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function mapAdvertiser(upstream: Upstream & { adType: AdType }): Advertiser {
+export function mapAdvertiser(upstream: Upstream & { adType: AdType; adTypeLinks?: Array<UpstreamAdType & { adType: AdType }> }): Advertiser {
+  const linkedAdTypes = (upstream.adTypeLinks ?? []).map(link => link.adType).filter(Boolean);
+  const adTypes = linkedAdTypes.length ? linkedAdTypes : upstream.adType ? [upstream.adType] : [];
+  const adTypeCodes = Array.from(new Set(adTypes.map(adType => adType.code)));
   return {
     id: upstream.id,
     name: upstream.name,
@@ -27,11 +30,18 @@ export function mapAdvertiser(upstream: Upstream & { adType: AdType }): Advertis
     email: upstream.email,
     notes: upstream.notes,
     status: upstream.status as EntityStatus,
-    adTypeCode: upstream.adType?.code,
+    adTypeCode: upstream.adType?.code ?? adTypeCodes[0],
+    adTypeCodes,
+    adTypes: adTypes.map(adType => ({ id: adType.id, code: adType.code, name: adType.name })),
   };
 }
 
-export function mapMedia(site: AdSite & { upstream: Upstream & { adType: AdType } }): Media {
+function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream?: { adType?: AdType | null } | null }) {
+  return site.adOrder?.adType ?? site.upstream?.adType ?? null;
+}
+
+export function mapMedia(site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (PrismaAdOrder & { adType: AdType }) | null }): Media {
+  const adType = actualAdType(site);
   return {
     id: site.id,
     name: site.name,
@@ -41,7 +51,8 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { adType: AdType 
     notes: null,
     status: site.status as EntityStatus,
     upstreamId: site.upstreamId,
-    adTypeCode: site.upstream?.adType?.code,
+    adTypeCode: adType?.code,
+    adTypeName: adType?.name ?? null,
     billingMethod: site.billingMethod as EntryType | undefined,
     currentUnitPrice: decimalToNum(site.currentUnitPrice),
     currentRatio: decimalToNum(site.currentRatio),
@@ -54,13 +65,14 @@ export function mapAdOrder(order: PrismaAdOrder & { upstream: Upstream; adType: 
     advId: order.upstreamId,
     name: order.name,
     adTypeCode: order.adType?.code ?? '',
+    adTypeName: order.adType?.name ?? null,
     notes: order.notes,
     status: order.status as EntityStatus,
   };
 }
 
 export function mapAdId(
-  site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: PrismaAdOrder | null }
+  site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (PrismaAdOrder & { adType?: AdType }) | null }
 ): AdId {
   // slot field — schema has no separate slot column; use adSite.name as slot identifier
   // rate — currentUnitPrice for CPM/CPA, currentRatio for RATIO
@@ -73,10 +85,12 @@ export function mapAdId(
     slot: site.name,
     type: site.billingMethod as EntryType,
     rate,
+    notes: (site as { notes?: string | null }).notes ?? null,
     status: site.status as EntityStatus,
     advertiserId: site.upstreamId,
     advertiserName: site.upstream?.name ?? '',
-    adTypeCode: site.upstream?.adType?.code ?? '',
+    adTypeCode: actualAdType(site)?.code ?? '',
+    adTypeName: actualAdType(site)?.name ?? null,
     adOrderId: site.adOrderId ?? null,
     upstreamId: site.upstreamId,
     billingMethod: site.billingMethod as EntryType,
@@ -87,7 +101,7 @@ export function mapAdId(
 
 export function mapMediaId(
   j: AdSiteDownstream & {
-    adSite: AdSite & { upstream: Upstream & { adType: AdType } };
+    adSite: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (PrismaAdOrder & { adType?: AdType }) | null };
     downstream: Downstream;
   }
 ): MediaId {
@@ -101,7 +115,8 @@ export function mapMediaId(
     status: 'active' as EntityStatus, // AdSiteDownstream has no status column → default active
     mediaId: j.adSite.id,
     mediaName: j.adSite.name,
-    adTypeCode: j.adSite.upstream?.adType?.code ?? '',
+    adTypeCode: actualAdType(j.adSite)?.code ?? '',
+    adTypeName: actualAdType(j.adSite)?.name ?? null,
     upstreamId: j.adSite.upstreamId,
     billingMethod: j.adSite.billingMethod as EntryType,
     isActive: j.adSite.isActive,
@@ -117,6 +132,7 @@ export function mapDownstream(d: Downstream & { adType: AdType }): DownstreamDto
     downstreamType: d.downstreamType,
     adTypeId: d.adTypeId,
     adTypeCode: d.adType?.code ?? '',
+    adTypeName: d.adType?.name ?? null,
     payoutRate: Number(d.payoutRate),
     status: d.status as EntityStatus,
   };

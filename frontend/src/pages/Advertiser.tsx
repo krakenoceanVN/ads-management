@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppContext } from '../AppContext';
-import { Table, TypeTag } from '../components/Table';
+import { Table, TypeTag, type SortDirection } from '../components/Table';
 import { QuarantineConfirmModal } from '../components/QuarantineConfirmModal';
 import { HardDeleteModal } from '../components/HardDeleteModal';
 import { useQuarantineAction } from '../hooks/useQuarantineAction';
@@ -118,7 +118,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 type AdvertiserFormState = {
   name: string;
-  adTypeCode: string;
+  adTypeCodes: string[];
   status: EntityStatus;
   contact: string;
   phone: string;
@@ -126,14 +126,19 @@ type AdvertiserFormState = {
   notes: string;
 };
 
+function getAdvertiserAdTypeCodes(record: Advertiser): string[] {
+  return record.adTypeCodes?.length ? record.adTypeCodes : record.adTypeCode ? [record.adTypeCode] : [];
+}
+
 function defaultAdvertiserForm(adTypeCode = ''): AdvertiserFormState {
-  return { name: '', adTypeCode, status: 'active', contact: '', phone: '', email: '', notes: '' };
+  return { name: '', adTypeCodes: adTypeCode ? [adTypeCode] : [], status: 'active', contact: '', phone: '', email: '', notes: '' };
 }
 
 function advertiserFormFromRecord(record: Advertiser, fallbackAdTypeCode = ''): AdvertiserFormState {
+  const adTypeCodes = getAdvertiserAdTypeCodes(record);
   return {
     name: record.name ?? '',
-    adTypeCode: record.adTypeCode ?? fallbackAdTypeCode,
+    adTypeCodes: adTypeCodes.length ? adTypeCodes : fallbackAdTypeCode ? [fallbackAdTypeCode] : [],
     status: record.status ?? 'active',
     contact: record.contact ?? '',
     phone: record.phone ?? '',
@@ -205,15 +210,39 @@ export function AdvertiserList() {
     quarantine.openModal();
   };
 
+  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
+  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
+
+  const toggleStatusSort = () => {
+    setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  };
+  const toggleNameSort = () => {
+    setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  };
+
   const advertiserColumns: CsvColumn<Advertiser>[] = [
     { label: t('advertiser'), value: r => displayName(r.name) },
-    { label: t('adType'), value: r => r.adTypeCode ?? '' },
+    { label: t('adType'), value: r => getAdvertiserAdTypeNames(r, adTypeNameByCode) },
     { label: t('contact'), value: r => r.contact ?? '-' },
     { label: t('phone'), value: r => r.phone ?? '-' },
     { label: t('email'), value: r => r.email ?? '-' },
     { label: t('notes'), value: r => r.notes ?? '-' },
     { label: t('status'), value: r => r.status ?? '' },
   ];
+
+  const adTypeNameByCode = React.useMemo(
+    () => new Map(adTypes.map(at => [at.code, at.name ?? at.code])),
+    [adTypes]
+  );
+
+  const getAdvertiserAdTypeNames = (record: Advertiser, map: Map<string, string>) => {
+    if (record.adTypes?.length) {
+      return record.adTypes.map(at => displayName(at.name ?? at.code)).join(', ');
+    }
+    return getAdvertiserAdTypeCodes(record)
+      .map(code => displayName(map.get(code) ?? code))
+      .join(', ');
+  };
 
   const adTypeOptions = adTypes;
 
@@ -231,17 +260,6 @@ export function AdvertiserList() {
   React.useEffect(() => {
     void loadAdTypes();
   }, [loadAdTypes]);
-
-  // Reset adTypeCode when advertiser changes if no longer valid
-  React.useEffect(() => {
-    if (!advFilter) { /* cleared — no reset */ }
-    else if (form.adTypeCode) {
-      const isValidForAdv = adTypes.some(t => t.code === form.adTypeCode);
-      if (!isValidForAdv) {
-        setForm(prev => ({ ...prev, adTypeCode: adTypeOptions[0]?.code ?? '' }));
-      }
-    }
-  }, [advFilter, adTypes, form.adTypeCode]);
 
   const loadRows = React.useCallback(async () => {
     setLoading(true);
@@ -268,7 +286,8 @@ export function AdvertiserList() {
     if (!keyword) return true;
     return [
       row.name,
-      row.adTypeCode,
+      getAdvertiserAdTypeNames(row, adTypeNameByCode),
+      getAdvertiserAdTypeCodes(row).join(' '),
       row.contact,
       row.phone,
       row.email,
@@ -278,9 +297,15 @@ export function AdvertiserList() {
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   }).sort((a, b) => {
-    const statusOrder = Number(b.status === 'active') - Number(a.status === 'active');
+    const aActive = a.status === 'active' ? 1 : 0;
+    const bActive = b.status === 'active' ? 1 : 0;
+    const statusDelta = aActive - bActive;
+    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
     if (statusOrder !== 0) return statusOrder;
-    const nameOrder = displayName(a.name).localeCompare(displayName(b.name), undefined, { sensitivity: 'base' });
+    const nameA = displayName(a.name);
+    const nameB = displayName(b.name);
+    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
     if (nameOrder !== 0) return nameOrder;
     return a.id - b.id;
   });
@@ -307,14 +332,15 @@ export function AdvertiserList() {
     }
     const payload: CreateAdvertiserInput | UpdateAdvertiserInput = {
       name: form.name.trim(),
-      adTypeCode: form.adTypeCode,
+      adTypeCode: form.adTypeCodes[0],
+      adTypeCodes: form.adTypeCodes,
       status: form.status,
       contact: form.contact.trim() || null,
       phone: form.phone.trim() || null,
       email: emailValue || null,
       notes: form.notes.trim() || null,
     };
-    if (!payload.name || !payload.adTypeCode) {
+    if (!payload.name || !form.adTypeCodes.length) {
       setFormError(t('requiredFields'));
       return;
     }
@@ -372,13 +398,13 @@ export function AdvertiserList() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('advertiser'), render: r => displayName(r.name) },
-              { key: 'adTypeCode', label: t('adType') },
+              { key: 'name', label: t('advertiser'), render: r => displayName(r.name), sortDirection: nameSort, onSortClick: toggleNameSort },
+              { key: 'adTypeCode', label: t('adType'), render: r => getAdvertiserAdTypeNames(r, adTypeNameByCode) },
               { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-') },
               { key: 'phone', label: t('phone'), render: r => r.phone ?? '-' },
               { key: 'email', label: t('email'), render: r => r.email ?? '-' },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} /> },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
               { key: '__actions__', label: t('actions') }
             ]}
             data={visibleRows}
@@ -396,10 +422,26 @@ export function AdvertiserList() {
             <div className="modal-body">
               <div className="form-group"><label>{t('advertiserName')}</label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
               <div className="form-group"><label>{t('adType')}</label>
-                <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
-                  <option value="">-</option>
-                  {adTypeOptions.map(type => <option key={type.code} value={type.code}>{type.name} ({type.code})</option>)}
-                </select>
+                <div className="checkbox-list">
+                  {adTypeOptions.map(type => {
+                    const checked = form.adTypeCodes.includes(type.code);
+                    return (
+                      <label key={type.code} className="checkbox-list-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setForm(prev => ({
+                            ...prev,
+                            adTypeCodes: checked
+                              ? prev.adTypeCodes.filter(code => code !== type.code)
+                              : [...prev.adTypeCodes, type.code],
+                          }))}
+                        />
+                        <span>{displayName(type.name)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="form-group"><label>{t('contact')}</label><input type="text" value={form.contact} onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))} /></div>
               <div className="form-group"><label>{t('phone')}</label><input type="text" value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} /></div>
@@ -452,6 +494,7 @@ export function AdOrderMgmt() {
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
   const [orders, setOrders] = React.useState<AdOrder[]>([]);
   const [adIds, setAdIds] = React.useState<AdId[]>([]);
+  const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [editing, setEditing] = React.useState<AdOrder | null>(null);
@@ -475,10 +518,11 @@ export function AdOrderMgmt() {
     setLoading(true);
     setError('');
     try {
-      const [advertiserRows, orderRows, adIdRows] = await Promise.all([listAdvertisers(), listAdOrders(), listAdIds()]);
+      const [advertiserRows, orderRows, adIdRows, typeRows] = await Promise.all([listAdvertisers(), listAdOrders(), listAdIds(), listAdTypes()]);
       setAdvertisers(advertiserRows);
       setOrders(orderRows);
       setAdIds(adIdRows);
+      setAdTypes(typeRows);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -506,11 +550,16 @@ export function AdOrderMgmt() {
   const adOrderColumns: CsvColumn<AdOrder>[] = [
     { label: t('advertiser'), value: r => displayName(advertiserName(r.advId)) },
     { label: t('adOrder'), value: r => displayName(r.name) },
-    { label: 'Code', value: r => r.adTypeCode ?? '' },
+    { label: t('adType'), value: r => displayName(r.adTypeName ?? adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
     { label: t('adIdCount'), value: r => countAdIds(r) },
     { label: t('notes'), value: r => r.notes ?? '-' },
     { label: t('status'), value: r => r.status ?? '' },
   ];
+
+  const adTypeNameByCode = React.useMemo(
+    () => new Map(adTypes.map(at => [at.code, at.name ?? at.code])),
+    [adTypes]
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -685,7 +734,7 @@ export function AdOrderMgmt() {
               { key: '__no__', label: t('no') },
               { key: 'advId', label: t('advertiser'), render: r => advertiserName(r.advId) },
               { key: 'name', label: t('adOrder'), render: r => displayName(r.name) + (r.isVirtual ? ` (${t('notSynced') || 'Chưa đồng bộ'})` : '') },
-              { key: 'adTypeCode', label: 'Code' },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(r.adTypeName ?? adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               {
                 key: '__count__',
                 label: t('adIdCount'),
@@ -723,7 +772,7 @@ export function AdOrderMgmt() {
               <div className="form-group"><label>{t('type')}</label>
                 <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
                   <option value="">-</option>
-                  {orders.filter(o => !advFilter || String(o.advId) === advFilter).map(o => <option key={o.adTypeCode} value={o.adTypeCode}>{displayName(o.name)} ({o.adTypeCode})</option>)}
+                  {orders.filter(o => !advFilter || String(o.advId) === advFilter).map(o => <option key={o.adTypeCode} value={o.adTypeCode}>{displayName(o.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('notes')}</label><textarea rows={2} value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} /></div>
@@ -769,7 +818,7 @@ function adIdFormFromRecord(record: AdId): AdIdFormState {
     type: record.type as 'CPM' | 'RATIO' | 'CPA',
     unitPrice: (record.type === 'CPM' || record.type === 'CPA') && record.rate != null ? String(record.rate) : '',
     ratio: record.type === 'RATIO' && record.rate != null ? String(record.rate) : '',
-    notes: '',
+    notes: record.notes ?? '',
     status: record.status,
   };
 }
@@ -881,11 +930,34 @@ export function AdIdMgmt() {
   }, [adIdPresetFilter, clearAdIdPresetFilter]);
 
   const adTypeNameByCode = React.useMemo(() => new Map(adTypes.map(at => [at.code, at.name ?? at.code])), [adTypes]);
-  const adTypeScopedRows = orderFilter ? rows.filter(row => row.adTypeCode === orderFilter) : rows;
-  const advertiserOptions = advertisers.filter(advertiser => adTypeScopedRows.some(row => row.advertiserId === advertiser.id));
-  const advertiserScopedRows = advFilter ? adTypeScopedRows.filter(row => row.advertiserId === Number(advFilter)) : adTypeScopedRows;
-  const adTypeOptions = adTypes.filter(adType => rows.some(row => row.adTypeCode === adType.code));
-  const typeOptions = Array.from(new Set(advertiserScopedRows.map(row => row.type).filter(Boolean)));
+  const selectedAdvertiser = React.useMemo(
+    () => advertisers.find(advertiser => advertiser.id === Number(advFilter)),
+    [advertisers, advFilter]
+  );
+  const selectedAdvertiserAdTypeCodes = React.useMemo(
+    () => selectedAdvertiser ? getAdvertiserAdTypeCodes(selectedAdvertiser) : [],
+    [selectedAdvertiser]
+  );
+  const adTypeScopedRows = React.useMemo(
+    () => orderFilter ? rows.filter(row => row.adTypeCode === orderFilter) : rows,
+    [orderFilter, rows]
+  );
+  const advertiserOptions = React.useMemo(
+    () => advertisers.filter(advertiser => !orderFilter || getAdvertiserAdTypeCodes(advertiser).includes(orderFilter)),
+    [advertisers, orderFilter]
+  );
+  const advertiserScopedRows = React.useMemo(
+    () => advFilter ? adTypeScopedRows.filter(row => row.advertiserId === Number(advFilter)) : adTypeScopedRows,
+    [adTypeScopedRows, advFilter]
+  );
+  const adTypeOptions = React.useMemo(
+    () => adTypes.filter(adType => selectedAdvertiser ? selectedAdvertiserAdTypeCodes.includes(adType.code) : rows.some(row => row.adTypeCode === adType.code)),
+    [adTypes, rows, selectedAdvertiser, selectedAdvertiserAdTypeCodes]
+  );
+  const typeOptions = React.useMemo(
+    () => Array.from(new Set(advertiserScopedRows.map(row => row.type).filter(Boolean))),
+    [advertiserScopedRows]
+  );
   const keyword = normalizeText(search);
   const visibleRows = advertiserScopedRows.filter(row => {
     if (typeFilter && row.type !== typeFilter) return false;
@@ -909,9 +981,18 @@ export function AdIdMgmt() {
     }
   }, [advFilter, advertiserOptions]);
 
+  React.useEffect(() => {
+    if (!orderFilter || !selectedAdvertiser) return;
+    if (!selectedAdvertiserAdTypeCodes.includes(orderFilter)) {
+      setOrderFilter('');
+    }
+  }, [orderFilter, selectedAdvertiser, selectedAdvertiserAdTypeCodes]);
+
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...defaultAdIdForm(), advertiserId: advFilter, adTypeCode: orderFilter });
+    const advertiser = advertisers.find(item => item.id === Number(advFilter));
+    const codes = advertiser ? getAdvertiserAdTypeCodes(advertiser) : [];
+    setForm({ ...defaultAdIdForm(), advertiserId: advFilter, adTypeCode: orderFilter || codes[0] || '' });
     setFormError('');
     setFormOpen(true);
   };
@@ -966,6 +1047,7 @@ export function AdIdMgmt() {
       type,
       unitPrice: type === 'CPM' || type === 'CPA' ? parseFloat(form.unitPrice) : undefined,
       ratio: type === 'RATIO' ? parseFloat(form.ratio) : undefined,
+      notes: form.notes.trim() || null,
       status: form.status,
     };
     setSaving(true);
@@ -1009,7 +1091,7 @@ export function AdIdMgmt() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
           <div className="toolbar-right">
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.code} value={type.code}>{displayName(type.name)} ({type.code})</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.code} value={type.code}>{displayName(type.name)}</option>)}</select>
             <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{formatBillingMethodLabel(type)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
@@ -1045,19 +1127,24 @@ export function AdIdMgmt() {
                 <select value={form.adTypeCode} onChange={e => setForm(prev => {
                   const nextAdTypeCode = e.target.value;
                   const currentAdvertiser = advertisers.find(a => String(a.id) === prev.advertiserId);
-                  return { ...prev, adTypeCode: nextAdTypeCode, advertiserId: currentAdvertiser && nextAdTypeCode && currentAdvertiser.adTypeCode !== nextAdTypeCode ? '' : prev.advertiserId };
+                  const currentAdvertiserCodes = currentAdvertiser ? getAdvertiserAdTypeCodes(currentAdvertiser) : [];
+                  return { ...prev, adTypeCode: nextAdTypeCode, advertiserId: currentAdvertiser && nextAdTypeCode && !currentAdvertiserCodes.includes(nextAdTypeCode) ? '' : prev.advertiserId };
                 })}>
                   <option value="">-</option>
-                  {adTypes.map(type => <option key={type.code} value={type.code}>{type.name} ({type.code})</option>)}
+                  {adTypes.filter(type => {
+                    const advertiser = advertisers.find(a => String(a.id) === form.advertiserId);
+                    return !advertiser || getAdvertiserAdTypeCodes(advertiser).includes(type.code);
+                  }).map(type => <option key={type.code} value={type.code}>{displayName(type.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('advertiser')}</label>
                 <select value={form.advertiserId} onChange={e => setForm(prev => {
                   const advertiser = advertisers.find(a => String(a.id) === e.target.value);
-                  return { ...prev, advertiserId: e.target.value, adTypeCode: advertiser?.adTypeCode ?? prev.adTypeCode };
+                  const codes = advertiser ? getAdvertiserAdTypeCodes(advertiser) : [];
+                  return { ...prev, advertiserId: e.target.value, adTypeCode: prev.adTypeCode && codes.includes(prev.adTypeCode) ? prev.adTypeCode : codes[0] ?? prev.adTypeCode };
                 })}>
                   <option value="">-</option>
-                  {advertisers.filter(a => !form.adTypeCode || a.adTypeCode === form.adTypeCode).map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
+                  {advertisers.filter(a => !form.adTypeCode || getAdvertiserAdTypeCodes(a).includes(form.adTypeCode)).map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('adId')}</label><input type="text" value={form.slot} onChange={e => setForm(prev => ({ ...prev, slot: e.target.value }))} /></div>
@@ -1070,6 +1157,7 @@ export function AdIdMgmt() {
               </div>
               {(form.type === 'CPM' || form.type === 'CPA') && <div className="form-group"><label>{t('unitPrice')}</label><input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setForm(prev => ({ ...prev, unitPrice: e.target.value }))} /></div>}
               {form.type === 'RATIO' && <div className="form-group"><label>{t('revenueShare')}</label><input type="number" step="0.0001" min="0" max="1" value={form.ratio} onChange={e => setForm(prev => ({ ...prev, ratio: e.target.value }))} /></div>}
+              <div className="form-group"><label>{t('notes')}</label><textarea rows={2} value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} /></div>
               <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>
                   <option value="active">{t('online')}</option>

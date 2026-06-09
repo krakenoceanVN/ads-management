@@ -27,7 +27,9 @@ async function create(req, res) {
     const body = req.body;
     if (!body || !body.name?.trim())
         throw new AppError_1.BadRequestError('name is required');
-    if (!body.adTypeCode?.trim())
+    const adTypeCodes = body.adTypeCodes?.map(code => code.trim()).filter(Boolean) ?? [];
+    const legacyAdTypeCode = body.adTypeCode?.trim();
+    if (!adTypeCodes.length && !legacyAdTypeCode)
         throw new AppError_1.BadRequestError('adTypeCode is required');
     const advertiser = await (0, advertiser_write_service_1.createAdvertiser)({
         name: body.name.trim(),
@@ -36,7 +38,8 @@ async function create(req, res) {
         email: body.email ?? null,
         notes: body.notes ?? null,
         status: body.status ?? 'active',
-        adTypeCode: body.adTypeCode.trim(),
+        adTypeCode: legacyAdTypeCode,
+        adTypeCodes: adTypeCodes.length ? adTypeCodes : undefined,
     });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
     res.status(201).json((0, success_1.bffData)(advertiser));
@@ -54,6 +57,7 @@ async function update(req, res) {
         notes: body.notes !== undefined ? body.notes : undefined,
         status: body.status,
         adTypeCode: body.adTypeCode?.trim(),
+        adTypeCodes: body.adTypeCodes?.map(code => code.trim()).filter(Boolean),
     });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
     res.json((0, success_1.bffData)(advertiser));

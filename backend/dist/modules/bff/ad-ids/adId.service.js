@@ -13,7 +13,10 @@ async function listAdIds(filters) {
         where.adOrderId = filters.adOrderId;
     }
     if (filters?.adTypeCode) {
-        where.upstream = { adType: { code: filters.adTypeCode } };
+        where.OR = [
+            { adOrder: { adType: { code: filters.adTypeCode } } },
+            { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
+        ];
     }
     if (filters?.type) {
         where.billingMethod = filters.type;
@@ -25,7 +28,7 @@ async function listAdIds(filters) {
         where,
         include: {
             upstream: { include: { adType: true } },
-            adOrder: true,
+            adOrder: { include: { adType: true } },
         },
         orderBy: { id: 'asc' },
     });
@@ -36,7 +39,7 @@ async function getAdId(id) {
         where: { id },
         include: {
             upstream: { include: { adType: true } },
-            adOrder: true,
+            adOrder: { include: { adType: true } },
         },
     });
     if (!row)

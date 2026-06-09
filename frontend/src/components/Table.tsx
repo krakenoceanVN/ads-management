@@ -1,10 +1,15 @@
 import React from 'react';
 import { useAppContext } from '../AppContext';
 
+export type SortDirection = 'asc' | 'desc' | null;
+
 export interface Column<T> {
   key?: keyof T | '__no__' | '__actions__' | '__count__';
   label: string;
   render?: (row: T, index: number) => React.ReactNode;
+  sortKey?: string;
+  sortDirection?: SortDirection;
+  onSortClick?: () => void;
 }
 
 interface TableProps<T> {
@@ -32,9 +37,20 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete }:
       <table>
         <thead>
           <tr>
-            {columns.map((c, i) => (
-              <th key={i}>{c.label}</th>
-            ))}
+            {columns.map((c, i) => {
+              if (c.onSortClick) {
+                const arrow = c.sortDirection === 'asc' ? '▲' : c.sortDirection === 'desc' ? '▼' : '↕';
+                return (
+                  <th key={i} className="th-sortable" aria-sort={c.sortDirection === 'asc' ? 'ascending' : c.sortDirection === 'desc' ? 'descending' : 'none'}>
+                    <button type="button" className="th-sort-btn" onClick={c.onSortClick}>
+                      <span>{c.label}</span>
+                      <span className={`th-sort-indicator ${c.sortDirection ? 'is-sorted' : ''}`} aria-hidden="true">{arrow}</span>
+                    </button>
+                  </th>
+                );
+              }
+              return <th key={i}>{c.label}</th>;
+            })}
           </tr>
         </thead>
         <tbody>

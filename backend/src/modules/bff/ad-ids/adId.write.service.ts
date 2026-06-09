@@ -3,7 +3,7 @@ import { BadRequestError } from '../../../shared/errors/AppError';
 import { mapAdId } from '../mappers';
 import type { Prisma } from '@prisma/client';
 import type { AdSite, Upstream, AdType, AdOrder } from '../../../shared/prisma/client';
-import type { EntityStatus, EntryType } from '../bff.types';
+import { normalizeBillingMethodForStorage, type EntityStatus, type EntryType } from '../bff.types';
 
 export interface CreateAdIdInput {
   advertiserId: number;
@@ -13,6 +13,7 @@ export interface CreateAdIdInput {
   type: EntryType;
   unitPrice?: number | null;
   ratio?: number | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
@@ -24,26 +25,28 @@ export interface UpdateAdIdInput {
   type?: EntryType;
   unitPrice?: number | null;
   ratio?: number | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
-async function getAdvertiserAdType(advertiserId: number) {
+async function getAdvertiserLinkedAdTypes(advertiserId: number) {
   const advertiser = await prisma.upstream.findUnique({
     where: { id: advertiserId },
-    include: { adType: true },
+    include: { adType: true, adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } } },
   });
   if (!advertiser) throw new BadRequestError('Invalid advertiserId: ' + advertiserId);
-  return advertiser.adType;
+  const linkedAdTypes = advertiser.adTypeLinks.map(link => link.adType);
+  return linkedAdTypes.length ? linkedAdTypes : advertiser.adType ? [advertiser.adType] : [];
 }
 
 async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, existingAdOrderId?: number): Promise<number> {
-  const advertiserAdType = await getAdvertiserAdType(advertiserId);
-  const canonicalAdTypeCode = advertiserAdType?.code;
-  const requestedAdTypeCode = adTypeCode ?? canonicalAdTypeCode;
+  const linkedAdTypes = await getAdvertiserLinkedAdTypes(advertiserId);
+  const linkedCodes = linkedAdTypes.map(adType => adType.code);
+  const requestedAdTypeCode = adTypeCode ?? linkedCodes[0];
 
   if (!requestedAdTypeCode) throw new BadRequestError('Either adOrderId or adTypeCode must be provided');
-  if (canonicalAdTypeCode && requestedAdTypeCode !== canonicalAdTypeCode) {
-    throw new BadRequestError(`adTypeCode ${requestedAdTypeCode} does not match advertiser adTypeCode ${canonicalAdTypeCode}`);
+  if (!linkedCodes.includes(requestedAdTypeCode)) {
+    throw new BadRequestError(`adTypeCode ${requestedAdTypeCode} is not linked to advertiserId ${advertiserId}`);
   }
 
   if (existingAdOrderId) {
@@ -61,7 +64,7 @@ async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, exist
     return existingAdOrderId;
   }
 
-  const adType = await prisma.adType.findUnique({ where: { code: requestedAdTypeCode } });
+  const adType = linkedAdTypes.find(item => item.code === requestedAdTypeCode);
   if (!adType) throw new BadRequestError('Invalid adTypeCode: ' + requestedAdTypeCode);
 
   const existing = await prisma.adOrder.findFirst({
@@ -82,7 +85,8 @@ async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, exist
 
 export async function createAdId(input: CreateAdIdInput) {
   const { advertiserId, adOrderId, adTypeCode, slot, type, ...rest } = input;
-  const billingMethod = type;
+  const billingMethod = normalizeBillingMethodForStorage(type);
+  if (!billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
   const resolvedAdOrderId = await resolveAdOrderId(advertiserId, adTypeCode, adOrderId);
 
   const row = await prisma.adSite.create({
@@ -90,14 +94,15 @@ export async function createAdId(input: CreateAdIdInput) {
       upstreamId: advertiserId,
       adOrderId: resolvedAdOrderId,
       name: slot.trim(),
+      notes: rest.notes ?? null,
       billingMethod,
-      currentUnitPrice: (type === 'CPM' || type === 'CPA') ? (rest.unitPrice ?? null) : null,
-      currentRatio: type === 'RATIO' ? (rest.ratio ?? null) : null,
+      currentUnitPrice: (billingMethod === 'CPM' || billingMethod === 'CPA') ? (rest.unitPrice ?? null) : null,
+      currentRatio: billingMethod === 'RATIO' ? (rest.ratio ?? null) : null,
       status: rest.status ?? 'active',
-    },
+    } as Prisma.AdSiteUncheckedCreateInput,
     include: {
       upstream: { include: { adType: true } },
-      adOrder: true,
+      adOrder: { include: { adType: true } },
     },
   });
   return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });
@@ -105,7 +110,8 @@ export async function createAdId(input: CreateAdIdInput) {
 
 export async function updateAdId(id: number, input: UpdateAdIdInput) {
   const { type, unitPrice, ratio, ...rest } = input;
-  const billingMethod = type ?? undefined;
+  const billingMethod = normalizeBillingMethodForStorage(type);
+  if (type !== undefined && !billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
 
   let resolvedAdOrderId = rest.adOrderId;
   if (rest.adTypeCode || rest.adOrderId || rest.advertiserId) {
@@ -121,16 +127,17 @@ export async function updateAdId(id: number, input: UpdateAdIdInput) {
       ...(rest.advertiserId !== undefined && { upstreamId: rest.advertiserId }),
       ...(resolvedAdOrderId !== undefined && { adOrderId: resolvedAdOrderId }),
       ...(rest.slot !== undefined && { name: rest.slot.trim() }),
+      ...(rest.notes !== undefined && { notes: rest.notes }),
       ...(billingMethod !== undefined && { billingMethod }),
-      ...((type === 'CPM' || type === 'CPA') && unitPrice !== undefined && { currentUnitPrice: unitPrice }),
-      ...((type === 'CPM' || type === 'CPA') && unitPrice === undefined && { currentUnitPrice: null }),
-      ...(type === 'RATIO' && ratio !== undefined && { currentRatio: ratio }),
-      ...(type === 'RATIO' && ratio === undefined && { currentRatio: null }),
+      ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice !== undefined && { currentUnitPrice: unitPrice }),
+      ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice === undefined && { currentUnitPrice: null }),
+      ...(billingMethod === 'RATIO' && ratio !== undefined && { currentRatio: ratio }),
+      ...(billingMethod === 'RATIO' && ratio === undefined && { currentRatio: null }),
       ...(rest.status !== undefined && { status: rest.status }),
     },
     include: {
       upstream: { include: { adType: true } },
-      adOrder: true,
+      adOrder: { include: { adType: true } },
     },
   });
   return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });
@@ -143,7 +150,7 @@ export async function deleteAdId(id: number) {
     data: { status: 'inactive' },
     include: {
       upstream: { include: { adType: true } },
-      adOrder: true,
+      adOrder: { include: { adType: true } },
     },
   });
   return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });

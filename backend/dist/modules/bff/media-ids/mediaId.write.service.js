@@ -15,15 +15,15 @@ async function createMediaId(input) {
     // Both foreign keys must point to existing rows — return a clean 400 instead of a raw FK crash.
     const adSite = await client_1.prisma.adSite.findUnique({
         where: { id: adSiteId },
-        include: { upstream: true },
+        include: { upstream: true, adOrder: true },
     });
     if (!adSite)
         throw new AppError_1.BadRequestError(`AdSite (ID quảng cáo) with id '${adSiteId}' does not exist`);
     const downstream = await client_1.prisma.downstream.findUnique({ where: { id: downstreamId } });
     if (!downstream)
         throw new AppError_1.BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
-    // The AdSite (via its upstream) and the Downstream must belong to the same AdType.
-    if (adSite.upstream.adTypeId !== downstream.adTypeId) {
+    const adSiteAdTypeId = adSite.adOrder?.adTypeId ?? adSite.upstream.adTypeId;
+    if (adSiteAdTypeId !== downstream.adTypeId) {
         throw new AppError_1.BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
     }
     // Do not allow creating NEW links to an inactive downstream.
@@ -45,7 +45,7 @@ async function createMediaId(input) {
             customPrice: customPrice ?? null,
         },
         include: {
-            adSite: { include: { upstream: { include: { adType: true } } } },
+            adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
             downstream: true,
         },
     });
@@ -61,7 +61,7 @@ async function updateMediaId(junctionId, input) {
             ...(customPrice !== undefined && { customPrice: customPrice }),
         },
         include: {
-            adSite: { include: { upstream: { include: { adType: true } } } },
+            adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
             downstream: true,
         },
     });

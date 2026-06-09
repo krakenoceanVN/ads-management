@@ -1,4 +1,4 @@
-import type { EntityStatus, EntryType } from '../bff.types';
+import { type EntityStatus, type EntryType } from '../bff.types';
 export interface CreateAdIdInput {
     advertiserId: number;
     adOrderId?: number;
@@ -7,6 +7,7 @@ export interface CreateAdIdInput {
     type: EntryType;
     unitPrice?: number | null;
     ratio?: number | null;
+    notes?: string | null;
     status?: EntityStatus;
 }
 export interface UpdateAdIdInput {
@@ -17,6 +18,7 @@ export interface UpdateAdIdInput {
     type?: EntryType;
     unitPrice?: number | null;
     ratio?: number | null;
+    notes?: string | null;
     status?: EntityStatus;
 }
 export declare function createAdId(input: CreateAdIdInput): Promise<import("../bff.types").AdId>;

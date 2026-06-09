@@ -14,6 +14,17 @@ function toStr(d) {
         return '';
     return d.toString();
 }
+function actualAdType(site) {
+    return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+function actualAdTypeWhere(adTypeCode) {
+    return {
+        OR: [
+            { adOrder: { adType: { code: adTypeCode } } },
+            { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+        ],
+    };
+}
 // Load all AdIds for advertiser-side data entry, with optional filters
 async function listAdvertiserEntries(params) {
     const { date, advertiserId, adTypeCode, status } = params;
@@ -25,7 +36,7 @@ async function listAdvertiserEntries(params) {
     const siteWhere = {
         isArchived: false,
         ...(advertiserId != null && { upstreamId: advertiserId }),
-        ...(adTypeCode && { upstream: { adType: { code: adTypeCode } } }),
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
     };
     // Load all candidate AdSites for the filter
     const adSites = await client_1.prisma.adSite.findMany({
@@ -62,7 +73,7 @@ async function listAdvertiserEntries(params) {
 function makeAdvertiserRow(site, recordDate, di) {
     const upstream = site.upstream;
     const adOrder = site.adOrder;
-    const adType = upstream.adType;
+    const adType = actualAdType(site);
     // Rate: CPM and CPA use unitPriceSnapshot;
     // RATIO and CPS use ratioSnapshot
     const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
@@ -89,6 +100,7 @@ function makeAdvertiserRow(site, recordDate, di) {
         adOrder: adOrder?.name ?? '',
         adOrderId: site.adOrderId ?? null,
         adOrderCode: adType?.code ?? null,
+        adOrderName: adType?.name ?? null,
         type: site.billingMethod,
         adId: site.name, // slot = AdSite.name (real schema has no slot field)
         adIdNum: site.id,
@@ -108,7 +120,7 @@ async function listMediaEntries(params) {
     const siteWhere = {
         isArchived: false,
         ...(mediaId != null && { id: mediaId }),
-        ...(adTypeCode && { upstream: { adType: { code: adTypeCode } } }),
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
         // Only include sites that have JUNCTIONS (MediaIds) — we need MediaId rows
         downstreams: { some: {} },
     };
@@ -116,6 +128,7 @@ async function listMediaEntries(params) {
         where: siteWhere,
         include: {
             upstream: { include: { adType: true } },
+            adOrder: { include: { adType: true } },
             downstreams: {
                 include: { downstream: true },
                 orderBy: { id: 'asc' },
@@ -161,8 +174,8 @@ async function listMediaEntries(params) {
 }
 function makeMediaRow(site, junction, payoutRate, recordDate, di) {
     const upstream = site.upstream;
-    // adType for this site
-    const adTypeCode = upstream.adType?.code ?? null;
+    const adTypeCode = actualAdType(site)?.code ?? null;
+    const adTypeName = actualAdType(site)?.name ?? null;
     // Rate: CPM/CPA use unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
     const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
         ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
@@ -195,6 +208,7 @@ function makeMediaRow(site, junction, payoutRate, recordDate, di) {
         mediaAdOrder: adTypeCode ?? '',
         mediaAdOrderId: null,
         mediaAdOrderCode: adTypeCode,
+        mediaAdOrderName: adTypeName,
         type: site.billingMethod,
         mediaIdStr: site.name, // slot = AdSite.name (no slot column in schema)
         upstreamAdId: site.name,

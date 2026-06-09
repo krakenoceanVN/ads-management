@@ -6,7 +6,8 @@ export interface CreateAdvertiserInput {
     email?: string | null;
     notes?: string | null;
     status?: EntityStatus;
-    adTypeCode: string;
+    adTypeCode?: string;
+    adTypeCodes?: string[];
 }
 export interface UpdateAdvertiserInput {
     name?: string;
@@ -16,6 +17,7 @@ export interface UpdateAdvertiserInput {
     notes?: string | null;
     status?: EntityStatus;
     adTypeCode?: string;
+    adTypeCodes?: string[];
 }
 export declare function createAdvertiser(input: CreateAdvertiserInput): Promise<import("../bff.types").Advertiser>;
 export declare function updateAdvertiser(id: number, input: UpdateAdvertiserInput): Promise<import("../bff.types").Advertiser>;

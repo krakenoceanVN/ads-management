@@ -22,7 +22,9 @@ export async function getById(req: Request, res: Response) {
 export async function create(req: Request, res: Response) {
   const body = req.body as CreateAdvertiserInput;
   if (!body || !body.name?.trim()) throw new BadRequestError('name is required');
-  if (!body.adTypeCode?.trim()) throw new BadRequestError('adTypeCode is required');
+  const adTypeCodes = body.adTypeCodes?.map(code => code.trim()).filter(Boolean) ?? [];
+  const legacyAdTypeCode = body.adTypeCode?.trim();
+  if (!adTypeCodes.length && !legacyAdTypeCode) throw new BadRequestError('adTypeCode is required');
   const advertiser = await createAdvertiser({
     name: body.name.trim(),
     contact: body.contact ?? null,
@@ -30,7 +32,8 @@ export async function create(req: Request, res: Response) {
     email: body.email ?? null,
     notes: body.notes ?? null,
     status: body.status ?? 'active',
-    adTypeCode: body.adTypeCode.trim(),
+    adTypeCode: legacyAdTypeCode,
+    adTypeCodes: adTypeCodes.length ? adTypeCodes : undefined,
   });
   await recordMasterDataOperation(req, 'CREATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.status(201).json(bffData(advertiser));
@@ -48,6 +51,7 @@ export async function update(req: Request, res: Response) {
     notes: body.notes !== undefined ? body.notes : undefined,
     status: body.status,
     adTypeCode: body.adTypeCode?.trim(),
+    adTypeCodes: body.adTypeCodes?.map(code => code.trim()).filter(Boolean),
   });
   await recordMasterDataOperation(req, 'UPDATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.json(bffData(advertiser));

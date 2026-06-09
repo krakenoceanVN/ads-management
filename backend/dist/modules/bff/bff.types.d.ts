@@ -1,6 +1,8 @@
 export type EntityStatus = 'active' | 'inactive';
 export type EntryType = 'CPM' | 'RATIO' | 'CPA' | 'CPS';
+export type StoredEntryType = 'CPM' | 'RATIO' | 'CPA';
 export type DataEntryStatus = 'pending' | 'confirmed';
+export declare function normalizeBillingMethodForStorage(type: EntryType | string | undefined): StoredEntryType | undefined;
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
 export type ReportStatusParam = 'confirmed' | 'unconfirmed' | 'pending' | 'all';
 export type AdTypeCode = string;
@@ -19,6 +21,12 @@ export interface Advertiser {
     notes: string | null;
     status: EntityStatus;
     adTypeCode?: string;
+    adTypeCodes?: string[];
+    adTypes?: Array<{
+        id: number;
+        code: string;
+        name: string;
+    }>;
 }
 export interface Media {
     id: number;
@@ -30,6 +38,7 @@ export interface Media {
     status: EntityStatus;
     upstreamId?: number;
     adTypeCode?: string;
+    adTypeName?: string | null;
     billingMethod?: EntryType;
     currentUnitPrice?: number;
     currentRatio?: number;
@@ -39,6 +48,7 @@ export interface AdOrder {
     advId: number;
     name: string;
     adTypeCode: string;
+    adTypeName?: string | null;
     notes: string | null;
     status: EntityStatus;
     isVirtual?: boolean;
@@ -48,10 +58,12 @@ export interface AdId {
     slot: string;
     type: EntryType;
     rate: number | null;
+    notes: string | null;
     status: EntityStatus;
     advertiserId: number;
     advertiserName: string;
     adTypeCode: string;
+    adTypeName?: string | null;
     adOrderId: number | null;
     upstreamId: number;
     billingMethod: EntryType;
@@ -69,6 +81,7 @@ export interface MediaId {
     mediaId: number;
     mediaName: string;
     adTypeCode: string;
+    adTypeName?: string | null;
     upstreamId: number;
     billingMethod: EntryType;
     isActive: boolean;
@@ -81,6 +94,7 @@ export interface DownstreamDto {
     downstreamType: string;
     adTypeId: number;
     adTypeCode: string;
+    adTypeName?: string | null;
     payoutRate: number | null;
     status: EntityStatus;
 }

@@ -29,6 +29,19 @@ function toStr(d: Prisma.Decimal | null | undefined): string {
   return d.toString();
 }
 
+function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream: { adType?: AdType | null } }) {
+  return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+
+function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
+  return {
+    OR: [
+      { adOrder: { adType: { code: adTypeCode } } },
+      { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+    ],
+  };
+}
+
 // Load all AdIds for advertiser-side data entry, with optional filters
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
   const { date, advertiserId, adTypeCode, status } = params;
@@ -42,7 +55,7 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
   const siteWhere: Prisma.AdSiteWhereInput = {
     isArchived: false,
     ...(advertiserId != null && { upstreamId: advertiserId }),
-    ...(adTypeCode && { upstream: { adType: { code: adTypeCode } } }),
+    ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
   };
 
   // Load all candidate AdSites for the filter
@@ -84,7 +97,7 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
 function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (AdOrder & { adType?: AdType }) | null }, recordDate: Date, di: Prisma.DailyInputGetPayload<{}> | null): AdvertiserEntryRow {
   const upstream = site.upstream;
   const adOrder = site.adOrder;
-  const adType = upstream.adType;
+  const adType = actualAdType(site);
 
   // Rate: CPM and CPA use unitPriceSnapshot;
   // RATIO and CPS use ratioSnapshot
@@ -114,6 +127,7 @@ function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdTyp
     adOrder: adOrder?.name ?? '',
     adOrderId: site.adOrderId ?? null,
     adOrderCode: adType?.code ?? null,
+    adOrderName: adType?.name ?? null,
     type: site.billingMethod as EntryType,
     adId: site.name,                // slot = AdSite.name (real schema has no slot field)
     adIdNum: site.id,
@@ -136,7 +150,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
   const siteWhere: Prisma.AdSiteWhereInput = {
     isArchived: false,
     ...(mediaId != null && { id: mediaId }),
-    ...(adTypeCode && { upstream: { adType: { code: adTypeCode } } }),
+    ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
     // Only include sites that have JUNCTIONS (MediaIds) — we need MediaId rows
     downstreams: { some: {} },
   };
@@ -145,6 +159,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
     where: siteWhere,
     include: {
       upstream: { include: { adType: true } },
+      adOrder: { include: { adType: true } },
       downstreams: {
         include: { downstream: true },
         orderBy: { id: 'asc' },
@@ -193,7 +208,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
 }
 
 function makeMediaRow(
-  site: AdSite & { upstream: Upstream & { adType: AdType }; downstreams: (AdSiteDownstream & { downstream: Downstream })[] },
+  site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (AdOrder & { adType?: AdType }) | null; downstreams: (AdSiteDownstream & { downstream: Downstream })[] },
   junction: AdSiteDownstream & { downstream: Downstream },
   payoutRate: number,
   recordDate: Date,
@@ -201,8 +216,8 @@ function makeMediaRow(
 ): MediaEntryRow {
   const upstream = site.upstream;
 
-  // adType for this site
-  const adTypeCode = upstream.adType?.code ?? null;
+  const adTypeCode = actualAdType(site)?.code ?? null;
+  const adTypeName = actualAdType(site)?.name ?? null;
 
   // Rate: CPM/CPA use unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
@@ -240,6 +255,7 @@ function makeMediaRow(
     mediaAdOrder: adTypeCode ?? '',
     mediaAdOrderId: null,
     mediaAdOrderCode: adTypeCode,
+    mediaAdOrderName: adTypeName,
     type: site.billingMethod as MediaEntryRow['type'],
     mediaIdStr: site.name,          // slot = AdSite.name (no slot column in schema)
     upstreamAdId: site.name,

@@ -456,12 +456,12 @@ export async function getTotalProfitReport(params: TotalProfitReportParams) {
 }
 
 export async function getOrderProfitReport(params: OrderProfitReportParams) {
-  // Backend returns OrderProfitRow[] with fields: date, orderId, orderName, upstreamId, upstream, billingMethod, qty, revenue, cost, grossProfit, tax, profit, profitRate, recordCount
-  // Frontend type maps upstream->advertiser, upstreamId->advertiserId, includes adTypeCode/adTypeName from order
   type BackendOrderProfitRow = {
     date: string;
     orderId: number | null;
     orderName: string | null;
+    adTypeCode: string | null;
+    adTypeName: string | null;
     upstreamId: number;
     upstream: string;
     billingMethod: string;
@@ -477,8 +477,6 @@ export async function getOrderProfitReport(params: OrderProfitReportParams) {
 
   const backendRows = await unwrapData(await request<BffDataResponse<BackendOrderProfitRow[]>>('/api/bff/reports/order-profit', { params }));
 
-  // Preserve backend granularity — each row already represents (date, upstream, billingMethod) group.
-  // adTypeCode is not in backend row; use billingMethod as proxy since Order Profit groups by billingMethod.
   return backendRows.map(row => ({
     date: row.date,
     orderId: row.orderId,
@@ -486,8 +484,8 @@ export async function getOrderProfitReport(params: OrderProfitReportParams) {
     advertiser: row.upstream,
     advertiserId: row.upstreamId,
     billingMethod: row.billingMethod,
-    adTypeCode: row.billingMethod, // proxy — billingMethod is the grouping dimension for order profit
-    adTypeName: row.orderName ?? row.upstream,
+    adTypeCode: row.adTypeCode ?? '',
+    adTypeName: row.adTypeName ?? row.adTypeCode ?? '',
     qty: row.qty,
     revenue: row.revenue,
     cost: row.cost,
@@ -500,12 +498,13 @@ export async function getOrderProfitReport(params: OrderProfitReportParams) {
 }
 
 export async function getAdvertiserSettlement(params: AdvertiserSettlementParams) {
-  // Backend returns rows with: advertiserId, advertiser, adTypeCode, totalAmount, recordCount
+  // Backend returns rows with: advertiserId, advertiser, adTypeCode, adTypeName, totalAmount, recordCount
   // Frontend type adds period (from query param)
   type BackendAdvSettlementRow = {
     advertiserId: number;
     advertiser: string;
     adTypeCode: string | null;
+    adTypeName?: string | null;
     totalAmount: number;
     recordCount: number;
   };
@@ -516,18 +515,20 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
     advertiser: row.advertiser,
     advertiserId: row.advertiserId,
     adTypeCode: row.adTypeCode,
+    adTypeName: row.adTypeName ?? null,
     totalAmount: row.totalAmount,
     recordCount: row.recordCount,
   }));
 }
 
 export async function getMediaSettlement(params: MediaSettlementParams) {
-  // Backend returns rows with: mediaId, media, adTypeCode, downstreamName, revenue, cost, grossProfit, tax, profit, profitRate, recordCount
+  // Backend returns rows with: mediaId, media, adTypeCode, adTypeName, downstreamName, revenue, cost, grossProfit, tax, profit, profitRate, recordCount
   // Frontend type uses different field names, add period from query param
   type BackendMediaSettlementRow = {
     mediaId: number;
     media: string;
     adTypeCode: string | null;
+    adTypeName?: string | null;
     downstreamName: string | null;
     revenue: number;
     cost: number;
@@ -545,6 +546,7 @@ export async function getMediaSettlement(params: MediaSettlementParams) {
     mediaId: row.mediaId,
     media: row.media,
     adTypeCode: row.adTypeCode,
+    adTypeName: row.adTypeName ?? null,
     revenue: row.revenue,
     cost: row.cost,
     grossProfit: row.grossProfit,

@@ -17,6 +17,17 @@ exports.getOrderProfit = getOrderProfit;
 const client_1 = require("../../../shared/prisma/client");
 const payout_service_1 = require("../../../shared/services/payout.service");
 const yiyi_service_1 = require("../../yiyi/yiyi.service");
+function actualAdType(site) {
+    return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+function actualAdTypeWhere(adTypeCode) {
+    return {
+        OR: [
+            { adOrder: { adType: { code: adTypeCode } } },
+            { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+        ],
+    };
+}
 // Test data sources excluded from official financial reports
 const TEST_UPSTREAM_NAMES = ['百战-bz'];
 const TEST_AD_SITE_NAMES = ['TestCPM', 'TestRATIO'];
@@ -85,7 +96,6 @@ async function getTotalProfit(params) {
     const upstreamWhere = {
         ...(params.advertiserId != null && { id: params.advertiserId }),
         ...(params.upstreamId != null && { id: params.upstreamId }),
-        ...(params.adTypeCode && { adType: { code: params.adTypeCode } }),
         name: { notIn: TEST_UPSTREAM_NAMES },
     };
     const dailyInputs = await client_1.prisma.dailyInput.findMany({
@@ -93,6 +103,7 @@ async function getTotalProfit(params) {
             ...dateFilter,
             status: 'confirmed',
             adSite: {
+                ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
                 upstream: { ...upstreamWhere },
                 name: { notIn: TEST_AD_SITE_NAMES },
                 downstreams: { some: {} },
@@ -102,6 +113,7 @@ async function getTotalProfit(params) {
             adSite: {
                 include: {
                     upstream: { include: { adType: true } },
+                    adOrder: { include: { adType: true } },
                     downstreams: { include: { downstream: true } },
                 },
             },
@@ -175,7 +187,6 @@ async function getOrderProfit(params) {
     const upstreamWhere = {
         ...(params.advertiserId != null && { id: params.advertiserId }),
         ...(params.upstreamId != null && { id: params.upstreamId }),
-        ...(params.adTypeCode && { adType: { code: params.adTypeCode } }),
         name: { notIn: TEST_UPSTREAM_NAMES },
     };
     const dailyInputs = await client_1.prisma.dailyInput.findMany({
@@ -183,6 +194,7 @@ async function getOrderProfit(params) {
             ...dateFilter,
             status: 'confirmed',
             adSite: {
+                ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
                 upstream: { ...upstreamWhere },
                 name: { notIn: TEST_AD_SITE_NAMES },
                 downstreams: { some: {} },
@@ -192,7 +204,7 @@ async function getOrderProfit(params) {
             adSite: {
                 include: {
                     upstream: { include: { adType: true } },
-                    adOrder: true,
+                    adOrder: { include: { adType: true } },
                     downstreams: { include: { downstream: true } },
                 },
             },
@@ -203,12 +215,15 @@ async function getOrderProfit(params) {
     for (const di of dailyInputs) {
         const upstream = di.adSite.upstream;
         const adOrder = di.adSite.adOrder;
-        const key = `${di.recordDate.toISOString().slice(0, 10)}|${adOrder?.id ?? 0}|${upstream.id}|${di.adSite.billingMethod}`;
+        const adType = actualAdType(di.adSite);
+        const key = `${di.recordDate.toISOString().slice(0, 10)}|${adOrder?.id ?? 0}|${adType?.code ?? ''}|${upstream.id}|${di.adSite.billingMethod}`;
         if (!groups.has(key)) {
             groups.set(key, {
                 date: di.recordDate.toISOString().slice(0, 10),
                 orderId: adOrder?.id ?? null,
                 orderName: adOrder?.name ?? null,
+                adTypeCode: adType?.code ?? null,
+                adTypeName: adType?.name ?? null,
                 upstreamId: upstream.id,
                 upstream: upstream.name,
                 billingMethod: di.adSite.billingMethod,
@@ -235,6 +250,8 @@ async function getOrderProfit(params) {
             date: g.date,
             orderId: g.orderId,
             orderName: g.orderName,
+            adTypeCode: g.adTypeCode,
+            adTypeName: g.adTypeName,
             upstreamId: g.upstreamId,
             upstream: g.upstream,
             billingMethod: g.billingMethod,

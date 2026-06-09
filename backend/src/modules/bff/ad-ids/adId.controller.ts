@@ -50,6 +50,7 @@ export async function create(req: Request, res: Response) {
     type: body.type,
     unitPrice: body.unitPrice ?? null,
     ratio: body.ratio ?? null,
+    notes: body.notes ?? null,
     status: body.status ?? 'active',
   });
   await recordMasterDataOperation(req, 'CREATE_AD_ID', 'adId', adId.id, adId.slot);
@@ -69,6 +70,7 @@ export async function update(req: Request, res: Response) {
     type: body.type,
     unitPrice: body.unitPrice,
     ratio: body.ratio,
+    notes: body.notes !== undefined ? body.notes : undefined,
     status: body.status,
   });
   await recordMasterDataOperation(req, 'UPDATE_AD_ID', 'adId', adId.id, adId.slot);

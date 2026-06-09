@@ -19,6 +19,20 @@ import {
 } from '../../../shared/services/payout.service';
 import { getYiyiMonthly } from '../../yiyi/yiyi.service';
 import type { BillingMethod } from '../../../shared/services/revenue.service';
+import type { AdType } from '../../../shared/prisma/client';
+
+function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream: { adType?: AdType | null } }) {
+  return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+
+function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
+  return {
+    OR: [
+      { adOrder: { adType: { code: adTypeCode } } },
+      { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+    ],
+  };
+}
 
 // Test data sources excluded from official financial reports
 const TEST_UPSTREAM_NAMES = ['百战-bz'];
@@ -122,7 +136,6 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
-    ...(params.adTypeCode && { adType: { code: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -131,6 +144,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
       ...dateFilter,
       status: 'confirmed',
       adSite: {
+        ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
@@ -140,6 +154,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
           downstreams: { include: { downstream: true } },
         },
       },
@@ -244,6 +259,8 @@ export interface OrderProfitRow {
   date: string;
   orderId: number | null;
   orderName: string | null;
+  adTypeCode: string | null;
+  adTypeName: string | null;
   upstreamId: number;
   upstream: string;
   billingMethod: string;
@@ -263,7 +280,6 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
-    ...(params.adTypeCode && { adType: { code: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -272,6 +288,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
       ...dateFilter,
       status: 'confirmed',
       adSite: {
+        ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
@@ -281,7 +298,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
       adSite: {
         include: {
           upstream: { include: { adType: true } },
-          adOrder: true,
+          adOrder: { include: { adType: true } },
           downstreams: { include: { downstream: true } },
         },
       },
@@ -295,6 +312,8 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
     date: string;
     orderId: number | null;
     orderName: string | null;
+    adTypeCode: string | null;
+    adTypeName: string | null;
     upstreamId: number;
     upstream: string;
     billingMethod: BillingMethod;
@@ -307,13 +326,16 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
     const adOrder = di.adSite.adOrder;
-    const key = `${di.recordDate.toISOString().slice(0,10)}|${adOrder?.id ?? 0}|${upstream.id}|${di.adSite.billingMethod}`;
+    const adType = actualAdType(di.adSite);
+    const key = `${di.recordDate.toISOString().slice(0,10)}|${adOrder?.id ?? 0}|${adType?.code ?? ''}|${upstream.id}|${di.adSite.billingMethod}`;
 
     if (!groups.has(key)) {
       groups.set(key, {
         date: di.recordDate.toISOString().slice(0, 10),
         orderId: adOrder?.id ?? null,
         orderName: adOrder?.name ?? null,
+        adTypeCode: adType?.code ?? null,
+        adTypeName: adType?.name ?? null,
         upstreamId: upstream.id,
         upstream: upstream.name,
         billingMethod: di.adSite.billingMethod as BillingMethod,
@@ -345,6 +367,8 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
       date: g.date,
       orderId: g.orderId,
       orderName: g.orderName,
+      adTypeCode: g.adTypeCode,
+      adTypeName: g.adTypeName,
       upstreamId: g.upstreamId,
       upstream: g.upstream,
       billingMethod: g.billingMethod,

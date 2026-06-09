@@ -71,11 +71,14 @@ export interface Advertiser {
   notes: string | null;
   status: EntityStatus;
   adTypeCode?: string;
+  adTypeCodes?: string[];
+  adTypes?: Array<{ id: number; code: string; name: string }>;
 }
 
 export interface CreateAdvertiserInput {
   name: string;
-  adTypeCode: AdTypeCode;
+  adTypeCode?: AdTypeCode;
+  adTypeCodes?: AdTypeCode[];
   status?: EntityStatus;
   contact?: string | null;
   phone?: string | null;
@@ -86,6 +89,7 @@ export interface CreateAdvertiserInput {
 export interface UpdateAdvertiserInput {
   name?: string;
   adTypeCode?: AdTypeCode;
+  adTypeCodes?: AdTypeCode[];
   status?: EntityStatus;
   contact?: string | null;
   phone?: string | null;
@@ -103,6 +107,7 @@ export interface Media {
   status: EntityStatus;
   upstreamId?: number;
   adTypeCode?: string;          // From upstream.adType.code
+  adTypeName?: string | null;   // Business display name
   billingMethod?: EntryType;
   currentUnitPrice?: number;
   currentRatio?: number;
@@ -149,6 +154,7 @@ export interface AdOrder {
   advId: number;
   name: string;
   adTypeCode: string;
+  adTypeName?: string | null;
   notes: string | null;
   status: EntityStatus;
   isVirtual?: boolean;
@@ -179,10 +185,12 @@ export interface AdId {
   slot: string;
   type: EntryType;
   rate: number | null;
+  notes: string | null;
   status: EntityStatus;
   advertiserId: number;
   advertiserName: string;
   adTypeCode: string;
+  adTypeName?: string | null;
   adOrderId: number | null;
   upstreamId: number;
   billingMethod: EntryType;
@@ -233,6 +241,7 @@ export interface MediaId {
   mediaId: number;
   mediaName: string;
   adTypeCode: string;
+  adTypeName?: string | null;
   upstreamId: number;
   billingMethod: EntryType;
   isActive: boolean;
@@ -265,6 +274,7 @@ export interface DownstreamDto {
   downstreamType: string;
   adTypeId: number;
   adTypeCode: string;
+  adTypeName?: string | null;
   payoutRate: number | null;
   status: EntityStatus;
 }
@@ -297,6 +307,7 @@ export interface AdvertiserEntryRow {
   adOrder: string;
   adOrderId: number | null;
   adOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
+  adOrderName?: string | null; // business display name
   type: EntryType;
   adId: string;
   adIdNum: number;
@@ -317,6 +328,7 @@ export interface MediaEntryRow {
   mediaAdOrder: string;
   mediaAdOrderId: number | null;
   mediaAdOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
+  mediaAdOrderName?: string | null; // business display name
   type: EntryType;
   mediaIdStr: string;
   upstreamAdId: string;
@@ -471,6 +483,7 @@ export interface AdvertiserSettlementRow {
   advertiser: string;
   advertiserId: number;
   adTypeCode: string | null;
+  adTypeName?: string | null;
   totalAmount: number;
   recordCount: number;
 }
@@ -481,6 +494,7 @@ export interface MediaSettlementRow {
   mediaId: number;
   media: string;
   adTypeCode: string | null;
+  adTypeName?: string | null;
   revenue: number;
   cost: number;
   grossProfit: number;

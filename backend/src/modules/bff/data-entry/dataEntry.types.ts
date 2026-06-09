@@ -10,6 +10,7 @@ export interface AdvertiserEntryRow {
   adOrder: string;
   adOrderId: number | null;
   adOrderCode: string | null;
+  adOrderName?: string | null;
   type: EntryType;
   adId: string;
   adIdNum: number;
@@ -28,6 +29,7 @@ export interface MediaEntryRow {
   mediaAdOrder: string;
   mediaAdOrderId: number | null;
   mediaAdOrderCode: string | null;
+  mediaAdOrderName?: string | null;
   type: EntryType;
   mediaIdStr: string;
   upstreamAdId: string;

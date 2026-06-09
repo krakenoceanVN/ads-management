@@ -53,6 +53,19 @@ function formatDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream: { adType?: AdType | null } }) {
+  return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+
+function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
+  return {
+    OR: [
+      { adOrder: { adType: { code: adTypeCode } } },
+      { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+    ],
+  };
+}
+
 function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
   include: {
     adSite: {
@@ -66,7 +79,7 @@ function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
   const site = di.adSite;
   const upstream = site.upstream;
   const adOrder = site.adOrder;
-  const adType = adOrder?.adType;
+  const adType = actualAdType(site);
 
   // Rate: CPM/CPA use unitPriceSnapshot; RATIO/CPS use ratioSnapshot
   const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
@@ -93,6 +106,7 @@ function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
     adOrder: adOrder?.name ?? '',
     adOrderId: site.adOrderId ?? null,
     adOrderCode: adType?.code ?? null,
+    adOrderName: adType?.name ?? null,
     type: site.billingMethod as EntryType,
     adId: site.name,
     adIdNum: site.id,
@@ -127,10 +141,8 @@ export async function getAdvertiserReport(params: AdvertiserReportParams): Promi
     statusFilter.status = 'confirmed';
   }
 
-  // Build upstream filter for advertiser report
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(advertiserId != null && { id: advertiserId }),
-    ...(adTypeCode && { adType: { code: adTypeCode } }),
   };
 
   // Get all DailyInputs matching filters — return entry-level rows (not grouped)
@@ -139,8 +151,8 @@ export async function getAdvertiserReport(params: AdvertiserReportParams): Promi
       ...dateFilter,
       ...statusFilter,
       status: { not: 'quarantined' },
-      // Only ad sites that belong to advertiser-type upstreams
       adSite: {
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
         upstream: {
           ...upstreamWhere,
         },
@@ -168,17 +180,19 @@ function makeReportMediaRow(
       adSite: {
         include: {
           upstream: { include: { adType: true } };
+          adOrder: { include: { adType: true } };
           downstreams: { include: { downstream: true } };
         };
       };
     };
   }>,
-  site: Prisma.AdSiteGetPayload<{ include: { upstream: { include: { adType: true } }; downstreams: { include: { downstream: true } } } }>,
+  site: Prisma.AdSiteGetPayload<{ include: { upstream: { include: { adType: true } }; adOrder: { include: { adType: true } }; downstreams: { include: { downstream: true } } } }>,
   upstream: Prisma.UpstreamGetPayload<{ include: { adType: true } }>,
   junction: Prisma.AdSiteDownstreamGetPayload<{ include: { downstream: true } }>,
   payoutRate: number,
 ): MediaEntryRow {
-  const adTypeCode = upstream.adType?.code ?? null;
+  const adTypeCode = actualAdType(site)?.code ?? null;
+  const adTypeName = actualAdType(site)?.name ?? null;
 
   // Rate: CPM uses unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
   const rate = site.billingMethod === 'CPM'
@@ -209,6 +223,7 @@ function makeReportMediaRow(
     mediaAdOrder: adTypeCode ?? '',
     mediaAdOrderId: null,
     mediaAdOrderCode: adTypeCode,
+    mediaAdOrderName: adTypeName,
     type: site.billingMethod as EntryType,
     mediaIdStr: site.name,
     upstreamAdId: site.name,
@@ -256,13 +271,14 @@ export async function getMediaReport(params: MediaReportParams): Promise<MediaEn
       adSite: {
         downstreams: { some: {} },
         ...(mediaId != null && { upstreamId: mediaId }),
-        ...(adTypeCode && { upstream: { adType: { code: adTypeCode } } }),
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
       },
     },
     include: {
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
           downstreams: {
             include: { downstream: true },
           },

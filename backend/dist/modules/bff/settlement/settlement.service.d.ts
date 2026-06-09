@@ -29,6 +29,7 @@ export interface AdvertiserSettlementRow {
     advertiserId: number;
     advertiser: string;
     adTypeCode: string | null;
+    adTypeName: string | null;
     totalAmount: number;
     recordCount: number;
 }
@@ -42,6 +43,7 @@ export interface MediaSettlementRow {
     mediaId: number;
     media: string;
     adTypeCode: string | null;
+    adTypeName: string | null;
     downstreamName: string | null;
     revenue: number;
     cost: number;

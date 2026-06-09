@@ -1,7 +1,6 @@
 import { prisma } from '../../../shared/prisma/client';
 import { mapMedia } from '../mappers';
-import type { AdSite, Upstream, AdType } from '../../../shared/prisma/client';
-import type { EntityStatus } from '../bff.types';
+import { normalizeBillingMethodForStorage, type EntityStatus } from '../bff.types';
 
 export interface CreateMediaInput {
   name: string;
@@ -34,18 +33,20 @@ export interface UpdateMediaInput {
 export async function createMedia(input: CreateMediaInput) {
   const upstream = await prisma.upstream.findUnique({ where: { id: input.upstreamId } });
   if (!upstream) throw new Error('Invalid upstreamId: ' + input.upstreamId);
+  const billingMethod = normalizeBillingMethodForStorage(input.billingMethod ?? 'CPM');
+  if (!billingMethod) throw new Error('Invalid billingMethod: ' + input.billingMethod);
   const row = await prisma.adSite.create({
     data: {
       name: input.name,
       upstreamId: input.upstreamId,
-      billingMethod: input.billingMethod ?? 'CPM',
+      billingMethod,
       currentUnitPrice: input.currentUnitPrice ?? null,
       currentRatio: input.currentRatio ?? null,
       status: input.status ?? 'active',
     },
-    include: { upstream: { include: { adType: true } } },
+    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
   });
-  return mapMedia(row as AdSite & { upstream: Upstream & { adType: AdType } });
+  return mapMedia(row);
 }
 
 export async function updateMedia(id: number, input: UpdateMediaInput) {
@@ -53,20 +54,22 @@ export async function updateMedia(id: number, input: UpdateMediaInput) {
     const upstream = await prisma.upstream.findUnique({ where: { id: input.upstreamId } });
     if (!upstream) throw new Error('Invalid upstreamId: ' + input.upstreamId);
   }
+  const billingMethod = normalizeBillingMethodForStorage(input.billingMethod);
+  if (input.billingMethod !== undefined && !billingMethod) throw new Error('Invalid billingMethod: ' + input.billingMethod);
   const row = await prisma.adSite.update({
     where: { id },
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.status !== undefined && { status: input.status }),
       ...(input.upstreamId !== undefined && { upstreamId: input.upstreamId }),
-      ...(input.billingMethod !== undefined && { billingMethod: input.billingMethod }),
+      ...(billingMethod !== undefined && { billingMethod }),
       ...(input.currentUnitPrice !== undefined && { currentUnitPrice: input.currentUnitPrice }),
       ...(input.currentRatio !== undefined && { currentRatio: input.currentRatio }),
       ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
     },
-    include: { upstream: { include: { adType: true } } },
+    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
   });
-  return mapMedia(row as AdSite & { upstream: Upstream & { adType: AdType } });
+  return mapMedia(row);
 }
 
 export async function deleteMedia(id: number) {
@@ -74,7 +77,7 @@ export async function deleteMedia(id: number) {
   const row = await prisma.adSite.update({
     where: { id },
     data: { isArchived: true },
-    include: { upstream: { include: { adType: true } } },
+    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
   });
-  return mapMedia(row as AdSite & { upstream: Upstream & { adType: AdType } });
+  return mapMedia(row);
 }

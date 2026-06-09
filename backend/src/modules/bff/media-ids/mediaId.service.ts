@@ -19,7 +19,10 @@ export async function listMediaIds(filters?: ListMediaIdsFilters) {
 
   if (filters?.adTypeCode || filters?.type !== undefined || filters?.archived !== undefined) {
     where.adSite = {
-      upstream: filters.adTypeCode ? { adType: { code: filters.adTypeCode } } : undefined,
+      OR: filters.adTypeCode ? [
+        { adOrder: { adType: { code: filters.adTypeCode } } },
+        { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
+      ] : undefined,
       billingMethod: filters.type,
       isArchived: filters.archived,
     };
@@ -31,6 +34,7 @@ export async function listMediaIds(filters?: ListMediaIdsFilters) {
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
         },
       },
       downstream: true,
@@ -48,6 +52,7 @@ export async function getMediaId(id: number) {
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
         },
       },
       downstream: true,

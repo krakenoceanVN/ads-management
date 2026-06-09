@@ -16,6 +16,7 @@ import type {
   ReportStatusParam,
   TotalProfitReportRow,
 } from '../lib/bffTypes';
+import { uiTypeToApiType } from '../lib/bffTypes';
 import { sortRowsByDate } from '../lib/date';
 
 type CsvColumn<T> = {
@@ -85,6 +86,10 @@ function csvEscape(value: string | number) {
   const text = String(value ?? '');
   if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
+}
+
+function billingMethodLabel(type: string) {
+  return type === 'RATIO' ? 'CPS' : type;
 }
 
 function downloadCsv<T>(filename: string, columns: CsvColumn<T>[], rows: T[]) {
@@ -487,7 +492,7 @@ export function OrderProfit() {
     getOrderProfitReport({
       startDate: draftStartDate,
       endDate: draftEndDate,
-      billingMethod: draftBillingMethod || undefined,
+      billingMethod: draftBillingMethod ? uiTypeToApiType(draftBillingMethod as 'CPM' | 'CPA' | 'CPS') : undefined,
     })
       .then(data => {
         if (!cancelled) setRows(data);
@@ -530,14 +535,13 @@ export function OrderProfit() {
     { value: 'CPM', label: 'CPM' },
     { value: 'CPA', label: 'CPA' },
     { value: 'CPS', label: 'CPS' },
-    { value: 'RATIO', label: 'RATIO' },
   ];
 
   const columns: CsvColumn<OrderProfitReportRow>[] = [
     { label: t('date'), value: row => row.date },
     { label: t('advertiser'), value: row => displayName(row.advertiser) },
     { label: t('adOrder'), value: row => displayName(row.adTypeName) },
-    { label: t('billingMethod'), value: row => row.billingMethod },
+    { label: t('billingMethod'), value: row => billingMethodLabel(row.billingMethod) },
     { label: t('revenue'), value: row => formatAmount(row.revenue) },
     { label: t('trafficData'), value: row => formatAmount(row.qty) },
     { label: 'Records', value: row => row.recordCount },
@@ -618,7 +622,7 @@ export function OrderProfit() {
                   <td>{row.date}</td>
                   <td>{displayName(row.advertiser)}</td>
                   <td>{displayName(row.adTypeName)}</td>
-                  <td>{row.billingMethod}</td>
+                  <td>{billingMethodLabel(row.billingMethod)}</td>
                   <td className="amount-cell">{formatAmount(row.revenue)}</td>
                   <td>{formatAmount(row.qty)}</td>
                   <td>{row.recordCount}</td>
@@ -743,11 +747,15 @@ export function AdvQuery() {
   );
 
   const orderCodeForAdvRow = (row: AdvertiserEntryRow) => row.adOrderCode ?? row.adOrder;
+  const orderNameForAdvRow = (row: AdvertiserEntryRow) => {
+    const name = (row.adOrderName ?? '').trim();
+    return name || orderCodeForAdvRow(row);
+  };
 
   const columns: CsvColumn<AdvertiserEntryRow>[] = [
     { label: t('date'), value: row => row.date },
     { label: t('advertiser'), value: row => displayName(row.advertiser) },
-    { label: t('adOrder'), value: row => displayName(orderCodeForAdvRow(row)) },
+    { label: t('adOrder'), value: row => displayName(orderNameForAdvRow(row)) },
     { label: t('type'), value: row => row.type },
     { label: t('adId'), value: row => row.adId },
     { label: t('unitPriceRevenueShare'), value: row => row.rate },
@@ -833,7 +841,7 @@ export function AdvQuery() {
                 <tr key={row.id}>
                   <td>{row.date}</td>
                   <td>{displayName(row.advertiser)}</td>
-                  <td>{displayName(orderCodeForAdvRow(row))}</td>
+                  <td>{displayName(orderNameForAdvRow(row))}</td>
                   <td>{row.type}</td>
                   <td>{row.adId}</td>
                   <td>{row.rate}</td>
@@ -951,6 +959,10 @@ export function MediaQuery() {
   const handleClearDates = () => { setDraftFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setAppliedFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setIsDirty(false); setDateWarning(null); };
 
   const orderCodeForMediaRow = (row: MediaEntryRow) => row.mediaAdOrderCode ?? row.mediaAdOrder;
+  const orderNameForMediaRow = (row: MediaEntryRow) => {
+    const name = (row.mediaAdOrderName ?? '').trim();
+    return name || orderCodeForMediaRow(row);
+  };
 
   const visibleRows = rows.filter(row =>
     (!draftFilters.business || orderCodeForMediaRow(row) === draftFilters.business)
@@ -967,7 +979,7 @@ export function MediaQuery() {
   const columns: CsvColumn<MediaEntryRow>[] = [
     { label: t('date'), value: row => row.date },
     { label: t('media'), value: row => displayName(row.media) },
-    { label: t('mediaAdOrder'), value: row => displayName(orderCodeForMediaRow(row)) },
+    { label: t('mediaAdOrder'), value: row => displayName(orderNameForMediaRow(row)) },
     { label: t('type'), value: row => row.type },
     { label: t('mediaId'), value: row => row.mediaIdStr },
     { label: t('unitPriceRevenueShare'), value: row => row.rate },
@@ -1059,7 +1071,7 @@ export function MediaQuery() {
                 <tr key={row.id}>
                   <td>{row.date}</td>
                   <td>{displayName(row.media)}</td>
-                  <td>{displayName(orderCodeForMediaRow(row))}</td>
+                  <td>{displayName(orderNameForMediaRow(row))}</td>
                   <td>{row.type}</td>
                   <td>{row.mediaIdStr}</td>
                   <td>{row.rate}</td>

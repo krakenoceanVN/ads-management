@@ -59,7 +59,7 @@ async function saveAdvertiserBatch(items, userId) {
     const siteIds = [...new Set(items.map(i => i.adSiteId))];
     const sites = await client_2.prisma.adSite.findMany({
         where: { id: { in: siteIds } },
-        include: { upstream: { include: { adType: true } }, adOrder: true },
+        include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
     });
     const siteById = new Map(sites.map(s => [s.id, s]));
     for (const item of items) {

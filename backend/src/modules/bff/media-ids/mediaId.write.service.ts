@@ -1,6 +1,6 @@
 import { prisma } from '../../../shared/prisma/client';
 import { mapMediaId } from '../mappers';
-import type { AdSiteDownstream, AdSite, Upstream, AdType, Downstream } from '../../../shared/prisma/client';
+import type { AdSiteDownstream, AdSite, Upstream, AdType, Downstream, AdOrder } from '../../../shared/prisma/client';
 import type { EntityStatus } from '../bff.types';
 import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
 
@@ -24,15 +24,15 @@ export async function createMediaId(input: CreateMediaIdInput) {
   // Both foreign keys must point to existing rows — return a clean 400 instead of a raw FK crash.
   const adSite = await prisma.adSite.findUnique({
     where: { id: adSiteId },
-    include: { upstream: true },
+    include: { upstream: true, adOrder: true },
   });
   if (!adSite) throw new BadRequestError(`AdSite (ID quảng cáo) with id '${adSiteId}' does not exist`);
 
   const downstream = await prisma.downstream.findUnique({ where: { id: downstreamId } });
   if (!downstream) throw new BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
 
-  // The AdSite (via its upstream) and the Downstream must belong to the same AdType.
-  if (adSite.upstream.adTypeId !== downstream.adTypeId) {
+  const adSiteAdTypeId = adSite.adOrder?.adTypeId ?? adSite.upstream.adTypeId;
+  if (adSiteAdTypeId !== downstream.adTypeId) {
     throw new BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
   }
 
@@ -57,11 +57,11 @@ export async function createMediaId(input: CreateMediaIdInput) {
       customPrice: customPrice ?? null,
     },
     include: {
-      adSite: { include: { upstream: { include: { adType: true } } } },
+      adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
       downstream: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType } }; downstream: Downstream });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (AdOrder & { adType: AdType }) | null }; downstream: Downstream });
 }
 
 export async function updateMediaId(junctionId: number, input: UpdateMediaIdInput) {
@@ -76,11 +76,11 @@ export async function updateMediaId(junctionId: number, input: UpdateMediaIdInpu
       ...(customPrice !== undefined && { customPrice: customPrice }),
     },
     include: {
-      adSite: { include: { upstream: { include: { adType: true } } } },
+      adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
       downstream: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType } }; downstream: Downstream });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (AdOrder & { adType: AdType }) | null }; downstream: Downstream });
 }
 
 export async function deleteMediaId(_junctionId: number) {

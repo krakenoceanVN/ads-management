@@ -1,4 +1,4 @@
-import type { EntityStatus } from '../bff.types';
+import { type EntityStatus } from '../bff.types';
 export interface CreateMediaInput {
     name: string;
     contact?: string | null;

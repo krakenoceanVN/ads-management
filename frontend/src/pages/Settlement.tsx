@@ -27,6 +27,16 @@ function formatPercent(value: unknown) {
   return `${percent.toFixed(2)}%`;
 }
 
+function formatAdType(row: { adTypeName?: string | null; adTypeCode?: string | null }) {
+  return displayNameOr(row.adTypeName, row.adTypeCode) ?? '--';
+}
+
+function displayNameOr(name: string | null | undefined, fallback: string | null | undefined) {
+  const trimmed = (name ?? '').trim();
+  if (trimmed) return trimmed;
+  return (fallback ?? '').trim() || null;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
 }
@@ -97,7 +107,7 @@ export function AdvSettlement() {
   const columns: CsvColumn<AdvertiserSettlementRow>[] = [
     { label: t('period'), value: row => row.period },
     { label: t('advertiser'), value: row => displayName(row.advertiser) },
-    { label: 'Code', value: row => row.adTypeCode ?? '--' },
+    { label: t('adType'), value: row => formatAdType(row) },
     { label: t('amount'), value: row => formatAmount(row.totalAmount) },
     { label: 'Records', value: row => row.recordCount },
   ];
@@ -121,7 +131,7 @@ export function AdvSettlement() {
             columns={[
               { key: 'period', label: t('period') },
               { key: 'advertiser', label: t('advertiser'), render: row => displayName(row.advertiser) },
-              { key: 'adTypeCode', label: 'Code', render: row => row.adTypeCode ?? '--' },
+              { key: 'adTypeCode', label: t('adType'), render: row => formatAdType(row) },
               { key: 'totalAmount', label: t('amount'), render: row => formatAmount(row.totalAmount) },
               { key: 'recordCount', label: 'Records' },
             ]}
@@ -170,7 +180,7 @@ export function MediaSettlement() {
     { label: t('period'), value: row => row.period },
     { label: t('media'), value: row => displayName(row.media) },
     { label: 'Downstream', value: row => row.downstreamName ?? '--' },
-    { label: 'Code', value: row => row.adTypeCode ?? '--' },
+    { label: t('adType'), value: row => formatAdType(row) },
     { label: t('revenue'), value: row => formatAmount(row.revenue) },
     { label: t('expense'), value: row => formatAmount(row.cost) },
     { label: t('profit'), value: row => formatAmount(row.profit) },
@@ -198,7 +208,7 @@ export function MediaSettlement() {
               { key: 'period', label: t('period') },
               { key: 'media', label: t('media'), render: row => displayName(row.media) },
               { key: 'downstreamName', label: 'Downstream', render: row => row.downstreamName ?? '--' },
-              { key: 'adTypeCode', label: 'Code', render: row => row.adTypeCode ?? '--' },
+              { key: 'adTypeCode', label: t('adType'), render: row => formatAdType(row) },
               { key: 'revenue', label: t('revenue'), render: row => formatAmount(row.revenue) },
               { key: 'cost', label: t('expense'), render: row => formatAmount(row.cost) },
               { key: 'profit', label: t('profit'), render: row => formatAmount(row.profit) },

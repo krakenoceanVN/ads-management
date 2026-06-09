@@ -8,6 +8,7 @@ async function listMedia() {
     const rows = await client_1.prisma.adSite.findMany({
         include: {
             upstream: { include: { adType: true } },
+            adOrder: { include: { adType: true } },
         },
         orderBy: { id: 'asc' },
     });
@@ -18,6 +19,7 @@ async function getMedia(id) {
         where: { id },
         include: {
             upstream: { include: { adType: true } },
+            adOrder: { include: { adType: true } },
         },
     });
     if (!row)

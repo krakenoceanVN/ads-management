@@ -225,6 +225,16 @@ export function AdvEntry() {
     [filteredRows, scopedRows]
   );
   const adOrderOptions = uniqueOptions(scopedRows.map(row => row.adOrderCode ?? row.adOrder).filter(Boolean));
+  const adOrderOptionLabels = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of scopedRows) {
+      const value = row.adOrderCode ?? row.adOrder ?? '';
+      if (!value || map.has(value)) continue;
+      const name = (row.adOrderName ?? '').trim();
+      map.set(value, name || value);
+    }
+    return map;
+  }, [scopedRows]);
   const advertiserOptions = uniqueOptions(scopedRows.map(row => row.advertiser));
   const filteredByAdvertiser = filters.first ? scopedRows.filter(row => row.advertiser === filters.first) : scopedRows;
   const filteredByOrder = filters.second ? filteredByAdvertiser.filter(row => (row.adOrderCode ?? row.adOrder) === filters.second) : filteredByAdvertiser;
@@ -242,7 +252,16 @@ export function AdvEntry() {
       || '';
   };
 
-  const adOrderDisplayForRow = (row: AdvertiserEntryRow) => adTypeCodeForRow(row) || row.adOrder;
+  const adOrderNameForRow = (row: AdvertiserEntryRow) => {
+    return row.adOrderName
+      || adOrders.find(order => order.id === row.adOrderId)?.adTypeName
+      || '';
+  };
+
+  const adOrderDisplayForRow = (row: AdvertiserEntryRow) => {
+    const name = adOrderNameForRow(row).trim();
+    return name || adTypeCodeForRow(row) || row.adOrder;
+  };
 
   const getAdvertiserRowKey = (row: AdvertiserEntryRow) => `${row.advertiser} / ${adOrderDisplayForRow(row)} / ${row.adId}`;
 
@@ -425,7 +444,7 @@ export function AdvEntry() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setAdOrderFilter(e.target.value)}>
             <option value="">{t('selectAdOrder')}</option>
-            {adOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
+            {adOrderOptions.map(item => <option key={item} value={item}>{displayName(adOrderOptionLabels.get(item) ?? item)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectAdId')}</option>
@@ -562,6 +581,16 @@ export function MediaDataMgmt() {
   );
   const mediaOptions = uniqueOptions(scopedRows.map(row => row.media));
   const mediaOrderOptions = uniqueOptions(scopedRows.map(row => row.mediaAdOrderCode ?? row.mediaAdOrder).filter(Boolean));
+  const mediaOrderOptionLabels = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of scopedRows) {
+      const value = row.mediaAdOrderCode ?? row.mediaAdOrder ?? '';
+      if (!value || map.has(value)) continue;
+      const name = (row.mediaAdOrderName ?? '').trim();
+      map.set(value, name || (value));
+    }
+    return map;
+  }, [scopedRows]);
   const filteredByMedia = filters.first ? scopedRows.filter(row => row.media === filters.first) : scopedRows;
   const filteredByOrder = filters.second ? filteredByMedia.filter(row => (row.mediaAdOrderCode ?? row.mediaAdOrder) === filters.second) : filteredByMedia;
   const mediaIdOptions = uniqueOptions(filteredByOrder.map(row => row.mediaIdStr));
@@ -577,6 +606,17 @@ export function MediaDataMgmt() {
     return row.mediaAdOrderCode
       || adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeCode
       || '';
+  };
+
+  const adOrderNameForRow = (row: MediaEntryRow) => {
+    return row.mediaAdOrderName
+      || adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeName
+      || '';
+  };
+
+  const mediaAdOrderDisplayForRow = (row: MediaEntryRow) => {
+    const name = adOrderNameForRow(row).trim();
+    return name || adTypeCodeForRow(row) || row.mediaAdOrder;
   };
 
   const updateRow = (uiKey: string, field: keyof Pick<MediaEntryRow, 'rate' | 'traffic' | 'settlement' | 'dataCoefficient'>, value: string) => {
@@ -682,7 +722,7 @@ export function MediaDataMgmt() {
     const body = visibleRows.map(row => [
       row.date,
       row.media,
-      row.mediaAdOrder,
+      mediaAdOrderDisplayForRow(row),
       row.type,
       row.mediaIdStr,
       row.rate,
@@ -711,7 +751,7 @@ export function MediaDataMgmt() {
           </select>
           <select className="input-sm" value={filters.second} onChange={e => setMediaOrderFilter(e.target.value)}>
             <option value="">{t('selectMediaAdOrder')}</option>
-            {mediaOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}
+            {mediaOrderOptions.map(item => <option key={item} value={item}>{displayName(mediaOrderOptionLabels.get(item) ?? item)}</option>)}
           </select>
           <select className="input-sm" value={filters.third} onChange={e => updateFilter(setFilters, 'third', e.target.value)}>
             <option value="">{t('selectMediaId')}</option>
@@ -758,7 +798,7 @@ export function MediaDataMgmt() {
                   <tr key={row.uiKey} className={isConfirmed ? 'entry-row-confirmed' : ''}>
                     <td>{row.date}</td>
                     <td>{displayName(row.media)}</td>
-                    <td>{displayName(row.mediaAdOrder)}</td>
+                    <td>{displayName(mediaAdOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.mediaIdStr}</td>
                     <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.rate === '—' ? '' : row.rate} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'rate', e.target.value)} /></td>

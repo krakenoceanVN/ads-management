@@ -29,6 +29,20 @@ import {
   type DailyInputWithSite,
 } from '../../../shared/services/payout.service';
 import type { BillingMethod } from '../../../shared/services/revenue.service';
+import type { AdType } from '../../../shared/prisma/client';
+
+function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream: { adType?: AdType | null } }) {
+  return site.adOrder?.adType ?? site.upstream.adType ?? null;
+}
+
+function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
+  return {
+    OR: [
+      { adOrder: { adType: { code: adTypeCode } } },
+      { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
+    ],
+  };
+}
 
 export interface AdvertiserSettlementParams {
   period?: string;       // YYYY-MM
@@ -42,6 +56,7 @@ export interface AdvertiserSettlementRow {
   advertiserId: number;
   advertiser: string;
   adTypeCode: string | null;
+  adTypeName: string | null;
   totalAmount: number;  // SUM(DailyInput.revenue), no recalculation
   recordCount: number;
 }
@@ -58,10 +73,8 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
     dateFilter = { recordDate: { gte: start, lte: end } };
   }
 
-  // Build upstream filter
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(advertiserId != null && { id: advertiserId }),
-    ...(adTypeCode && { adType: { code: adTypeCode } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
@@ -69,6 +82,7 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
       ...dateFilter,
       status: 'confirmed',
       adSite: {
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
         upstream: { ...upstreamWhere },
       },
     },
@@ -76,28 +90,33 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
         },
       },
     },
     orderBy: { recordDate: 'asc' },
   });
 
-  const byAdvertiser = new Map<number, AdvertiserSettlementRow>();
+  const byAdvertiser = new Map<string, AdvertiserSettlementRow>();
 
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
-    const code = upstream.adType?.code ?? null;
+    const adType = actualAdType(di.adSite);
+    const code = adType?.code ?? null;
+    const name = adType?.name ?? null;
+    const key = `${upstream.id}|${code ?? ''}`;
 
-    if (!byAdvertiser.has(upstream.id)) {
-      byAdvertiser.set(upstream.id, {
+    if (!byAdvertiser.has(key)) {
+      byAdvertiser.set(key, {
         advertiserId: upstream.id,
         advertiser: upstream.name,
         adTypeCode: code,
+        adTypeName: name,
         totalAmount: 0,
         recordCount: 0,
       });
     }
-    const row = byAdvertiser.get(upstream.id)!;
+    const row = byAdvertiser.get(key)!;
     const rev = di.revenue ? parseFloat(di.revenue.toString()) || 0 : 0;
     row.totalAmount = Math.round((row.totalAmount + rev) * 100) / 100;
     row.recordCount += 1;
@@ -118,6 +137,7 @@ export interface MediaSettlementRow {
   mediaId: number;
   media: string;
   adTypeCode: string | null;
+  adTypeName: string | null;
   downstreamName: string | null;
   revenue: number;        // SUM(DailyInput.revenue)
   cost: number;          // SUM(resolved downstream costs)
@@ -142,7 +162,6 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
 
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(mediaId != null && { id: mediaId }),
-    ...(adTypeCode && { adType: { code: adTypeCode } }),
   };
 
   // Only adSites that have at least one downstream junction
@@ -151,6 +170,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
       ...dateFilter,
       status: 'confirmed',
       adSite: {
+        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
         upstream: { ...upstreamWhere },
         downstreams: { some: {} },
       },
@@ -159,6 +179,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
       adSite: {
         include: {
           upstream: { include: { adType: true } },
+          adOrder: { include: { adType: true } },
           downstreams: {
             include: {
               downstream: true,
@@ -170,16 +191,14 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
     orderBy: { recordDate: 'asc' },
   });
 
-  // Group by media (upstream) only — one row per media.
-  // Revenue is counted ONCE per DailyInput, and cost is the SUM of all active
-  // downstream costs for that media (via aggregateDownstreamCost). Grouping by
-  // (media, downstream) previously duplicated both revenue and cost when an
-  // adSite had multiple downstream junctions.
+  // Group by media and actual AdType. Revenue is counted ONCE per DailyInput,
+  // and cost is the SUM of all active downstreams for the grouped inputs.
   type GroupKey = string;
   const groups = new Map<GroupKey, {
     mediaId: number;
     media: string;
     adTypeCode: string | null;
+    adTypeName: string | null;
     downstreamNames: Set<string>;
     revenueSum: number;
     recordCount: number;
@@ -188,14 +207,17 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
 
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
-    const adTypeCode = upstream.adType?.code ?? null;
+    const adType = actualAdType(di.adSite);
+    const adTypeCode = adType?.code ?? null;
+    const adTypeName = adType?.name ?? null;
 
-    const key = `${upstream.id}`;
+    const key = `${upstream.id}|${adTypeCode ?? ''}`;
     if (!groups.has(key)) {
       groups.set(key, {
         mediaId: upstream.id,
         media: upstream.name,
         adTypeCode,
+        adTypeName,
         downstreamNames: new Set<string>(),
         revenueSum: 0,
         recordCount: 0,
@@ -231,6 +253,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
       mediaId: g.mediaId,
       media: g.media,
       adTypeCode: g.adTypeCode,
+      adTypeName: g.adTypeName,
       downstreamName,
       revenue: profitRes.revenue,
       cost: profitRes.cost,

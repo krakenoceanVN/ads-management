@@ -56,6 +56,8 @@ export interface OrderProfitRow {
     date: string;
     orderId: number | null;
     orderName: string | null;
+    adTypeCode: string | null;
+    adTypeName: string | null;
     upstreamId: number;
     upstream: string;
     billingMethod: string;

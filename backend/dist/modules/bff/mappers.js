@@ -21,6 +21,9 @@ function decimalToNull(d) {
     return Number.isFinite(n) ? n : null;
 }
 function mapAdvertiser(upstream) {
+    const linkedAdTypes = (upstream.adTypeLinks ?? []).map(link => link.adType).filter(Boolean);
+    const adTypes = linkedAdTypes.length ? linkedAdTypes : upstream.adType ? [upstream.adType] : [];
+    const adTypeCodes = Array.from(new Set(adTypes.map(adType => adType.code)));
     return {
         id: upstream.id,
         name: upstream.name,
@@ -29,10 +32,16 @@ function mapAdvertiser(upstream) {
         email: upstream.email,
         notes: upstream.notes,
         status: upstream.status,
-        adTypeCode: upstream.adType?.code,
+        adTypeCode: upstream.adType?.code ?? adTypeCodes[0],
+        adTypeCodes,
+        adTypes: adTypes.map(adType => ({ id: adType.id, code: adType.code, name: adType.name })),
     };
 }
+function actualAdType(site) {
+    return site.adOrder?.adType ?? site.upstream?.adType ?? null;
+}
 function mapMedia(site) {
+    const adType = actualAdType(site);
     return {
         id: site.id,
         name: site.name,
@@ -42,7 +51,8 @@ function mapMedia(site) {
         notes: null,
         status: site.status,
         upstreamId: site.upstreamId,
-        adTypeCode: site.upstream?.adType?.code,
+        adTypeCode: adType?.code,
+        adTypeName: adType?.name ?? null,
         billingMethod: site.billingMethod,
         currentUnitPrice: decimalToNum(site.currentUnitPrice),
         currentRatio: decimalToNum(site.currentRatio),
@@ -54,6 +64,7 @@ function mapAdOrder(order) {
         advId: order.upstreamId,
         name: order.name,
         adTypeCode: order.adType?.code ?? '',
+        adTypeName: order.adType?.name ?? null,
         notes: order.notes,
         status: order.status,
     };
@@ -69,10 +80,12 @@ function mapAdId(site) {
         slot: site.name,
         type: site.billingMethod,
         rate,
+        notes: site.notes ?? null,
         status: site.status,
         advertiserId: site.upstreamId,
         advertiserName: site.upstream?.name ?? '',
-        adTypeCode: site.upstream?.adType?.code ?? '',
+        adTypeCode: actualAdType(site)?.code ?? '',
+        adTypeName: actualAdType(site)?.name ?? null,
         adOrderId: site.adOrderId ?? null,
         upstreamId: site.upstreamId,
         billingMethod: site.billingMethod,
@@ -91,7 +104,8 @@ function mapMediaId(j) {
         status: 'active', // AdSiteDownstream has no status column → default active
         mediaId: j.adSite.id,
         mediaName: j.adSite.name,
-        adTypeCode: j.adSite.upstream?.adType?.code ?? '',
+        adTypeCode: actualAdType(j.adSite)?.code ?? '',
+        adTypeName: actualAdType(j.adSite)?.name ?? null,
         upstreamId: j.adSite.upstreamId,
         billingMethod: j.adSite.billingMethod,
         isActive: j.adSite.isActive,
@@ -106,6 +120,7 @@ function mapDownstream(d) {
         downstreamType: d.downstreamType,
         adTypeId: d.adTypeId,
         adTypeCode: d.adType?.code ?? '',
+        adTypeName: d.adType?.name ?? null,
         payoutRate: Number(d.payoutRate),
         status: d.status,
     };

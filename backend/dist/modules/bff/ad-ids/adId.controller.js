@@ -55,6 +55,7 @@ async function create(req, res) {
         type: body.type,
         unitPrice: body.unitPrice ?? null,
         ratio: body.ratio ?? null,
+        notes: body.notes ?? null,
         status: body.status ?? 'active',
     });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_AD_ID', 'adId', adId.id, adId.slot);
@@ -73,6 +74,7 @@ async function update(req, res) {
         type: body.type,
         unitPrice: body.unitPrice,
         ratio: body.ratio,
+        notes: body.notes !== undefined ? body.notes : undefined,
         status: body.status,
     });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_AD_ID', 'adId', adId.id, adId.slot);

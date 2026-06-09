@@ -504,7 +504,7 @@ export function MediaAdOrderMgmt() {
 
   const mediaAdOrderColumns: CsvColumn<AdOrder>[] = [
     { label: t('mediaAdOrder'), value: r => displayName(r.name) },
-    { label: t('adType'), value: r => r.adTypeCode ?? '' },
+    { label: t('adType'), value: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
     { label: t('notes'), value: r => r.notes ?? '-' },
   ];
 
@@ -556,6 +556,11 @@ export function MediaAdOrderMgmt() {
   const adTypeOptions = React.useMemo(() => {
     return adTypes.map(at => at.code).sort();
   }, [adTypes]);
+
+  const adTypeNameByCode = React.useMemo(
+    () => new Map(adTypes.map(at => [at.code, at.name ?? at.code])),
+    [adTypes]
+  );
 
   const submitForm = async () => {
     const upstreamId = Number(form.upstreamId);
@@ -618,7 +623,7 @@ export function MediaAdOrderMgmt() {
             columns={[
               { key: '__no__', label: t('no') },
               { key: 'name', label: t('mediaAdOrder'), render: r => displayName(r.name) },
-              { key: 'adTypeCode', label: t('adType') },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
               { key: '__actions__', label: t('actions') },
             ]}
@@ -644,7 +649,7 @@ export function MediaAdOrderMgmt() {
               <div className="form-group"><label>{t('adType')}</label>
                 <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
                   <option value="">-</option>
-                  {adTypes.map(at => <option key={at.code} value={at.code}>{at.code}</option>)}
+                  {adTypes.map(at => <option key={at.code} value={at.code}>{displayName(at.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('mediaAdOrderName')}</label>

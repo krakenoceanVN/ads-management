@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useAppContext } from '../AppContext';
 import { DatePickerInput } from '../components/DatePickerInput';
+import { PageHeader } from '../components/common/PageHeader';
+import { TableCard } from '../components/common/TableCard';
 import { getYiyiMonthlyData, saveYiyiDailyData, type YiyiChannelData } from '../api/yiyiApi';
 
 const YIYI_CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const;
@@ -25,6 +27,12 @@ export function YiyiData() {
   const [success, setSuccess] = useState('');
 
   const canWrite = can('dataEntry.create') || can('dataEntry.write') || can('perm_data_input');
+  const totalQty = channels.reduce((sum, channel) => sum + channel.qty, 0);
+  const activeChannelCount = channels.filter(channel => channel.hasData || channel.qty > 0).length;
+  const unitPriceValue = Number(unitPrice);
+  const profitUnitPriceValue = Number(profitUnitPrice);
+  const vendorAmount = Number.isFinite(unitPriceValue) ? (totalQty * unitPriceValue) / 1000 : 0;
+  const profitAmount = Number.isFinite(profitUnitPriceValue) ? (totalQty * profitUnitPriceValue) / 1000 : 0;
 
   const DEFAULT_UNIT_PRICE = 2;
   const DEFAULT_PROFIT_UNIT_PRICE = 1;
@@ -116,27 +124,53 @@ export function YiyiData() {
   };
 
   return (
-    <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pYiyiEntry')}</h1></div>
-      <div className="card">
-        <div className="yiyi-data-filters">
+    <div className="page active yiyi-entry-page">
+      <PageHeader
+        eyebrow={t('dataEntry') || '数据录入'}
+        title={t('pYiyiEntry')}
+        description={canWrite ? date : `${date} · Read only`}
+        actions={(
           <DatePickerInput
             placeholder={t('date')}
-            className="input-sm filter-date"
+            className="input-sm filter-date yiyi-entry-date"
             value={date}
             onChange={setDate}
           />
-        </div>
+        )}
+      />
 
+      <div className="yiyi-entry-overview">
+        <div className="yiyi-entry-metric">
+          <span className="yiyi-entry-metric-label">Quantity</span>
+          <strong>{totalQty.toLocaleString()}</strong>
+          <span>{activeChannelCount}/{YIYI_CHANNELS.length} channels</span>
+        </div>
+        <div className="yiyi-entry-metric">
+          <span className="yiyi-entry-metric-label">Vendor amount</span>
+          <strong>{vendorAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })}</strong>
+          <span>quantity × unitPrice / 1000</span>
+        </div>
+        <div className="yiyi-entry-metric">
+          <span className="yiyi-entry-metric-label">Profit</span>
+          <strong>{profitAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })}</strong>
+          <span>quantity × profitUnitPrice / 1000</span>
+        </div>
+      </div>
+
+      <TableCard
+        className="yiyi-entry-card"
+        title={date}
+        description={canWrite ? t('saveSystem') : 'Read only'}
+      >
         {error && <div className="form-error">{error}</div>}
         {success && <div className="form-success">{success}</div>}
 
         {loading ? (
-          <div className="empty-state-text" style={{ padding: '20px' }}>Loading...</div>
+          <div className="yiyi-entry-loading">Loading...</div>
         ) : (
-          <>
-            <div className="table-wrap">
-              <table className="entry-table">
+          <div className="yiyi-entry-body-grid">
+            <div className="table-wrap yiyi-entry-table-wrap">
+              <table className="entry-table yiyi-entry-table">
                 <thead>
                   <tr>
                     <th>{t('channel') || 'Channel'}</th>
@@ -147,10 +181,10 @@ export function YiyiData() {
                 <tbody>
                   {channels.map(ch => (
                     <tr key={ch.channel}>
-                      <td>{ch.channel}</td>
+                      <td><span className="yiyi-entry-channel">{ch.channel}</span></td>
                       <td>
                         <input
-                          className="cell-input"
+                          className="cell-input yiyi-entry-qty-input"
                           type="number"
                           min="0"
                           value={ch.qty}
@@ -158,15 +192,22 @@ export function YiyiData() {
                           onChange={e => updateQty(ch.channel, e.target.value)}
                         />
                       </td>
-                      <td>{ch.hasData ? t('saved') : '--'}</td>
+                      <td>
+                        <span className={`yiyi-entry-status ${ch.hasData ? 'is-saved' : 'is-empty'}`}>
+                          {ch.hasData ? t('saved') : '--'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div className="yiyi-pricing-section">
-              <h3 style={{ marginBottom: '12px' }}>{t('yiyiPricing') || 'Yiyi Pricing'}</h3>
+            <aside className="yiyi-pricing-section">
+              <div className="yiyi-pricing-header">
+                <h3>{t('yiyiPricing') || 'Yiyi Pricing'}</h3>
+                <p>amount = quantity × unitPrice / 1000</p>
+              </div>
               <div className="yiyi-pricing-row">
                 <div className="yiyi-pricing-field">
                   <label>unitPrice</label>
@@ -191,22 +232,26 @@ export function YiyiData() {
                   />
                 </div>
               </div>
-            </div>
-
-            {canWrite && (
-              <div className="yiyi-actions">
-                <button
-                  className="btn-primary"
-                  disabled={saving || loading}
-                  onClick={() => void handleSave()}
-                >
-                  {saving ? 'Saving...' : t('saveSystem')}
-                </button>
-              </div>
-            )}
-          </>
+              <div className="yiyi-pricing-formula">profit = quantity × profitUnitPrice / 1000</div>
+            </aside>
+          </div>
         )}
-      </div>
+
+        <div className="yiyi-entry-actions">
+          <span className={`yiyi-entry-permission ${canWrite ? 'can-write' : 'read-only'}`}>
+            {canWrite ? t('saveSystem') : 'Read only'}
+          </span>
+          {canWrite && (
+            <button
+              className="btn-primary"
+              disabled={saving || loading}
+              onClick={() => void handleSave()}
+            >
+              {saving ? 'Saving...' : t('saveSystem')}
+            </button>
+          )}
+        </div>
+      </TableCard>
     </div>
   );
 }

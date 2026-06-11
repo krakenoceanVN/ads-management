@@ -16,6 +16,7 @@ import type {
   ReportStatusParam,
   TotalProfitReportRow,
 } from '../lib/bffTypes';
+import { PageHeader } from '../components/common/PageHeader';
 import { uiTypeToApiType } from '../lib/bffTypes';
 import { sortRowsByDate } from '../lib/date';
 
@@ -362,7 +363,7 @@ export function TotalProfit() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pTotalProfit')}</h1></div>
+      <PageHeader eyebrow={t('report') || 'Report'} title={t('pTotalProfit')} description={startDate && endDate ? `${startDate} - ${endDate}` : t('date')} />
       <div className="card report-card report-table-card total-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -549,7 +550,7 @@ export function OrderProfit() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pOrderProfit')}</h1></div>
+      <PageHeader eyebrow={t('report') || 'Report'} title={t('pOrderProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
       <div className="card report-card report-table-card order-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -769,7 +770,7 @@ export function AdvQuery() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pAdvQuery')}</h1></div>
+      <PageHeader eyebrow={t('report') || 'Report'} title={t('pAdvQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
       <div className="card report-card report-table-card adv-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -996,7 +997,7 @@ export function MediaQuery() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pMediaQuery')}</h1></div>
+      <PageHeader eyebrow={t('report') || 'Report'} title={t('pMediaQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
       <div className="card report-card report-table-card media-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">

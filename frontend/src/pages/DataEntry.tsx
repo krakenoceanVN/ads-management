@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useAppContext } from '../AppContext';
 import { DatePickerInput } from '../components/DatePickerInput';
+import { PageHeader } from '../components/common/PageHeader';
+import { TableCard } from '../components/common/TableCard';
 import {
   confirmAdvertiserEntryBatch,
   confirmMediaEntryBatch,
@@ -433,8 +435,12 @@ export function AdvEntry() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pAdvEntry')}</h1></div>
-      <div className="card data-entry-card entry-card entry-table-card">
+      <PageHeader
+        eyebrow={t('dataEntry') || 'Data Entry'}
+        title={t('pAdvEntry')}
+        description={dateRangeLabel(filters, t('startDate'))}
+      />
+      <TableCard className="data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
           <div className="filter-spacer"></div>
@@ -527,7 +533,7 @@ export function AdvEntry() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </TableCard>
     </div>
   );
 }
@@ -740,8 +746,12 @@ export function MediaDataMgmt() {
 
   return (
     <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pMediaDataMgmt')}</h1></div>
-      <div className="card data-entry-card entry-card entry-table-card">
+      <PageHeader
+        eyebrow={t('dataEntry') || 'Data Entry'}
+        title={t('pMediaDataMgmt')}
+        description={dateRangeLabel(filters, t('startDate'))}
+      />
+      <TableCard className="data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
           <div className="filter-spacer"></div>
@@ -805,13 +815,11 @@ export function MediaDataMgmt() {
                     {row.type === 'CPM' || row.type === 'CPA'
                       ? <><td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
                       <td className="amount-cell">—</td>
-                      <td className="amount-cell">—</td>
                       <td className="amount-cell">—</td></>
                       : null}
                     {row.type === 'CPS'
                       ? <><td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
                       <td><input className={`cell-input cell-input-wide ${isLocked ? 'cell-input-locked' : ''}`} value={row.settlement} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'settlement', e.target.value)} /></td>
-                      <td className="amount-cell">—</td>
                       <td className="amount-cell">—</td></>
                       : null}
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
@@ -838,7 +846,7 @@ export function MediaDataMgmt() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </TableCard>
     </div>
   );
 }

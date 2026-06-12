@@ -653,6 +653,10 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .de-preview { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
 .de-preview-label { font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 .report-filters { display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid var(--border); align-items: center; }
+
+.settlement-month-select { display: inline-flex; gap: 6px; align-items: center; }
+.settlement-month-select .filter-select { min-width: 92px; }
+.settlement-month-year { min-width: 96px; }
 .report-toolbar { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fff; flex-wrap: nowrap; }
 .report-toolbar-left { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .report-toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: nowrap; min-width: 0; }

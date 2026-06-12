@@ -153,9 +153,9 @@ export function AiEntry() {
       <div className="card">
         <div className="empty-state" style={{ padding: '60px 20px' }}>
           <div className="empty-state-icon">🔒</div>
-          <div className="empty-state-text">Feature locked</div>
+          <div className="empty-state-text">{t('featureLocked')}</div>
           <div style={{ color: 'var(--text-sub)', fontSize: '13px', marginTop: '8px' }}>
-            This feature is not yet available.
+            {t('featureUnavailable')}
           </div>
         </div>
       </div>
@@ -273,9 +273,9 @@ export function AdvEntry() {
   };
 
   const getAdvertiserRowValidationError = (row: AdvertiserEntryRow) => {
-    if (!isAllowedEntryType(row.type)) return 'Only CPM, CPS, and CPA are supported.';
+    if (!isAllowedEntryType(row.type)) return t('onlySupportedBillingTypes');
     if (row.type === 'CPS') {
-      if (!row.traffic.trim() || !row.settlement.trim()) return 'RATIO requires amount values.';
+      if (!row.traffic.trim() || !row.settlement.trim()) return t('ratioRequiresAmountValues');
       if (Number(row.rate) <= 0) return t('ratioMustBePositive');
       return '';
     }
@@ -336,7 +336,7 @@ export function AdvEntry() {
       await saveRows([row]);
       clearDrafts([row]);
       await loadRows();
-      setMessage('Saved row successfully.');
+      setMessage(t('savedRowSuccessfully'));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -353,7 +353,7 @@ export function AdvEntry() {
       await confirmAdvertiserEntryBatch({ recordDate: normalizeDate(row.date) ?? row.date, adSiteIds: [row.adIdNum] });
       clearDrafts([row]);
       await loadRows();
-      setMessage('Confirmed row successfully.');
+      setMessage(t('confirmedRowSuccessfully'));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -487,7 +487,7 @@ export function AdvEntry() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="empty-state-text">Loading...</td></tr>
+                <tr><td colSpan={11} className="empty-state-text">{t('loading')}</td></tr>
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;
@@ -631,14 +631,14 @@ export function MediaDataMgmt() {
 
   const saveRows = async (targetRows: MediaEntryRow[]) => {
     for (const row of targetRows) {
-      if (!isAllowedEntryType(row.type)) throw new Error('Only CPM, CPS, and CPA are supported.');
+      if (!isAllowedEntryType(row.type)) throw new Error(t('onlySupportedBillingTypes'));
       if (row.type === 'CPS') {
-        if (!row.traffic.trim() || !row.settlement.trim()) throw new Error('RATIO requires amount values.');
+        if (!row.traffic.trim() || !row.settlement.trim()) throw new Error(t('ratioRequiresAmountValues'));
         if (Number(row.rate) <= 0) throw new Error(t('ratioMustBePositive'));
       } else {
         // CPM and CPA require qty (traffic field) and unitPrice (rate)
         if (!row.traffic.trim()) throw new Error(t('requiredFields'));
-        if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error('dataCoefficient must be neutral: 1, 100%, or empty.');
+        if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error(t('dataCoefficientNeutralRequired'));
       }
     }
     const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ mediaId: number; type: EntryType; rate: string; traffic: string; settlement: string; dataCoefficient: string; recordDate: string }> }>();
@@ -800,7 +800,7 @@ export function MediaDataMgmt() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={14} className="empty-state-text">Loading...</td></tr>
+                <tr><td colSpan={14} className="empty-state-text">{t('loading')}</td></tr>
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;

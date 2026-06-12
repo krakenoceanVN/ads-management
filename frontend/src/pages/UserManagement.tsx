@@ -30,6 +30,16 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return ReactDOM.createPortal(children, container.current);
 }
 
+function formatCreatedAt(value: string | null | undefined) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function UserManagement() {
   const { t, can, currentUser } = useAppContext();
   const [rows, setRows] = useState<UserManagementUser[]>([]);
@@ -160,7 +170,7 @@ export function UserManagement() {
             { key: 'username', label: t('username') },
             { key: 'roleName', label: t('role') },
             { key: 'status', label: t('status'), render: (r) => statusBadge(r.status) },
-            { key: 'created_at', label: t('createdAt'), render: (r) => new Date(r.created_at).toLocaleDateString() },
+            { key: 'created_at', label: t('createdAt'), render: (r) => formatCreatedAt(r.created_at) },
             {
               key: '__actions__',
               label: t('actions'),

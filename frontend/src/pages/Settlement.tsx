@@ -5,6 +5,51 @@ import { getAdvertiserSettlement, getMediaSettlement } from '../lib/bffApi';
 import type { AdvertiserSettlementRow, MediaSettlementRow } from '../lib/bffTypes';
 
 const DEFAULT_SETTLEMENT_PERIOD = '2026-05';
+const SETTLEMENT_YEAR_RANGE = 5;
+
+function settlementYears() {
+  const fallbackYear = Number(DEFAULT_SETTLEMENT_PERIOD.slice(0, 4)) || new Date().getFullYear();
+  const nowYear = new Date().getFullYear();
+  const center = Math.max(fallbackYear, nowYear);
+  const years: number[] = [];
+  for (let y = center - SETTLEMENT_YEAR_RANGE; y <= center + SETTLEMENT_YEAR_RANGE; y++) {
+    years.push(y);
+  }
+  return years;
+}
+
+function SettlementMonthSelect({ value, onChange, t }: { value: string; onChange: (value: string) => void; t: (key: string) => string }) {
+  const [yearPart, monthPart] = (() => {
+    const match = /^(\d{4})-(\d{2})$/.exec(value || '');
+    if (match) return [match[1], match[2]];
+    const fallback = DEFAULT_SETTLEMENT_PERIOD.split('-');
+    return [fallback[0] || String(new Date().getFullYear()), fallback[1] || '01'];
+  })();
+  const years = React.useMemo(settlementYears, []);
+  const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+  const update = (nextYear: string, nextMonth: string) => onChange(`${nextYear}-${nextMonth}`);
+
+  return (
+    <span className="settlement-month-select">
+      <select
+        className="filter-select settlement-month-year"
+        value={yearPart}
+        onChange={event => update(event.target.value, monthPart)}
+        aria-label={t('year')}
+      >
+        {years.map(y => <option key={y} value={String(y)}>{y}</option>)}
+      </select>
+      <select
+        className="filter-select settlement-month-month"
+        value={monthPart}
+        onChange={event => update(yearPart, event.target.value)}
+        aria-label={t('month')}
+      >
+        {months.map(m => <option key={m} value={m}>{t(`month${m}`)}</option>)}
+      </select>
+    </span>
+  );
+}
 
 type CsvColumn<T> = {
   label: string;
@@ -117,7 +162,7 @@ export function AdvSettlement() {
       <div className="page-header"><h1 className="page-title">{t('pAdvSettlement')}</h1></div>
       <div className="card">
         <div className="report-filters">
-          <input type="month" className="search-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
+          <SettlementMonthSelect value={period} onChange={setPeriod} t={t} />
           <select className="filter-select" value={advertiserId} onChange={event => setAdvertiserId(event.target.value)}>
             <option value="">{t('selectAdvertiser')}</option>
             {advertisers.map(advertiser => <option key={advertiser.id} value={advertiser.id}>{displayName(advertiser.name)}</option>)}
@@ -126,7 +171,7 @@ export function AdvSettlement() {
           <button className="btn-outline" onClick={() => downloadCsv('广告主结算单.csv', columns, visibleRows)}>{t('export')}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
-        {loading ? <div className="empty-state"><div className="empty-state-text">Loading...</div></div> : (
+        {loading ? <div className="empty-state"><div className="empty-state-text">{t('loading')}</div></div> : (
           <Table
             columns={[
               { key: 'period', label: t('period') },
@@ -193,7 +238,7 @@ export function MediaSettlement() {
       <div className="page-header"><h1 className="page-title">{t('pMediaSettlement')}</h1></div>
       <div className="card">
         <div className="report-filters">
-          <input type="month" className="search-input" style={{ minWidth: '140px' }} value={period} onChange={event => setPeriod(event.target.value)} />
+          <SettlementMonthSelect value={period} onChange={setPeriod} t={t} />
           <select className="filter-select" value={mediaId} onChange={event => setMediaId(event.target.value)}>
             <option value="">{t('selectMedia')}</option>
             {mediaOptions.map(media => <option key={media.id} value={media.id}>{displayName(media.name)}</option>)}
@@ -202,7 +247,7 @@ export function MediaSettlement() {
           <button className="btn-outline" onClick={() => downloadCsv('媒体结算单.csv', columns, visibleRows)}>{t('export')}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
-        {loading ? <div className="empty-state"><div className="empty-state-text">Loading...</div></div> : (
+        {loading ? <div className="empty-state"><div className="empty-state-text">{t('loading')}</div></div> : (
           <Table
             columns={[
               { key: 'period', label: t('period') },

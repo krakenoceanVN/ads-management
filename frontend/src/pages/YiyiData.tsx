@@ -62,11 +62,11 @@ export function YiyiData() {
         setProfitUnitPrice(String(DEFAULT_PROFIT_UNIT_PRICE));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      setError(err instanceof Error ? err.message : t('loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   React.useEffect(() => {
     void loadData(date);
@@ -89,17 +89,17 @@ export function YiyiData() {
     const unitPriceNum = Number(unitPrice);
     const profitUnitPriceNum = Number(profitUnitPrice);
     if (Number.isNaN(unitPriceNum) || unitPriceNum < 0) {
-      setError('unitPrice must be >= 0');
+      setError(t('unitPriceNonNegative'));
       return;
     }
     if (Number.isNaN(profitUnitPriceNum) || profitUnitPriceNum < 0) {
-      setError('profitUnitPrice must be >= 0');
+      setError(t('profitUnitPriceNonNegative'));
       return;
     }
 
     for (const ch of channels) {
       if (Number.isNaN(ch.qty) || ch.qty < 0) {
-        setError('qty must be >= 0');
+        setError(t('qtyNonNegative'));
         return;
       }
     }
@@ -117,7 +117,7 @@ export function YiyiData() {
       setSuccess(t('saved'));
       await loadData(date);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      setError(err instanceof Error ? err.message : t('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -128,7 +128,7 @@ export function YiyiData() {
       <PageHeader
         eyebrow={t('dataEntry') || '数据录入'}
         title={t('pYiyiEntry')}
-        description={canWrite ? date : `${date} · Read only`}
+        description={canWrite ? date : `${date} · ${t('readOnly')}`}
         actions={(
           <DatePickerInput
             placeholder={t('date')}
@@ -141,40 +141,40 @@ export function YiyiData() {
 
       <div className="yiyi-entry-overview">
         <div className="yiyi-entry-metric">
-          <span className="yiyi-entry-metric-label">Quantity</span>
+          <span className="yiyi-entry-metric-label">{t('quantity')}</span>
           <strong>{totalQty.toLocaleString()}</strong>
-          <span>{activeChannelCount}/{YIYI_CHANNELS.length} channels</span>
+          <span>{activeChannelCount}/{YIYI_CHANNELS.length} {t('channels')}</span>
         </div>
         <div className="yiyi-entry-metric">
-          <span className="yiyi-entry-metric-label">Vendor amount</span>
+          <span className="yiyi-entry-metric-label">{t('vendorAmount')}</span>
           <strong>{vendorAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })}</strong>
-          <span>quantity × unitPrice / 1000</span>
+          <span>{t('totalVendorPayable')}</span>
         </div>
         <div className="yiyi-entry-metric">
-          <span className="yiyi-entry-metric-label">Profit</span>
+          <span className="yiyi-entry-metric-label">{t('profit')}</span>
           <strong>{profitAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })}</strong>
-          <span>quantity × profitUnitPrice / 1000</span>
+          <span>{t('estimatedProfit')}</span>
         </div>
       </div>
 
       <TableCard
         className="yiyi-entry-card"
         title={date}
-        description={canWrite ? t('saveSystem') : 'Read only'}
+        description={canWrite ? t('saveSystem') : t('readOnly')}
       >
         {error && <div className="form-error">{error}</div>}
         {success && <div className="form-success">{success}</div>}
 
         {loading ? (
-          <div className="yiyi-entry-loading">Loading...</div>
+          <div className="yiyi-entry-loading">{t('loading')}</div>
         ) : (
           <div className="yiyi-entry-body-grid">
             <div className="table-wrap yiyi-entry-table-wrap">
               <table className="entry-table yiyi-entry-table">
                 <thead>
                   <tr>
-                    <th>{t('channel') || 'Channel'}</th>
-                    <th>Quantity</th>
+                    <th>{t('channel')}</th>
+                    <th>{t('quantity')}</th>
                     <th>{t('status')}</th>
                   </tr>
                 </thead>
@@ -205,8 +205,8 @@ export function YiyiData() {
 
             <aside className="yiyi-pricing-section">
               <div className="yiyi-pricing-header">
-                <h3>{t('yiyiPricing') || 'Yiyi Pricing'}</h3>
-                <p>amount = quantity × unitPrice / 1000</p>
+                <h3>{t('yiyiPricing')}</h3>
+                <p>{t('perChannelUnitPrices')}</p>
               </div>
               <div className="yiyi-pricing-row">
                 <div className="yiyi-pricing-field">
@@ -232,14 +232,13 @@ export function YiyiData() {
                   />
                 </div>
               </div>
-              <div className="yiyi-pricing-formula">profit = quantity × profitUnitPrice / 1000</div>
             </aside>
           </div>
         )}
 
         <div className="yiyi-entry-actions">
           <span className={`yiyi-entry-permission ${canWrite ? 'can-write' : 'read-only'}`}>
-            {canWrite ? t('saveSystem') : 'Read only'}
+            {canWrite ? t('saveSystem') : t('readOnly')}
           </span>
           {canWrite && (
             <button
@@ -247,7 +246,7 @@ export function YiyiData() {
               disabled={saving || loading}
               onClick={() => void handleSave()}
             >
-              {saving ? 'Saving...' : t('saveSystem')}
+              {saving ? t('saving') : t('saveSystem')}
             </button>
           )}
         </div>

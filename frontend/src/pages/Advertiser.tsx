@@ -103,8 +103,8 @@ function errorMessage(error: unknown): string {
   return String(error || 'Request failed');
 }
 
-function LoadingState() {
-  return <div className="empty-state"><div className="empty-state-text">Loading...</div></div>;
+function LoadingState({ t }: { t: (key: string) => string }) {
+  return <div className="empty-state"><div className="empty-state-text">{t('loading')}</div></div>;
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -394,7 +394,7 @@ export function AdvertiserList() {
             <button className="btn-outline" onClick={() => downloadCsv('advertisers.csv', advertiserColumns, visibleRows)}>{t('export')}</button>
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },
@@ -728,7 +728,7 @@ export function AdOrderMgmt() {
             <button className="btn-outline" onClick={() => downloadCsv('ad-orders.csv', adOrderColumns, visibleRows)}>{t('export')}</button>
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },
@@ -1098,7 +1098,7 @@ export function AdIdMgmt() {
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },

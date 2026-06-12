@@ -74,8 +74,8 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
 }
 
-function LoadingState() {
-  return <div className="empty-state"><div className="empty-state-text">Loading...</div></div>;
+function LoadingState({ t }: { t: (key: string) => string }) {
+  return <div className="empty-state"><div className="empty-state-text">{t('loading')}</div></div>;
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -358,7 +358,7 @@ export function MediaMgmt() {
             <button className="btn-outline" onClick={() => downloadCsv('media.csv', mediaColumns, visibleRows)}>{t('export')}</button>
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },
@@ -618,7 +618,7 @@ export function MediaAdOrderMgmt() {
             <button className="btn-outline" onClick={() => downloadCsv('media-ad-orders.csv', mediaAdOrderColumns, visibleRows)}>{t('export')}</button>
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },
@@ -957,7 +957,7 @@ export function MediaIdMgmt() {
             <button className="btn-outline" onClick={() => downloadCsv('media-ids.csv', mediaIdColumns, visibleRows)}>{t('export')}</button>
           </div>
         </div>
-        {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
+        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
           <Table
             columns={[
               { key: '__no__', label: t('no') },

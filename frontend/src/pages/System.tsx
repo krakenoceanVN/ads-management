@@ -46,7 +46,7 @@ export function OpLog() {
       }));
       setRows(mapped);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load operation logs');
+      setError(err instanceof Error ? err.message : t('failedToLoadOperationLogs'));
     } finally {
       setLoading(false);
     }

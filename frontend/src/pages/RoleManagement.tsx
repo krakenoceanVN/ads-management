@@ -67,7 +67,7 @@ export function RoleManagement() {
       setRoles(roleList);
       setPermissions(permList);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      setError(err instanceof Error ? err.message : t('loadFailed'));
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import type { Upstream, UpstreamAdType, AdSite, AdOrder, AdSiteDownstream, Downstream, AdType, AdSiteEvent, DailyDownstreamRate, DailyInput, DailyInputQuarantineBatch, DailyInputQuarantineRecord, LEDailyCost, Role, Permission, RolePermission, User, OperationLog, AdSiteRebateRate, YiyiDailyData, YiyiDailyPricing, DownstreamPeriod } from '@prisma/client';
+import type { Upstream, UpstreamAdType, AdSite, AdOrder, AdSiteDownstream, Downstream, DownstreamAdType, AdType, AdSiteEvent, DailyDownstreamRate, DailyInput, DailyInputQuarantineBatch, DailyInputQuarantineRecord, LEDailyCost, Role, Permission, RolePermission, User, OperationLog, AdSiteRebateRate, YiyiDailyData, YiyiDailyPricing, DownstreamPeriod } from '@prisma/client';
 
-export type { Upstream, UpstreamAdType, AdSite, AdOrder, AdSiteDownstream, Downstream, AdType, AdSiteEvent, DailyDownstreamRate, DailyInput, DailyInputQuarantineBatch, DailyInputQuarantineRecord, LEDailyCost, Role, Permission, RolePermission, User, OperationLog, AdSiteRebateRate, YiyiDailyData, YiyiDailyPricing, DownstreamPeriod };
+export type { Upstream, UpstreamAdType, AdSite, AdOrder, AdSiteDownstream, Downstream, DownstreamAdType, AdType, AdSiteEvent, DailyDownstreamRate, DailyInput, DailyInputQuarantineBatch, DailyInputQuarantineRecord, LEDailyCost, Role, Permission, RolePermission, User, OperationLog, AdSiteRebateRate, YiyiDailyData, YiyiDailyPricing, DownstreamPeriod };
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

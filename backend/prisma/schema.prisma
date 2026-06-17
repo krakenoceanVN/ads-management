@@ -20,8 +20,25 @@ model AdType {
 
   upstreams       Upstream[]
   upstreamAdTypes UpstreamAdType[]
-  downstreams     Downstream[]
+  downstreamAdTypes DownstreamAdType[]
   orders          AdOrder[]
+}
+
+// ============================================================
+// TABLE 5b: downstream_ad_type (junction, mirrors UpstreamAdType)
+// ============================================================
+model DownstreamAdType {
+  id           Int      @id @default(autoincrement())
+  downstreamId Int
+  adTypeId     Int
+  createdAt    DateTime @default(now())
+
+  downstream Downstream @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
+  adType     AdType     @relation(fields: [adTypeId], references: [id])
+
+  @@unique([downstreamId, adTypeId])
+  @@index([downstreamId])
+  @@index([adTypeId])
 }
 
 // ============================================================
@@ -250,19 +267,16 @@ model DailyInputQuarantineRecord {
 // ============================================================
 model Downstream {
   id              Int       @id @default(autoincrement())
-  adTypeId        Int
   downstreamType  String    // ML | LE | YIYI
   payoutRate      Decimal   @default(0.8)
   status          String    @default("active") // active | inactive
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  adType   AdType              @relation(fields: [adTypeId], references: [id])
+  adTypeLinks DownstreamAdType[]
   periods  DownstreamPeriod[]
   dailyRates DailyDownstreamRate[]
   adSites  AdSiteDownstream[]
-
-  @@index([adTypeId])
 }
 
 // ============================================================

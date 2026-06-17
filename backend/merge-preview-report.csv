@@ -1,0 +1,17 @@
+=== BÁO CÁO PREVIEW GỘP UPSTREAM ===
+
+Nhóm,Upstream_ID,Upstream_Name,AdType,AdOrder_ID,AdOrder_Name,AdSite_Count,DailyInput_Count,Revenue
+百战,3,"百战-BZ-sm",SM,3,"sm",5,48,0
+百战,3,"百战-BZ-sm",SM,9,"other",0,0,0
+百战,9,"百战-千问",OTHER,10,"other",3,38,0
+圣乐游,1,"圣乐游-sly-sm",SM,1,"sm",4,33,0
+圣乐游,1,"圣乐游-sly-sm",SM,8,"other",4,51,0
+圣乐游,5,"圣乐游-iqiyi",IQIYI,5,"iqiyi",1,0,0
+圣乐游,5,"圣乐游-iqiyi",IQIYI,6,"投放链接1",0,0,0
+圣乐游,8,"圣乐游-千问",OTHER,11,"other",5,38,0
+响云,2,"响云- BB-sm",SM,2,"sm",0,0,0
+响云,2,"响云- BB-sm",SM,12,"sm",6,37,0
+响云,6,"响云-360",360,7,"360",1,0,0
+响云,14,"响云-千问",OTHER,13,"千问",1,4,0
+罗强,15,"罗强-抖音",DOUYIN,14,"抖音",5,23,0
+刘佳,4,"刘佳-LJ-sm",SM,4,"sm",2,13,0

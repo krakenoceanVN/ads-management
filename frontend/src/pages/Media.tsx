@@ -695,7 +695,7 @@ export function MediaIdMgmt() {
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<MediaId[]>([]);
   const [adSites, setAdSites] = React.useState<{ id: number; name: string; mediaId: number; mediaName: string; adTypeCode?: string }[]>([]);
-  const [downstreams, setDownstreams] = React.useState<{ id: number; name: string; adTypeCode: string }[]>([]);
+  const [downstreams, setDownstreams] = React.useState<{ id: number; name: string; adTypeCodes: string[] }[]>([]);
   const [downstreamLoading, setDownstreamLoading] = React.useState(false);
   const [downstreamError, setDownstreamError] = React.useState('');
   const [loading, setLoading] = React.useState(true);
@@ -746,10 +746,10 @@ export function MediaIdMgmt() {
     setDownstreamError('');
     listDownstreams()
       .then(data => {
-        setDownstreams(data.map((d: { downstreamType: string; id: number; adTypeCode: string }) => ({
+        setDownstreams(data.map((d: { downstreamType: string; id: number; adTypeCode?: string; adTypeCodes?: string[] }) => ({
           id: d.id,
           name: d.downstreamType,
-          adTypeCode: d.adTypeCode,
+          adTypeCodes: d.adTypeCodes?.length ? d.adTypeCodes : d.adTypeCode ? [d.adTypeCode] : [],
         })));
       })
       .catch(() => setDownstreamError(t('failedToLoadDownstreams') || 'Failed to load downstreams'))
@@ -762,17 +762,17 @@ export function MediaIdMgmt() {
     [downstreams, form.downstreamId]
   );
 
-  // Filter AdSites to match selected downstream's adTypeCode
+  // Filter AdSites whose adType is one of the selected downstream's adTypes
   const filteredAdSites = React.useMemo(() => {
-    if (!selectedDownstream?.adTypeCode) return adSites;
-    return adSites.filter(site => site.adTypeCode === selectedDownstream.adTypeCode);
+    if (!selectedDownstream?.adTypeCodes?.length) return adSites;
+    return adSites.filter(site => !site.adTypeCode || selectedDownstream.adTypeCodes.includes(site.adTypeCode));
   }, [adSites, selectedDownstream]);
 
   // When downstream changes, clear adSiteId if it no longer matches
   React.useEffect(() => {
-    if (selectedDownstream?.adTypeCode && form.adSiteId) {
+    if (selectedDownstream?.adTypeCodes?.length && form.adSiteId) {
       const currentSite = adSites.find(s => String(s.id) === form.adSiteId);
-      if (currentSite && currentSite.adTypeCode && currentSite.adTypeCode !== selectedDownstream.adTypeCode) {
+      if (currentSite?.adTypeCode && !selectedDownstream.adTypeCodes.includes(currentSite.adTypeCode)) {
         setForm(prev => ({ ...prev, adSiteId: '' }));
       }
     }
@@ -891,10 +891,10 @@ export function MediaIdMgmt() {
       return;
     }
 
-    // Frontend validation: ensure adType matches
-    if (selectedDownstream?.adTypeCode) {
+    // Frontend validation: ensure adSite adType matches one of the selected downstream's adTypes
+    if (selectedDownstream?.adTypeCodes?.length) {
       const selectedSite = adSites.find(s => s.id === adSiteId);
-      if (selectedSite?.adTypeCode && selectedSite.adTypeCode !== selectedDownstream.adTypeCode) {
+      if (selectedSite?.adTypeCode && !selectedDownstream.adTypeCodes.includes(selectedSite.adTypeCode)) {
         setFormError(t('adTypeMismatch'));
         return;
       }
@@ -986,7 +986,7 @@ export function MediaIdMgmt() {
               <div className="form-group"><label>{t('selectDownstream')}</label>
                 <select value={form.downstreamId} onChange={e => setForm(prev => ({ ...prev, downstreamId: e.target.value }))} disabled={downstreamLoading}>
                   <option value="">-</option>
-                  {downstreams.map(item => <option key={item.id} value={item.id}>{item.name} ({item.adTypeCode})</option>)}
+                  {downstreams.map(item => <option key={item.id} value={item.id}>{item.name} ({item.adTypeCodes.join(', ')})</option>)}
                 </select>
                 {downstreamError && <div className="form-error">{downstreamError}</div>}
               </div>

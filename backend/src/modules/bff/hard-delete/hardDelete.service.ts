@@ -198,7 +198,7 @@ async function countAdTypeDependencies(adTypeId: number): Promise<DependencyCoun
       prisma.upstream.count({ where: { adTypeId } }),
       prisma.adOrder.count({ where: { adTypeId } }),
       prisma.adSite.count({ where: adSiteWhere }),
-      prisma.downstream.count({ where: { adTypeId } }),
+      prisma.downstreamAdType.count({ where: { adTypeId } }),
       prisma.adSiteDownstream.count({ where: { adSite: adSiteWhere } }),
       prisma.adSiteRebateRate.count({ where: { adSite: adSiteWhere } }),
       prisma.adSiteEvent.count({ where: { adSite: adSiteWhere } }),

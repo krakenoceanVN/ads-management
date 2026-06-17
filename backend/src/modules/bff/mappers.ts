@@ -3,7 +3,7 @@
 
 import type { Decimal } from '@prisma/client/runtime/library';
 import type { Advertiser, Media, AdOrder, AdId, MediaId, DownstreamDto } from './bff.types';
-import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, AdType, UpstreamAdType } from '../../shared/prisma/client';
+import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, DownstreamAdType, AdType, UpstreamAdType } from '../../shared/prisma/client';
 import type { EntityStatus, EntryType } from './bff.types';
 
 function decimalToNum(d: Decimal | null | undefined): number | undefined {
@@ -126,13 +126,21 @@ export function mapMediaId(
   };
 }
 
-export function mapDownstream(d: Downstream & { adType: AdType }): DownstreamDto {
+export function mapDownstream(
+  d: Downstream & { adTypeLinks: Array<DownstreamAdType & { adType: AdType }> }
+): DownstreamDto {
+  const linked = (d.adTypeLinks ?? []).map(l => l.adType).filter(Boolean);
+  const adTypes = linked;
+  const adTypeCodes = Array.from(new Set(adTypes.map(at => at.code)));
+  const primary = adTypes[0];
   return {
     id: d.id,
     downstreamType: d.downstreamType,
-    adTypeId: d.adTypeId,
-    adTypeCode: d.adType?.code ?? '',
-    adTypeName: d.adType?.name ?? null,
+    adTypeIds: adTypes.map(at => at.id),
+    adTypeCodes,
+    adTypes: adTypes.map(at => ({ id: at.id, code: at.code, name: at.name })),
+    adTypeCode: primary?.code ?? '',
+    adTypeName: primary?.name ?? null,
     payoutRate: Number(d.payoutRate),
     status: d.status as EntityStatus,
   };

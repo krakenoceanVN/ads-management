@@ -639,8 +639,11 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .entry-confirm-btn:disabled { opacity: .95; }
 .entry-confirm-btn.all { min-width: 112px; }
 .entry-action-cell { min-width: 96px; }
+.entry-action-cell .entry-edit-btn + .entry-edit-btn { margin-left: 6px; }
 .entry-edit-btn { min-width: 74px; height: 30px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 0 12px; background: #fff; color: var(--text-main); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .entry-edit-btn:hover { border-color: var(--primary-btn); color: var(--primary-btn); background: #f0f9fb; }
+.entry-edit-btn.entry-edit-btn-secondary { color: #b91c1c; border-color: #fecaca; background: #fff; }
+.entry-edit-btn.entry-edit-btn-secondary:hover { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
 .entry-edit-btn.cancel { min-width: 92px; color: #b45309; border-color: #f5d08a; background: #fffbeb; }
 .entry-empty-action { color: #8a9bb3; font-weight: 600; }
 .entry-table .entry-total-row td { background: #4f83d9 !important; color: #fff; font-weight: 800; border-color: #4a76bd; }

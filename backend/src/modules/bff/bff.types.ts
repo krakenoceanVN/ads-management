@@ -110,9 +110,11 @@ export interface MediaId {
 export interface DownstreamDto {
   id: number;
   downstreamType: string;
-  adTypeId: number;
+  adTypeIds: number[];
+  adTypeCodes: string[];
+  adTypes: Array<{ id: number; code: string; name: string }>;
   adTypeCode: string;
-  adTypeName?: string | null;
+  adTypeName: string | null;
   payoutRate: number | null;
   status: EntityStatus;
 }

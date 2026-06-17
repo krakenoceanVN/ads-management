@@ -1,0 +1,14 @@
+BÁO CÁO THIẾT KẾ MỚI: UPSTREAM NHIỀU ADTYPE
+================================================================================
+
+Các AdOrder "other" hiện tại:
+  AdOrder 8: Upstream=圣乐游-sly-sm, AdType=OTHER, Sites=4, DI=51, Rev=136836.19
+  AdOrder 9: Upstream=百战-BZ-sm, AdType=OTHER, Sites=0, DI=0, Rev=0.00
+  AdOrder 10: Upstream=百战-千问, AdType=OTHER, Sites=3, DI=38, Rev=92370.76
+  AdOrder 11: Upstream=圣乐游-千问, AdType=OTHER, Sites=5, DI=38, Rev=117628.80
+
+Đề xuất đổi tên "other" → "千问":
+  - AdOrder id=10 (Upstream 3 百战): NÊN đổi → "千问"
+  - AdOrder id=8  (Upstream 1 圣乐游): NÊN đổi → "千问"
+  - AdOrder id=11 (sẽ về Upstream 1 圣乐游): NÊN đổi → "千问"
+  - AdOrder id=13 (Upstream 2 响云): NÊN đổi → "千问"

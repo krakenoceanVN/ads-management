@@ -13,6 +13,7 @@ import type {
   CreateAdIdInput,
   CreateAdOrderInput,
   CreateAdvertiserInput,
+  CreateDownstreamInput,
   CreateMediaInput,
   CreateMediaIdInput,
   CreateUserInput,
@@ -49,6 +50,7 @@ import type {
   UpdateAdIdInput,
   UpdateAdOrderInput,
   UpdateAdvertiserInput,
+  UpdateDownstreamInput,
   UpdateMediaInput,
   UpdateMediaIdInput,
   UpdateUserInput,
@@ -312,11 +314,15 @@ export async function listDownstreams(params?: ListDownstreamsParams) {
   return unwrapData(await request<BffDataResponse<DownstreamDto[]>>('/api/bff/downstreams', { params }));
 }
 
-export async function createDownstream(input: { adTypeId: number; downstreamType: string; payoutRate?: number; status?: string }) {
+export async function getDownstream(id: number) {
+  return unwrapData(await request<BffDataResponse<DownstreamDto>>(`/api/bff/downstreams/${id}`));
+}
+
+export async function createDownstream(input: CreateDownstreamInput) {
   return unwrapData(await request<BffDataResponse<DownstreamDto>>('/api/bff/downstreams', { method: 'POST', body: input }));
 }
 
-export async function updateDownstream(id: number, input: { downstreamType?: string; payoutRate?: number; status?: string }) {
+export async function updateDownstream(id: number, input: UpdateDownstreamInput) {
   return unwrapData(await request<BffDataResponse<DownstreamDto>>(`/api/bff/downstreams/${id}`, { method: 'PUT', body: input }));
 }
 

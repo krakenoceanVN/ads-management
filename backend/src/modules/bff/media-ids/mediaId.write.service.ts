@@ -28,11 +28,16 @@ export async function createMediaId(input: CreateMediaIdInput) {
   });
   if (!adSite) throw new BadRequestError(`AdSite (ID quảng cáo) with id '${adSiteId}' does not exist`);
 
-  const downstream = await prisma.downstream.findUnique({ where: { id: downstreamId } });
+  const downstream = await prisma.downstream.findUnique({
+    where: { id: downstreamId },
+    include: { adTypeLinks: { include: { adType: true } } },
+  });
   if (!downstream) throw new BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
 
+  // The adSite's adType must be one of the downstream's adTypes.
   const adSiteAdTypeId = adSite.adOrder?.adTypeId ?? adSite.upstream.adTypeId;
-  if (adSiteAdTypeId !== downstream.adTypeId) {
+  const allowedAdTypeIds = new Set<number>(downstream.adTypeLinks.map(link => link.adTypeId));
+  if (!allowedAdTypeIds.has(adSiteAdTypeId)) {
     throw new BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
   }
 

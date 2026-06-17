@@ -19,14 +19,14 @@ export interface UpdateAdTypeInput {
 
 // Check if adType code is referenced by any business table
 async function isCodeReferenced(code: string): Promise<boolean> {
-  const [upstream, upstreamAdType, adOrder, adSite, downstream] = await Promise.all([
+  const [upstream, upstreamAdType, adOrder, adSite, downstreamAdType] = await Promise.all([
     prisma.upstream.count({ where: { adType: { code } } }),
     prisma.upstreamAdType.count({ where: { adType: { code } } }),
     prisma.adOrder.count({ where: { adType: { code } } }),
     prisma.adSite.count({ where: { OR: [{ adOrder: { adType: { code } } }, { adOrderId: null, upstream: { adType: { code } } }] } }),
-    prisma.downstream.count({ where: { adType: { code } } }),
+    prisma.downstreamAdType.count({ where: { adType: { code } } }),
   ]);
-  return upstream > 0 || upstreamAdType > 0 || adOrder > 0 || adSite > 0 || downstream > 0;
+  return upstream > 0 || upstreamAdType > 0 || adOrder > 0 || adSite > 0 || downstreamAdType > 0;
 }
 
 export async function createAdType(input: CreateAdTypeInput): Promise<{ id: number; code: string; name: string }> {

@@ -10,16 +10,22 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
 }
 
+function getDownstreamAdTypeCodes(record: DownstreamDto): string[] {
+  if (record.adTypeCodes?.length) return record.adTypeCodes;
+  if (record.adTypeCode) return [record.adTypeCode];
+  return [];
+}
+
 interface EditState {
   id?: number;
-  adTypeId: number | '';
+  adTypeCodes: string[];
   downstreamType: string;
   payoutPercent: string;
   status: EntityStatus;
 }
 
 export function DownstreamMgmt() {
-  const { t, can } = useAppContext();
+  const { t, displayName, can } = useAppContext();
   const [rows, setRows] = useState<DownstreamDto[]>([]);
   const [adTypes, setAdTypes] = useState<AdType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,14 +60,26 @@ export function DownstreamMgmt() {
   }, [loadRows]);
 
   const adTypeName = useCallback(
-    (code: string) => adTypes.find(a => a.code === code)?.name ?? code,
-    [adTypes],
+    (code: string) => displayName(adTypes.find(a => a.code === code)?.name ?? code),
+    [adTypes, displayName],
   );
 
-  const filteredRows = rows.filter(r =>
-    (!filterAdType || r.adTypeCode === filterAdType) &&
-    (!filterStatus || r.status === filterStatus),
+  const getAdTypeNames = useCallback(
+    (record: DownstreamDto) => {
+      const codes = getDownstreamAdTypeCodes(record);
+      return codes.map(code => adTypeName(code)).join(', ');
+    },
+    [adTypeName],
   );
+
+  const filteredRows = rows.filter(r => {
+    if (filterAdType) {
+      const codes = getDownstreamAdTypeCodes(r);
+      if (!codes.includes(filterAdType)) return false;
+    }
+    if (filterStatus && r.status !== filterStatus) return false;
+    return true;
+  });
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -80,14 +98,14 @@ export function DownstreamMgmt() {
   };
 
   const openCreate = () => {
-    setEditModal({ adTypeId: '', downstreamType: '', payoutPercent: '80', status: 'active' });
+    setEditModal({ adTypeCodes: [], downstreamType: '', payoutPercent: '80', status: 'active' });
     setEditError('');
   };
 
   const openEdit = (row: DownstreamDto) => {
     setEditModal({
       id: row.id,
-      adTypeId: row.adTypeId,
+      adTypeCodes: getDownstreamAdTypeCodes(row),
       downstreamType: row.downstreamType,
       payoutPercent: String(Math.round((row.payoutRate ?? 0) * 1000) / 10),
       status: row.status,
@@ -100,11 +118,24 @@ export function DownstreamMgmt() {
     setEditError('');
   };
 
+  const toggleAdType = (code: string) => {
+    setEditModal(prev => {
+      if (!prev) return prev;
+      const exists = prev.adTypeCodes.includes(code);
+      return {
+        ...prev,
+        adTypeCodes: exists
+          ? prev.adTypeCodes.filter(c => c !== code)
+          : [...prev.adTypeCodes, code],
+      };
+    });
+  };
+
   const handleSave = async () => {
     if (!editModal) return;
-    const { id, adTypeId, downstreamType, payoutPercent, status } = editModal;
+    const { id, adTypeCodes, downstreamType, payoutPercent, status } = editModal;
 
-    if (id === undefined && !adTypeId) { setEditError(t('requiredFields')); return; }
+    if (id === undefined && adTypeCodes.length === 0) { setEditError(t('requiredFields')); return; }
     if (!downstreamType.trim()) { setEditError(t('requiredFields')); return; }
     const percent = Number(payoutPercent);
     if (Number.isNaN(percent) || percent < 0 || percent > 10000) {
@@ -117,9 +148,9 @@ export function DownstreamMgmt() {
     setEditError('');
     try {
       if (id !== undefined) {
-        await updateDownstream(id, { downstreamType, payoutRate, status });
+        await updateDownstream(id, { downstreamType, payoutRate, status, adTypeCodes });
       } else {
-        await createDownstream({ adTypeId: Number(adTypeId), downstreamType, payoutRate, status });
+        await createDownstream({ adTypeCodes, downstreamType, payoutRate, status });
       }
       setEditModal(null);
       await loadRows();
@@ -145,14 +176,22 @@ export function DownstreamMgmt() {
               {editError && <div className="form-error" style={{ marginBottom: '8px' }}>{editError}</div>}
               <div className="form-group">
                 <label>{t('adType')} <span style={{ color: 'red' }}>*</span></label>
-                <select
-                  value={editModal.adTypeId}
-                  disabled={saving || editModal.id !== undefined}
-                  onChange={e => setEditModal(prev => prev ? { ...prev, adTypeId: e.target.value ? Number(e.target.value) : '' } : prev)}
-                >
-                  <option value="">-</option>
-                  {adTypes.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
-                </select>
+                <div className="checkbox-list">
+                  {adTypes.map(type => {
+                    const checked = editModal.adTypeCodes.includes(type.code);
+                    return (
+                      <label key={type.code} className="checkbox-list-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={saving}
+                          onChange={() => toggleAdType(type.code)}
+                        />
+                        <span>{displayName(type.name)} ({type.code})</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="form-group">
                 <label>{t('downstreamType')} <span style={{ color: 'red' }}>*</span></label>
@@ -220,7 +259,7 @@ export function DownstreamMgmt() {
             </div>
             <div className="modal-body">
               <p style={{ marginBottom: '8px' }}>
-                <code style={{ fontWeight: 600 }}>{deleteTarget.downstreamType}</code> ({deleteTarget.adTypeCode})
+                <code style={{ fontWeight: 600 }}>{deleteTarget.downstreamType}</code> ({getAdTypeNames(deleteTarget)})
               </p>
               <div style={{ fontSize: '12px', color: 'var(--text-sub)' }}>{t('removeDownstreamHint')}</div>
             </div>
@@ -263,7 +302,7 @@ export function DownstreamMgmt() {
             columns={[
               { key: 'id', label: 'ID' },
               { key: 'downstreamType', label: t('downstreamType'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.downstreamType}</code> },
-              { key: 'adTypeCode', label: t('adType'), render: (r: DownstreamDto) => `${adTypeName(r.adTypeCode)} (${r.adTypeCode})` },
+              { key: 'adTypeCodes', label: t('adType'), render: (r: DownstreamDto) => getAdTypeNames(r) },
               { key: 'payoutRate', label: t('payoutRate'), render: (r: DownstreamDto) => `${Math.round((r.payoutRate ?? 0) * 1000) / 10}%` },
               { key: 'status', label: t('status'), render: (r: DownstreamDto) => r.status === 'active' ? t('active') : t('inactive') },
               {

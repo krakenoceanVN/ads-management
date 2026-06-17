@@ -377,6 +377,34 @@ export function AdvEntry() {
     }
   };
 
+  const clearAdvertiserRow = (row: AdvertiserEntryRow) => {
+    if (row.status === 'confirmed') {
+      setError(t('clearConfirmedRowWarning'));
+      return;
+    }
+    setMessage('');
+    setError('');
+    setRows(prev => {
+      const next = prev.map(r => {
+        if (r.uiKey !== row.uiKey) return r;
+        if (r.type === 'CPS') {
+          return { ...r, traffic: '0', settlement: '0', status: 'pending' as DataEntryStatus };
+        }
+        return { ...r, traffic: '0', settlement: '', status: 'pending' as DataEntryStatus };
+      });
+      const updated = next.find(r => r.uiKey === row.uiKey);
+      if (updated) {
+        draftRowsRef.current.set(draftKeyForRow(updated), {
+          rate: updated.rate,
+          traffic: updated.traffic,
+          settlement: updated.settlement,
+        });
+      }
+      return next;
+    });
+    setMessage(t('clearRowSuccess'));
+  };
+
   const confirmAllRows = async () => {
     const pendingRows = visibleRows.filter(row => row.status !== 'confirmed');
     const emptyRows = pendingRows.filter(row => !hasAnyAdvertiserInput(row));
@@ -491,6 +519,27 @@ export function AdvEntry() {
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;
+                const warnLocked = () => {
+                  if (!isConfirmed) return;
+                  setMessage('');
+                  setError(t('confirmedRowEditWarning'));
+                };
+                const guardedChange = (handler: (value: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (isConfirmed) {
+                    warnLocked();
+                    return;
+                  }
+                  handler(e.target.value);
+                };
+                const lockedInputProps = {
+                  className: `cell-input ${isLocked ? 'cell-input-locked' : ''}`,
+                  placeholder: t('valuePlaceholder'),
+                  readOnly: isConfirmed,
+                  disabled: busy,
+                  onClick: warnLocked,
+                  onFocus: warnLocked,
+                  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (isConfirmed) e.preventDefault(); },
+                } as const;
                 return (
                   <tr key={row.uiKey} className={isConfirmed ? 'entry-row-confirmed' : ''}>
                     <td>{row.date}</td>
@@ -498,25 +547,30 @@ export function AdvEntry() {
                     <td>{displayName(adOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.adId}</td>
-                    <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.rate} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'rate', e.target.value)} /></td>
+                    <td><input {...lockedInputProps} value={row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
                     {row.type === 'CPM' || row.type === 'CPA'
-                      ? <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
+                      ? <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
                       : null}
                     {row.type === 'CPM' || row.type === 'CPA'
                       ? <td className="amount-cell">—</td>
                       : null}
                     {row.type === 'CPS'
-                      ? <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
+                      ? <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
                       : null}
                     {row.type === 'CPS'
-                      ? <td><input className={`cell-input cell-input-wide ${isLocked ? 'cell-input-locked' : ''}`} value={row.settlement} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'settlement', e.target.value)} /></td>
+                      ? <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
                       : null}
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
                     <td><ConfirmButton confirmed={isConfirmed} onClick={() => void confirmRow(row)} /></td>
                     <td className="entry-action-cell">
                       {isConfirmed
                         ? <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void unconfirmRow(row)}>{t('modify')}</button>
-                        : <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void saveRow(row)}>{t('saveSystem')}</button>}
+                        : (
+                          <>
+                            <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void saveRow(row)}>{t('saveSystem')}</button>
+                            <button className="entry-edit-btn entry-edit-btn-secondary" type="button" disabled={busy} onClick={() => clearAdvertiserRow(row)}>{t('clearRow')}</button>
+                          </>
+                        )}
                     </td>
                   </tr>
                 );
@@ -706,6 +760,21 @@ export function MediaDataMgmt() {
     }
   };
 
+  const clearMediaRow = (row: MediaEntryRow) => {
+    if (row.status === 'confirmed') {
+      setError(t('clearConfirmedRowWarning'));
+      return;
+    }
+    setError('');
+    setRows(prev => prev.map(r => {
+      if (r.uiKey !== row.uiKey) return r;
+      if (r.type === 'CPS') {
+        return { ...r, traffic: '0', settlement: '0', status: 'pending' as DataEntryStatus };
+      }
+      return { ...r, traffic: '0', settlement: '', status: 'pending' as DataEntryStatus };
+    }));
+  };
+
   const confirmAllRows = async () => {
     const pendingRows = visibleRows.filter(row => row.status !== 'confirmed');
     if (!pendingRows.length) return;
@@ -804,6 +873,26 @@ export function MediaDataMgmt() {
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;
+                const warnLocked = () => {
+                  if (!isConfirmed) return;
+                  setError(t('confirmedRowEditWarning'));
+                };
+                const guardedChange = (handler: (value: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (isConfirmed) {
+                    warnLocked();
+                    return;
+                  }
+                  handler(e.target.value);
+                };
+                const lockedInputProps = {
+                  className: `cell-input ${isLocked ? 'cell-input-locked' : ''}`,
+                  placeholder: t('valuePlaceholder'),
+                  readOnly: isConfirmed,
+                  disabled: busy,
+                  onClick: warnLocked,
+                  onFocus: warnLocked,
+                  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (isConfirmed) e.preventDefault(); },
+                } as const;
                 return (
                   <tr key={row.uiKey} className={isConfirmed ? 'entry-row-confirmed' : ''}>
                     <td>{row.date}</td>
@@ -811,15 +900,15 @@ export function MediaDataMgmt() {
                     <td>{displayName(mediaAdOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.mediaIdStr}</td>
-                    <td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.rate === '—' ? '' : row.rate} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'rate', e.target.value)} /></td>
+                    <td><input {...lockedInputProps} value={row.rate === '—' ? '' : row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
                     {row.type === 'CPM' || row.type === 'CPA'
-                      ? <><td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
+                      ? <><td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
                       <td className="amount-cell">—</td>
                       <td className="amount-cell">—</td></>
                       : null}
                     {row.type === 'CPS'
-                      ? <><td><input className={`cell-input ${isLocked ? 'cell-input-locked' : ''}`} value={row.traffic} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'traffic', e.target.value)} /></td>
-                      <td><input className={`cell-input cell-input-wide ${isLocked ? 'cell-input-locked' : ''}`} value={row.settlement} placeholder={t('valuePlaceholder')} disabled={isLocked} onChange={e => updateRow(row.uiKey, 'settlement', e.target.value)} /></td>
+                      ? <><td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
+                      <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
                       <td className="amount-cell">—</td></>
                       : null}
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
@@ -829,7 +918,12 @@ export function MediaDataMgmt() {
                     <td className="entry-action-cell">
                       {isConfirmed
                         ? <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void unconfirmRow(row)}>{t('modify')}</button>
-                        : <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void saveRow(row)}>{t('saveSystem')}</button>}
+                        : (
+                          <>
+                            <button className="entry-edit-btn" type="button" disabled={busy} onClick={() => void saveRow(row)}>{t('saveSystem')}</button>
+                            <button className="entry-edit-btn entry-edit-btn-secondary" type="button" disabled={busy} onClick={() => clearMediaRow(row)}>{t('clearRow')}</button>
+                          </>
+                        )}
                     </td>
                   </tr>
                 );

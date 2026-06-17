@@ -272,11 +272,27 @@ export interface UpdateMediaIdInput {
 export interface DownstreamDto {
   id: number;
   downstreamType: string;
-  adTypeId: number;
+  adTypeIds: number[];
+  adTypeCodes: string[];
+  adTypes: Array<{ id: number; code: string; name: string }>;
   adTypeCode: string;
-  adTypeName?: string | null;
+  adTypeName: string | null;
   payoutRate: number | null;
   status: EntityStatus;
+}
+
+export interface CreateDownstreamInput {
+  adTypeCodes: AdTypeCode[];
+  downstreamType: string;
+  payoutRate?: number;
+  status?: EntityStatus;
+}
+
+export interface UpdateDownstreamInput {
+  downstreamType?: string;
+  payoutRate?: number;
+  status?: EntityStatus;
+  adTypeCodes?: AdTypeCode[];
 }
 
 export interface ListDownstreamsParams {

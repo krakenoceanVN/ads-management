@@ -17,7 +17,7 @@ import type {
   TotalProfitReportRow,
 } from '../lib/bffTypes';
 import { PageHeader } from '../components/common/PageHeader';
-import { uiTypeToApiType } from '../lib/bffTypes';
+import { type EntryType } from '../lib/bffTypes';
 import { sortRowsByDate } from '../lib/date';
 
 type CsvColumn<T> = {
@@ -90,7 +90,7 @@ function csvEscape(value: string | number) {
 }
 
 function billingMethodLabel(type: string) {
-  return type === 'RATIO' ? 'CPS' : type;
+  return type;
 }
 
 function downloadCsv<T>(filename: string, columns: CsvColumn<T>[], rows: T[]) {
@@ -305,44 +305,63 @@ function businessOptionsFromRows<T>(rows: T[], getValue: (row: T) => string, get
 
 export function TotalProfit() {
   const { t, displayName } = useAppContext();
-  const [startDate, setStartDate] = React.useState('');
-  const [endDate, setEndDate] = React.useState('');
+  const [draftStartDate, setDraftStartDate] = React.useState('');
+  const [draftEndDate, setDraftEndDate] = React.useState('');
+  const [appliedStartDate, setAppliedStartDate] = React.useState('');
+  const [appliedEndDate, setAppliedEndDate] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [rows, setRows] = React.useState<TotalProfitReportRow[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [isDirty, setIsDirty] = React.useState(false);
+  const [dateWarning, setDateWarning] = React.useState<string | null>(null);
 
-  const dateValidation = startDate && endDate && startDate > endDate
-    ? 'Từ ngày không được lớn hơn Đến ngày'
-    : undefined;
+  const dateValidation = draftStartDate && draftEndDate && draftStartDate > draftEndDate
+    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    : null;
 
   const handleClearDates = () => {
-    setStartDate('');
-    setEndDate('');
+    setDraftStartDate('');
+    setDraftEndDate('');
+    setAppliedStartDate('');
+    setAppliedEndDate('');
+    setIsDirty(false);
+    setDateWarning(null);
   };
 
-  React.useEffect(() => {
-    if (!startDate || !endDate || dateValidation) {
-      setRows([]);
+  const handleQuery = React.useCallback(() => {
+    if (!draftStartDate || !draftEndDate) {
+      setDateWarning('Vui lòng chọn khoảng ngày trước khi truy vấn.');
       return;
     }
+    if (dateValidation) return;
+    setDateWarning(null);
+    setAppliedStartDate(draftStartDate);
+    setAppliedEndDate(draftEndDate);
+    setIsDirty(false);
     let cancelled = false;
     setLoading(true);
     setError('');
-    getTotalProfitReport({ startDate, endDate })
+    getTotalProfitReport({ startDate: draftStartDate, endDate: draftEndDate })
       .then(data => {
         if (!cancelled) setRows(data);
       })
       .catch(err => {
-        if (!cancelled) setError(errorMessage(err));
+        if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [startDate, endDate, dateValidation]);
+  }, [draftStartDate, draftEndDate, dateValidation]);
+
+  function handleFilterChange() { setIsDirty(true); }
+
+  function handlePreset(label: 'thisMonth' | 'lastMonth') {
+    const range = label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
+    setDraftStartDate(range.startDate);
+    setDraftEndDate(range.endDate);
+    if (appliedStartDate) handleFilterChange();
+  }
 
   const totalRow = rows.find(row => row.date.endsWith('-total'));
   const dailyRows = rows.filter(row => !row.date.endsWith('-total'));
@@ -363,25 +382,47 @@ export function TotalProfit() {
 
   return (
     <div className="page active">
-      <PageHeader eyebrow={t('report') || 'Report'} title={t('pTotalProfit')} description={startDate && endDate ? `${startDate} - ${endDate}` : t('date')} />
+      <PageHeader eyebrow={t('report') || 'Report'} title={t('pTotalProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
       <div className="card report-card report-table-card total-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
             <ReportDateRangeField
-              startValue={startDate}
-              endValue={endDate}
-              onStartChange={setStartDate}
-              onEndChange={setEndDate}
+              startValue={draftStartDate}
+              endValue={draftEndDate}
+              onStartChange={v => { setDraftStartDate(v); setDateWarning(null); handleFilterChange(); }}
+              onEndChange={v => { setDraftEndDate(v); setDateWarning(null); handleFilterChange(); }}
               placeholder={t('date')}
               validation={dateValidation}
               onClear={handleClearDates}
+              onPreset={handlePreset}
             />
           </div>
           <div className="report-toolbar-right">
             <ReportSearchField placeholder={compactSearchPlaceholder(t('search'))} value={search} onChange={setSearch} />
-            <DownloadButton onClick={() => downloadCsv('总利润表.csv', columns, exportRows)} />
+            <button
+              type="button"
+              className="btn-primary report-download-btn data-download-btn"
+              onClick={handleQuery}
+              disabled={!!dateValidation}
+              title={t('query')}
+            >
+              {t('query') || 'Truy vấn'}
+            </button>
+            <button
+              type="button"
+              className="btn-primary report-download-btn data-download-btn"
+              onClick={() => downloadCsv('总利润表.csv', columns, exportRows)}
+              title={isDirty ? (t('exportDirtyWarning') || 'Filters changed. Click Query first.') : t('dataDownload')}
+              disabled={isDirty || !appliedStartDate}
+            >
+              {t('exportExcel') || 'Xuất Excel'}
+            </button>
           </div>
         </div>
+        {isDirty && appliedStartDate && (
+          <div className="form-note">Bộ lọc đã thay đổi. Vui lòng bấm Truy vấn để cập nhật kết quả.</div>
+        )}
+        {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table">
@@ -405,7 +446,11 @@ export function TotalProfit() {
                   <td className="amount-cell">{formatAmount(row.profit)}</td>
                   <td>{formatPercent(row.profitRate)}</td>
                 </tr>
-              )) : <EmptyRow colSpan={6} />}
+              )) : !appliedStartDate ? (
+                <tr><td colSpan={6} className="empty-state-text">Chọn khoảng ngày rồi bấm Truy vấn để xem dữ liệu.</td></tr>
+              ) : (
+                <tr><td colSpan={6} className="empty-state-text">Không có dữ liệu trong khoảng ngày/bộ lọc đã chọn.</td></tr>
+              )}
             </tbody>
             {totalRow && (
               <tfoot>
@@ -493,7 +538,7 @@ export function OrderProfit() {
     getOrderProfitReport({
       startDate: draftStartDate,
       endDate: draftEndDate,
-      billingMethod: draftBillingMethod ? uiTypeToApiType(draftBillingMethod as 'CPM' | 'CPA' | 'CPS') : undefined,
+      billingMethod: draftBillingMethod ? (draftBillingMethod as EntryType) : undefined,
     })
       .then(data => {
         if (!cancelled) setRows(data);
@@ -822,7 +867,7 @@ export function AdvQuery() {
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
-          <table className="report-table query-report-table">
+          <table className="report-table report-table-query">
             <thead>
               <tr>
                 <th>{t('date')}</th>
@@ -1049,7 +1094,7 @@ export function MediaQuery() {
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
         <div className="table-wrap report-table-wrap report-table-scroll">
-          <table className="report-table media-query-table">
+          <table className="report-table report-table-media">
             <thead>
               <tr>
                 <th>{t('date')}</th>

@@ -54,6 +54,7 @@ body { font-family: var(--font); background: var(--content-bg); color: var(--tex
 .sb-child:hover { background: var(--sidebar-hover); color: #fff; }
 .sb-child.active { background: var(--sidebar-active-bg); color: var(--sidebar-active); font-weight: 600; }
 .sb-child.active::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--sidebar-active); margin-right: 7px; flex-shrink: 0; }
+.sb-divider { height: 1px; background: rgba(255,255,255,.08); margin: 6px 16px; }
 .sb-single { display: flex; align-items: center; padding: 9px 16px 9px 14px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--sidebar-text); border-radius: 6px; margin: 1px 6px; transition: background .15s; }
 .sb-single:hover { background: var(--sidebar-hover); }
 .sb-single.active { background: var(--sidebar-active-bg); color: var(--sidebar-active); }
@@ -748,9 +749,8 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .report-table-wrap { border: none; margin: 0; max-height: none; overflow: auto; }
 .report-table-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .report-table { min-width: 980px; border-collapse: collapse; table-layout: auto; }
-.grouped-report-table { min-width: 1680px; }
-.query-report-table { min-width: 1280px; }
-.media-query-table { min-width: 1600px; }
+.report-table-query { min-width: 1280px; }
+.report-table-media { min-width: 1600px; }
 .report-table th { background: #f8fafc; border: 1px solid #d9e2ec; padding: 9px 10px; text-align: center; color: #4c5f7a; font-size: 12px; line-height: 1.2; }
 .report-table td { border: 1px solid #d9e2ec; padding: 8px 10px; text-align: center; font-size: 13px; line-height: 1.2; white-space: nowrap; background: #fff; }
 .report-table tbody tr:hover td { background: #f7fbfd; }
@@ -1008,33 +1008,6 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .yiyi-report-table-card {
   overflow: hidden;
 }
-.yiyi-report-table-wrap {
-  overflow-x: auto;
-  max-height: calc(100vh - 340px);
-  overflow-y: auto;
-}
-.yiyi-report-table {
-  width: 100%;
-  min-width: 900px;
-  border-collapse: collapse;
-  table-layout: auto;
-}
-.yiyi-report-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.yiyi-report-table th {
-  background: #f8fafc;
-  border: 1px solid #d9e2ec;
-  padding: 10px 12px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #4c5f7a;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 .yiyi-th-center { text-align: center; }
 .yiyi-th-right { text-align: right; }
 .yiyi-th-sub {
@@ -1044,13 +1017,6 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   text-transform: none;
   letter-spacing: 0;
   margin-top: 2px;
-}
-.yiyi-report-table td {
-  border: 1px solid #e8edf5;
-  padding: 9px 12px;
-  font-size: 13px;
-  color: var(--text-main);
-  background: #fff;
 }
 .yiyi-td-center { text-align: center; }
 .yiyi-td-right { text-align: right; }
@@ -1065,20 +1031,6 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .yiyi-row-alt td { background: #fafbfd; }
 .yiyi-row-error td { background: #fff9f0 !important; border-color: #f5d08a !important; }
 .yiyi-row-error .yiyi-td-date { color: #92400e; }
-
-/* Footer / Total Row */
-.yiyi-tfoot-row td {
-  background: #4f83d9 !important;
-  color: #fff !important;
-  font-weight: 800;
-  font-size: 13px;
-  border-color: #4a76bd !important;
-}
-.yiyi-tfoot-row .yiyi-td-money,
-.yiyi-tfoot-row .yiyi-td-grand,
-.yiyi-tfoot-row .yiyi-td-traffic {
-  color: #fff !important;
-}
 
 /* Empty State */
 .yiyi-report-empty {
@@ -1268,15 +1220,13 @@ body {
 
 table,
 .entry-table,
-.report-table,
-.yiyi-report-table {
+.report-table {
   font-variant-numeric: tabular-nums;
 }
 
 th,
 .entry-table th,
-.report-table th,
-.yiyi-report-table th {
+.report-table th {
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
   color: #40536f;
   font-weight: 800;
@@ -1284,15 +1234,13 @@ th,
 
 td,
 .entry-table td,
-.report-table td,
-.yiyi-report-table td {
+.report-table td {
   border-bottom-color: #e9eef5;
 }
 
 tr:hover td,
 .entry-table tbody tr:hover td,
-.report-table tbody tr:hover td,
-.yiyi-report-table tbody tr:hover td {
+.report-table tbody tr:hover td {
   background: #f4fbfd;
 }
 

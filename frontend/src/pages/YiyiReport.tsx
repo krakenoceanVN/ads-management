@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useAppContext } from '../AppContext';
 import { getYiyiMonthlyData, type YiyiMonthlyRow } from '../api/yiyiApi';
 import { Download, RefreshCw } from 'lucide-react';
+import { PageHeader } from '../components/common/PageHeader';
 
 const YIYI_CHANNELS = ['yy-02-01', 'yy-02-02', 'yy-02-03', 'yy-02-04'] as const;
 
@@ -51,6 +52,9 @@ export function YiyiReport() {
   const { t } = useAppContext();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
+  // In-flight guard prevents duplicate fetches on rapid clicks (button disabled
+  // state is async, so a fast double-click can fire `loadData` twice).
+  const inFlightRef = React.useRef(false);
 
   const [year, setYear] = useState(String(currentYear));
   const [month, setMonth] = useState(String(currentMonth));
@@ -60,6 +64,7 @@ export function YiyiReport() {
   const [fetched, setFetched] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (inFlightRef.current) return;
     const yearNum = parseInt(year, 10);
     const monthNum = parseInt(month, 10);
     if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
@@ -67,6 +72,7 @@ export function YiyiReport() {
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
     setError('');
     setFetched(false);
@@ -77,6 +83,7 @@ export function YiyiReport() {
     } catch (err) {
       setError('Không thể tải báo cáo Yiyi.');
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, [year, month]);
@@ -170,82 +177,86 @@ export function YiyiReport() {
 
   return (
     <div className="page active">
-      {/* Page Header */}
-      <div className="yiyi-report-page-header">
-        <div className="yiyi-report-header-left">
-          <h1 className="yiyi-report-title">{t('pYiyiReport')}</h1>
-          <p className="yiyi-report-subtitle">
-            {t('yiyiReportSubtitle') || 'Theo dõi dữ liệu Yiyi theo tháng, tổng hợp traffic, số tiền phải trả, lợi nhuận và tổng cộng.'}
-          </p>
-        </div>
-        {fetched && rows.length > 0 && (
-          <button type="button" className="btn-primary yiyi-report-export-btn" onClick={handleExport}>
-            <Download size={14} strokeWidth={2} />
-            {t('exportCSV') || 'Xuất CSV'}
-          </button>
-        )}
-      </div>
+      {/* Page Header (shared with other reports) */}
+      <PageHeader
+        eyebrow={t('report') || 'Report'}
+        title={t('pYiyiReport')}
+        description={t('yiyiReportSubtitle') || 'Theo dõi dữ liệu Yiyi theo tháng, tổng hợp traffic, số tiền phải trả, lợi nhuận và tổng cộng.'}
+      />
 
-      {/* Filter Card */}
-      <div className="card yiyi-report-filter-card">
-        <div className="yiyi-report-filter-row">
-          <div className="yiyi-report-filter-group">
+      {/* Filter Card (year + month — không dùng ReportDateRangeField) */}
+      <div className="card report-card yiyi-report-card">
+        <div className="report-toolbar">
+          <div className="report-toolbar-left">
             <label className="yiyi-report-filter-label">{t('year') || 'Năm'}</label>
             <select
-              className="yiyi-report-select"
+              className="report-control report-select"
               value={year}
               onChange={e => { setYear(e.target.value); setFetched(false); }}
+              aria-label={t('year') || 'Năm'}
             >
               {yearOptions.map(y => (
                 <option key={y} value={String(y)}>{y}</option>
               ))}
             </select>
-          </div>
-          <div className="yiyi-report-filter-group">
             <label className="yiyi-report-filter-label">{t('month') || 'Tháng'}</label>
             <select
-              className="yiyi-report-select"
+              className="report-control report-select"
               value={month}
               onChange={e => { setMonth(e.target.value); setFetched(false); }}
+              aria-label={t('month') || 'Tháng'}
             >
               {monthOptions.map(m => (
                 <option key={m} value={String(m)}>{String(m).padStart(2, '0')}</option>
               ))}
             </select>
           </div>
-          <button
-            type="button"
-            className="btn-primary yiyi-report-search-btn"
-            onClick={handleSearch}
-            disabled={loading}
-          >
-            {loading ? (
-              <RefreshCw size={14} strokeWidth={2} className="yiyi-spin" />
-            ) : (
-              t('query') || 'Tìm kiếm'
+          <div className="report-toolbar-right">
+            <button
+              type="button"
+              className="btn-primary report-download-btn data-download-btn"
+              onClick={handleSearch}
+              disabled={loading}
+              title={t('query')}
+            >
+              {loading ? (
+                <RefreshCw size={14} strokeWidth={2} className="yiyi-spin" />
+              ) : (
+                t('query') || 'Truy vấn'
+              )}
+            </button>
+            {fetched && rows.length > 0 && (
+              <button
+                type="button"
+                className="btn-primary report-download-btn data-download-btn"
+                onClick={handleExport}
+                title={t('dataDownload')}
+              >
+                <Download size={14} strokeWidth={2} />
+                {t('exportCSV') || 'Xuất CSV'}
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              className="btn-outline report-download-btn"
+              onClick={handleRefresh}
+              title={t('refresh') || 'Làm mới'}
+            >
+              <RefreshCw size={14} strokeWidth={2} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="yiyi-report-error">
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <div className="form-error">{error}</div>}
 
       {loading && !fetched && (
-        <div className="yiyi-report-loading">
-          <div className="yiyi-report-loading-inner">
-            <RefreshCw size={24} strokeWidth={1.5} className="yiyi-spin-lg" />
-            <span>{t('yiyiReportLoading') || 'Đang tải báo cáo Yiyi...'}</span>
-          </div>
-        </div>
+        <div className="form-note">{t('yiyiReportLoading') || 'Đang tải báo cáo Yiyi...'}</div>
       )}
 
       {fetched && rows.length > 0 && (
         <>
-          {/* Summary Cards */}
+          {/* Summary Cards (Yiyi-specific — không có ở 4 trang kia) */}
           <div className="yiyi-report-summary-grid">
             <div className="yiyi-summary-card">
               <div className="yiyi-summary-card-sub">{t('traffic') || 'Tổng lượng'}</div>
@@ -269,7 +280,7 @@ export function YiyiReport() {
             </div>
           </div>
 
-          {/* Validation Status Bar */}
+          {/* Validation Status Bar (Yiyi-specific) */}
           <div className="yiyi-report-status-bar">
             <span>{rows.length} {t('days') || 'ngày'}</span>
             <span className="yiyi-report-status-sep">·</span>
@@ -284,10 +295,10 @@ export function YiyiReport() {
             </span>
           </div>
 
-          {/* Table */}
-          <div className="card yiyi-report-table-card">
-            <div className="table-wrap yiyi-report-table-wrap">
-              <table className="yiyi-report-table">
+          {/* Table (report-table base + yiyi- modifiers for cell widths) */}
+          <div className="card report-table-card yiyi-report-table-card">
+            <div className="table-wrap report-table-wrap report-table-scroll">
+              <table className="report-table">
                 <thead>
                   <tr>
                     <th className="yiyi-th-center">{t('date') || 'Ngày'}</th>
@@ -328,7 +339,7 @@ export function YiyiReport() {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="yiyi-tfoot-row">
+                  <tr className="report-total-row report-total-sticky">
                     <td className="yiyi-td-center">{t('total') || 'Tổng cộng'}</td>
                     <td className="yiyi-td-right yiyi-td-traffic">{formatInteger(totals.totalTraffic)}</td>
                     <td className="yiyi-td-right"></td>
@@ -349,17 +360,11 @@ export function YiyiReport() {
       )}
 
       {fetched && rows.length === 0 && (
-        <div className="yiyi-report-empty">
-          <div className="yiyi-report-empty-icon">📊</div>
-          <div className="yiyi-report-empty-text">{t('yiyiReportNoData') || 'Không có dữ liệu cho tháng đã chọn.'}</div>
-        </div>
+        <div className="form-note">{t('yiyiReportNoData') || 'Không có dữ liệu cho tháng đã chọn.'}</div>
       )}
 
       {!fetched && !loading && !error && (
-        <div className="yiyi-report-empty">
-          <div className="yiyi-report-empty-icon">📅</div>
-          <div className="yiyi-report-empty-text">{t('yiyiReportSelectMonth') || 'Chọn năm và tháng, nhấn Tìm kiếm để xem báo cáo.'}</div>
-        </div>
+        <div className="form-note">{t('yiyiReportSelectMonth') || 'Chọn năm và tháng, nhấn Tìm kiếm để xem báo cáo.'}</div>
       )}
     </div>
   );

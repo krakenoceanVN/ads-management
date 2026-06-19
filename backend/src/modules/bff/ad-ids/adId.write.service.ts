@@ -39,7 +39,7 @@ async function getAdvertiserLinkedAdTypes(advertiserId: number) {
   return linkedAdTypes.length ? linkedAdTypes : advertiser.adType ? [advertiser.adType] : [];
 }
 
-async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, existingAdOrderId?: number): Promise<number> {
+export async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, existingAdOrderId?: number): Promise<number> {
   const linkedAdTypes = await getAdvertiserLinkedAdTypes(advertiserId);
   const linkedCodes = linkedAdTypes.map(adType => adType.code);
   const requestedAdTypeCode = adTypeCode ?? linkedCodes[0];
@@ -67,20 +67,49 @@ async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, exist
   const adType = linkedAdTypes.find(item => item.code === requestedAdTypeCode);
   if (!adType) throw new BadRequestError('Invalid adTypeCode: ' + requestedAdTypeCode);
 
-  const existing = await prisma.adOrder.findFirst({
-    where: { upstreamId: advertiserId, adTypeId: adType.id },
-  });
-  if (existing) return existing.id;
+  // Auto-create path. Retry semantics differ from the form path
+  // (modules/bff/ad-orders/seq.ts):
+  //   * On P2002, ANOTHER concurrent caller just inserted seq=1 for the same
+  //     pair. We must NOT increment to seq=2 — we re-findFirst and reuse.
+  //   * We only ever create a row when the pair has no AdOrder yet; this
+  //     preserves the existing "one AdOrder per (advertiser, adType) pair
+  //     via auto-create" behavior. The form path can create additional
+  //     rows for the same pair.
+  const SEQ_UNIQUE_COLUMNS = ['upstreamId', 'adTypeId', 'seq'];
+  const MAX_ATTEMPTS = 5;
 
-  const created = await prisma.adOrder.create({
-    data: {
-      upstreamId: advertiserId,
-      adTypeId: adType.id,
-      name: adType.name ?? requestedAdTypeCode,
-      status: 'active',
-    },
-  });
-  return created.id;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const existing = await prisma.adOrder.findFirst({
+      where: { upstreamId: advertiserId, adTypeId: adType.id },
+    });
+    if (existing) return existing.id;
+
+    try {
+      const created = await prisma.adOrder.create({
+        data: {
+          upstreamId: advertiserId,
+          adTypeId: adType.id,
+          seq: 1,
+          name: `${adType.code}-001`,
+          status: 'active',
+        },
+      });
+      return created.id;
+    } catch (e: unknown) {
+      const err = e as { code?: string; meta?: { target?: string | string[] } };
+      if (err?.code === 'P2002') {
+        const target = err.meta?.target;
+        const targetArr = Array.isArray(target) ? target : typeof target === 'string' ? [target] : [];
+        const onSeq = SEQ_UNIQUE_COLUMNS.every(col => targetArr.includes(col));
+        if (onSeq && attempt < MAX_ATTEMPTS - 1) {
+          // Pair was just created by a concurrent request — re-loop and reuse.
+          continue;
+        }
+      }
+      throw e;
+    }
+  }
+  throw new Error('resolveAdOrderId: exhausted retries');
 }
 
 export async function createAdId(input: CreateAdIdInput) {
@@ -97,7 +126,7 @@ export async function createAdId(input: CreateAdIdInput) {
       notes: rest.notes ?? null,
       billingMethod,
       currentUnitPrice: (billingMethod === 'CPM' || billingMethod === 'CPA') ? (rest.unitPrice ?? null) : null,
-      currentRatio: billingMethod === 'RATIO' ? (rest.ratio ?? null) : null,
+      currentRatio: billingMethod === 'CPS' ? (rest.ratio ?? null) : null,
       status: rest.status ?? 'active',
     } as Prisma.AdSiteUncheckedCreateInput,
     include: {
@@ -131,8 +160,8 @@ export async function updateAdId(id: number, input: UpdateAdIdInput) {
       ...(billingMethod !== undefined && { billingMethod }),
       ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice !== undefined && { currentUnitPrice: unitPrice }),
       ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice === undefined && { currentUnitPrice: null }),
-      ...(billingMethod === 'RATIO' && ratio !== undefined && { currentRatio: ratio }),
-      ...(billingMethod === 'RATIO' && ratio === undefined && { currentRatio: null }),
+      ...(billingMethod === 'CPS' && ratio !== undefined && { currentRatio: ratio }),
+      ...(billingMethod === 'CPS' && ratio === undefined && { currentRatio: null }),
       ...(rest.status !== undefined && { status: rest.status }),
     },
     include: {

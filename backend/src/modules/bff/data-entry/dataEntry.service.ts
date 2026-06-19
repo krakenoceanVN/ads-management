@@ -100,12 +100,12 @@ function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdTyp
   const adType = actualAdType(site);
 
   // Rate: CPM and CPA use unitPriceSnapshot;
-  // RATIO and CPS use ratioSnapshot
+  // CPS uses ratioSnapshot
   const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);
 
-  // Traffic: CPM qty, RATIO amount1, CPA amount2
+  // Traffic: CPM qty, CPS amount1, CPA amount2
   let traffic = '';
   let settlement = '';
   if (di) {
@@ -219,7 +219,7 @@ function makeMediaRow(
   const adTypeCode = actualAdType(site)?.code ?? null;
   const adTypeName = actualAdType(site)?.name ?? null;
 
-  // Rate: CPM/CPA use unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
+  // Rate: CPM/CPA use unitPriceSnapshot or currentUnitPrice, CPS uses currentRatio
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);

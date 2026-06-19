@@ -86,6 +86,7 @@ model AdOrder {
   id         Int       @id @default(autoincrement())
   upstreamId Int
   adTypeId   Int
+  seq        Int
   name       String
   notes      String?
   status     String    @default("active") // active | inactive
@@ -96,6 +97,7 @@ model AdOrder {
   adType   AdType   @relation(fields: [adTypeId], references: [id])
   adSites  AdSite[]
 
+  @@unique([upstreamId, adTypeId, seq])
   @@index([upstreamId])
   @@index([adTypeId])
   @@index([status])
@@ -125,10 +127,10 @@ model AdSite {
   adOrderId        Int?
   name             String
   notes            String?
-  billingMethod    String    // CPM | RATIO | CPA
+  billingMethod    String    // CPM | CPS | CPA
   rebateRate       Float?
   currentUnitPrice Decimal?  // for CPM
-  currentRatio    Decimal?  // for RATIO
+  currentRatio    Decimal?  // for CPS
   isActive         Boolean   @default(true)
   isArchived       Boolean   @default(false)
   status           String    @default("active") // active | inactive
@@ -187,9 +189,9 @@ model DailyInput {
   adSiteId           Int
   qty                Int       @default(0)           // CPM quantity
   unitPriceSnapshot  Decimal?                       // CPM price snapshot
-  amount1            Decimal   @default(0)          // RATIO amount1
-  amount2            Decimal   @default(0)          // RATIO amount2
-  ratioSnapshot      Decimal?                       // RATIO ratio snapshot
+  amount1            Decimal   @default(0)          // CPS amount1
+  amount2            Decimal   @default(0)          // CPS amount2
+  ratioSnapshot      Decimal?                       // CPS ratio snapshot
   rebateAmount       Decimal   @default(0)
   rebateRateSnapshot Decimal   @default(0)
   revenue            Decimal   @default(0)

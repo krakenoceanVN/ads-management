@@ -5,13 +5,11 @@
  * CPM:  baseRevenue = qty * unitPrice / 1000
  *       if rebateRate present: revenue = baseRevenue - (qty * rebateRate)
  *       else: revenue = baseRevenue
- * CPS:  revenue = (amount1 + amount2) * ratio   (RATIO is legacy alias)
+ * CPS:  revenue = (amount1 + amount2) * ratio
  * CPA:  revenue = qty * unitPrice
  */
 
-import type { EntryType } from '../../modules/bff/bff.types';
-
-export type BillingMethod = 'CPM' | 'CPS' | 'CPA' | 'RATIO';
+export type BillingMethod = 'CPM' | 'CPS' | 'CPA';
 
 export interface RevenueInput {
   billingMethod: string;
@@ -25,7 +23,7 @@ export interface RevenueInput {
 }
 
 export function normalizeBillingMethod(m: string): BillingMethod {
-  if (m === 'RATIO') return 'CPS';
+  if (m === 'RATIO') return 'CPS'; // legacy alias (DB now canonical on CPS)
   return m as BillingMethod;
 }
 

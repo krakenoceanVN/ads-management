@@ -39,7 +39,7 @@ function validateMediaBatchItem(item: MediaBatchItem, billingMethod: string): vo
     const qty = Number(item.qty);
     if (isNaN(qty)) throw new Error(`${billingMethod}: qty must be numeric`);
     if (qty < 0) throw new Error(`${billingMethod}: qty must be >= 0`);
-  } else if (billingMethod === 'RATIO' || billingMethod === 'CPS') {
+  } else if (billingMethod === 'CPS') {
     const hasA1 = Object.prototype.hasOwnProperty.call(item, 'amount1') && item.amount1 !== undefined && item.amount1 !== null && String(item.amount1).trim() !== '';
     const hasA2 = Object.prototype.hasOwnProperty.call(item, 'amount2') && item.amount2 !== undefined && item.amount2 !== null && String(item.amount2).trim() !== '';
     const hasRatio = Object.prototype.hasOwnProperty.call(item, 'ratio') && item.ratio !== undefined && item.ratio !== null && String(item.ratio).trim() !== '';

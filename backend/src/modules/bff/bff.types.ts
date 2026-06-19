@@ -2,14 +2,23 @@
 // These are used by BFF mappers and controllers
 
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'RATIO' | 'CPA' | 'CPS';
-export type StoredEntryType = 'CPM' | 'RATIO' | 'CPA';
+export type EntryType = 'CPM' | 'CPS' | 'CPA';
+export type StoredEntryType = 'CPM' | 'CPS' | 'CPA';
 export type DataEntryStatus = 'pending' | 'confirmed';
 
+/**
+ * Canonicalizes an incoming billing-method value before persisting.
+ *
+ * The DB now stores a single canonical value per method. The legacy
+ * 'RATIO' literal is still accepted here (for old imports / partner systems
+ * that may still send it) and mapped to 'CPS' — never persisted as RATIO.
+ *
+ * Anything not in {CPM, CPS, CPA, RATIO} is rejected with `undefined`.
+ */
 export function normalizeBillingMethodForStorage(type: EntryType | string | undefined): StoredEntryType | undefined {
   if (type === undefined) return undefined;
-  if (type === 'CPS') return 'RATIO';
-  if (type === 'CPM' || type === 'RATIO' || type === 'CPA') return type;
+  if (type === 'CPM' || type === 'CPS' || type === 'CPA') return type;
+  if (type === 'RATIO') return 'CPS'; // legacy alias from old data
   return undefined;
 }
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
@@ -47,6 +56,7 @@ export interface Media {
   notes: string | null;
   status: EntityStatus;
   upstreamId?: number;
+  adOrderId?: number | null;
   adTypeCode?: string;
   adTypeName?: string | null;
   billingMethod?: EntryType;

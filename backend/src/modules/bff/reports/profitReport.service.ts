@@ -36,7 +36,7 @@ function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
 
 // Test data sources excluded from official financial reports
 const TEST_UPSTREAM_NAMES = ['百战-bz'];
-const TEST_AD_SITE_NAMES = ['TestCPM', 'TestRATIO'];
+const TEST_AD_SITE_NAMES = ['TestCPM', 'TestCPS'];
 
 // ─── Yiyi Cost Calculator ─────────────────────────────────────────────────────
 

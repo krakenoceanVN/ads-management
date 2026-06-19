@@ -253,8 +253,9 @@ export async function aggregateDownstreamCost(
 
       const recordDate = di.recordDate;
       const adSiteId = adSite.id;
-      // Normalize legacy 'RATIO' → 'CPS' so calculateCost matches the CPS branch
-      // (otherwise RATIO sites fall through to default and downstream cost = 0).
+      // Defensive: normalizeBillingMethod() maps any incoming 'RATIO' to 'CPS'
+      // so calculateCost matches the CPS branch. Once the DB is fully migrated
+      // (no more RATIO rows) this is a no-op, but kept as a safety net.
       const billingMethod = normalizeBillingMethod(adSite.billingMethod);
 
       try {

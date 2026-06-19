@@ -4,6 +4,7 @@ import { createAdId, updateAdId, deleteAdId } from './adId.write.service';
 import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
 import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
+import { normalizeBillingMethodForStorage } from '../bff.types';
 import type { CreateAdIdInput, UpdateAdIdInput } from './adId.write.service';
 
 export async function getAll(req: Request, res: Response) {
@@ -13,7 +14,7 @@ export async function getAll(req: Request, res: Response) {
     advertiserId: advertiserId ? parseInt(String(advertiserId), 10) : undefined,
     adOrderId: adOrderId ? parseInt(String(adOrderId), 10) : undefined,
     adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
-    type: type ? (String(type) as 'CPM' | 'RATIO' | 'CPA' | 'CPS') : undefined,
+    type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
   };
 
@@ -35,10 +36,14 @@ export async function create(req: Request, res: Response) {
   if (!body.adOrderId && !body.adTypeCode) throw new BadRequestError('adOrderId or adTypeCode is required');
   if (!body.slot?.trim()) throw new BadRequestError('slot is required');
   if (!body.type) throw new BadRequestError('type is required');
-  if ((body.type === 'CPM' || body.type === 'CPA') && (body.unitPrice === undefined || body.unitPrice === null || isNaN(Number(body.unitPrice)) || Number(body.unitPrice) <= 0)) {
-    throw new BadRequestError('unitPrice is required and must be greater than 0 for ' + body.type);
+  // Normalize legacy 'RATIO' → 'CPS' before validation so the field-rate
+  // checks below only need to handle canonical values.
+  const canonicalType = normalizeBillingMethodForStorage(body.type);
+  if (!canonicalType) throw new BadRequestError('Invalid billing method: ' + body.type);
+  if ((canonicalType === 'CPM' || canonicalType === 'CPA') && (body.unitPrice === undefined || body.unitPrice === null || isNaN(Number(body.unitPrice)) || Number(body.unitPrice) <= 0)) {
+    throw new BadRequestError('unitPrice is required and must be greater than 0 for ' + canonicalType);
   }
-  if ((body.type === 'RATIO' || body.type === 'CPS') && (body.ratio === undefined || body.ratio === null || isNaN(Number(body.ratio)) || Number(body.ratio) <= 0)) {
+  if (canonicalType === 'CPS' && (body.ratio === undefined || body.ratio === null || isNaN(Number(body.ratio)) || Number(body.ratio) <= 0)) {
     throw new BadRequestError('ratio is required and must be greater than 0 for CPS');
   }
 

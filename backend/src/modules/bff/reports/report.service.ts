@@ -81,7 +81,7 @@ function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
   const adOrder = site.adOrder;
   const adType = actualAdType(site);
 
-  // Rate: CPM/CPA use unitPriceSnapshot; RATIO/CPS use ratioSnapshot
+  // Rate: CPM/CPA use unitPriceSnapshot; CPS uses ratioSnapshot
   const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
     ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di.ratioSnapshot ?? site.currentRatio);
@@ -194,7 +194,7 @@ function makeReportMediaRow(
   const adTypeCode = actualAdType(site)?.code ?? null;
   const adTypeName = actualAdType(site)?.name ?? null;
 
-  // Rate: CPM uses unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
+  // Rate: CPM uses unitPriceSnapshot or currentUnitPrice, CPS uses currentRatio
   const rate = site.billingMethod === 'CPM'
     ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di.ratioSnapshot ?? site.currentRatio);

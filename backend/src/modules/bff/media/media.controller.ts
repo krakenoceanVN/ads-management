@@ -4,10 +4,13 @@ import { createMedia, updateMedia, deleteMedia } from './media.write.service';
 import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
 import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
+import { normalizeBillingMethodForStorage } from '../bff.types';
 import type { CreateMediaInput, UpdateMediaInput } from './media.write.service';
 
-export async function getAll(_req: Request, res: Response) {
-  const data = await listMedia();
+export async function getAll(req: Request, res: Response) {
+  const adOrderIdRaw = req.query['adOrderId'];
+  const adOrderId = adOrderIdRaw ? parseInt(String(adOrderIdRaw), 10) : undefined;
+  const data = await listMedia(adOrderId != null && !Number.isNaN(adOrderId) ? { adOrderId } : undefined);
   res.json(bffData(data));
 }
 
@@ -27,9 +30,11 @@ export async function create(req: Request, res: Response) {
       (body.currentUnitPrice === undefined || body.currentUnitPrice === null || isNaN(Number(body.currentUnitPrice)) || Number(body.currentUnitPrice) <= 0)) {
     throw new BadRequestError('currentUnitPrice is required and must be greater than 0 for ' + body.billingMethod);
   }
-  if ((body.billingMethod === 'RATIO' || body.billingMethod === 'CPS') &&
+  const canonicalBilling = body.billingMethod ? normalizeBillingMethodForStorage(body.billingMethod) : undefined;
+  if (!canonicalBilling) throw new BadRequestError('Invalid billing method: ' + body.billingMethod);
+  if (canonicalBilling === 'CPS' &&
       (body.currentRatio === undefined || body.currentRatio === null || isNaN(Number(body.currentRatio)) || Number(body.currentRatio) <= 0)) {
-    throw new BadRequestError('currentRatio is required and must be greater than 0 for RATIO/CPS');
+    throw new BadRequestError('currentRatio is required and must be greater than 0 for CPS');
   }
   const media = await createMedia({
     name: body.name.trim(),
@@ -39,7 +44,7 @@ export async function create(req: Request, res: Response) {
     notes: body.notes ?? null,
     status: body.status ?? 'active',
     upstreamId: body.upstreamId as number,
-    billingMethod: body.billingMethod,
+    billingMethod: canonicalBilling,
     currentUnitPrice: body.currentUnitPrice ?? null,
     currentRatio: body.currentRatio ?? null,
   });
@@ -52,6 +57,9 @@ export async function update(req: Request, res: Response) {
   if (isNaN(id)) throw new NotFoundError('Invalid media id');
   const body = req.body as UpdateMediaInput;
   if (body.upstreamId !== undefined && body.upstreamId <= 0) throw new BadRequestError('upstreamId must be greater than 0');
+  if (body.billingMethod !== undefined && !normalizeBillingMethodForStorage(body.billingMethod)) {
+    throw new BadRequestError('Invalid billing method: ' + body.billingMethod);
+  }
   const media = await updateMedia(id, {
     name: body.name?.trim(),
     contact: body.contact !== undefined ? body.contact : undefined,

@@ -51,6 +51,7 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { adType: AdType 
     notes: null,
     status: site.status as EntityStatus,
     upstreamId: site.upstreamId,
+    adOrderId: site.adOrderId ?? null,
     adTypeCode: adType?.code,
     adTypeName: adType?.name ?? null,
     billingMethod: site.billingMethod as EntryType | undefined,
@@ -83,7 +84,7 @@ export function mapAdId(
   site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (PrismaAdOrder & { adType?: AdType }) | null }
 ): AdId {
   // slot field — schema has no separate slot column; use adSite.name as slot identifier
-  // rate — currentUnitPrice for CPM/CPA, currentRatio for RATIO
+  // rate — currentUnitPrice for CPM/CPA, currentRatio for CPS
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
     ? decimalToNull(site.currentUnitPrice)
     : decimalToNull(site.currentRatio);

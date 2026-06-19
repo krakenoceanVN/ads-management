@@ -24,6 +24,7 @@ import type {
   ListDownstreamsParams,
   ListMediaEntriesParams,
   ListMediaIdsParams,
+  ListMediaParams,
   ListOperationLogsParams,
   LoginInput,
   LoginResponse,
@@ -56,7 +57,7 @@ import type {
   UpdateUserInput,
   UserManagementUser,
 } from './bffTypes';
-import { uiTypeToApiType, apiTypeToUiType, type EntryType } from './bffTypes';
+import { type EntryType } from './bffTypes';
 
 export const BFF_AUTH_TOKEN_STORAGE_KEY = 'token';
 export const BFF_AUTH_TOKEN_INVALID_EVENT = 'bff-auth-token-invalid';
@@ -206,8 +207,8 @@ export async function deleteAdvertiser(id: number) {
   return request<BffMutationResponse>(`/api/bff/advertisers/${id}`, { method: 'DELETE' });
 }
 
-export async function listMedia() {
-  return unwrapData(await request<BffDataResponse<Media[]>>('/api/bff/media'));
+export async function listMedia(params?: ListMediaParams) {
+  return unwrapData(await request<BffDataResponse<Media[]>>('/api/bff/media', { params }));
 }
 
 export async function getMedia(id: number) {
@@ -339,7 +340,7 @@ export async function deleteDownstream(id: number) {
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
   const data = await unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/data-entry/advertisers', { params }));
   return data.map(row => {
-    const base = { ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType };
+    const base = { ...row, type: row.type as EntryType };
     // uiKey = stable unique key per (adSite, date). adIdNum = AdSite id.
     // Using adIdNum + date ensures unique identity even when id=0 (unsaved rows).
     (base as Record<string, unknown>).uiKey = `advertiser-${row.adIdNum}-${row.date}`;
@@ -350,7 +351,7 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
 export async function saveAdvertiserEntryBatch(payload: SaveAdvertiserEntryBatchPayload) {
   const apiPayload = {
     items: payload.records.map(r => {
-      const billingMethod = uiTypeToApiType(r.type);
+      const billingMethod = r.type;
       // traffic maps to qty for CPM/CPA, and amount1 for revenue-share entries.
       const item: Record<string, unknown> = {
         adSiteId: r.adId,
@@ -392,7 +393,7 @@ export async function unconfirmAdvertiserEntry(id: number) {
 export async function listMediaEntries(params: ListMediaEntriesParams) {
   const data = await unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/data-entry/media', { params }));
   return data.map((row, idx) => {
-    const base = { ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType };
+    const base = { ...row, type: row.type as EntryType };
     // uiKey = stable unique key per row. Use upstreamAdIdNum (AdSite id) + index suffix when id=0
     // to distinguish multiple downstream rows for the same site. Index is stable per render
     // since rows are in insertion order and no row is deleted without full reload.
@@ -407,7 +408,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
 export async function saveMediaEntryBatch(payload: SaveMediaEntryBatchPayload) {
   const apiPayload = {
     items: payload.records.map(r => {
-      const billingMethod = uiTypeToApiType(r.type);
+      const billingMethod = r.type;
       const item: Record<string, unknown> = {
         adSiteId: r.mediaId,
         recordDate: r.recordDate,
@@ -447,12 +448,12 @@ export async function unconfirmMediaEntry(id: number) {
 
 export async function getAdvertiserReport(params: AdvertiserReportParams) {
   const data = await unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertisers', { params }));
-  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
+  return data.map(row => ({ ...row, type: row.type as EntryType }));
 }
 
 export async function getMediaReport(params: MediaReportParams) {
   const data = await unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/reports/media', { params }));
-  return data.map(row => ({ ...row, type: apiTypeToUiType(row.type as 'CPM' | 'RATIO' | 'CPA') as EntryType }));
+  return data.map(row => ({ ...row, type: row.type as EntryType }));
 }
 
 export async function getTotalProfitReport(params: TotalProfitReportParams) {

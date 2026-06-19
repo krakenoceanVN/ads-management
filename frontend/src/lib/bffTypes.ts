@@ -1,23 +1,6 @@
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'RATIO' | 'CPA' | 'CPS';
+export type EntryType = 'CPM' | 'CPS' | 'CPA';
 
-/**
- * Maps UI-facing label to backend API value
- * CPS (user-facing) → RATIO (backend)
- */
-export function uiTypeToApiType(type: EntryType): 'CPM' | 'RATIO' | 'CPA' {
-    if (type === 'CPS') return 'RATIO';
-    return type;
-}
-
-/**
- * Maps backend API value to UI-facing label
- * RATIO (backend) → CPS (user-facing)
- */
-export function apiTypeToUiType(type: 'CPM' | 'RATIO' | 'CPA'): 'CPM' | 'CPS' | 'CPA' {
-    if (type === 'RATIO') return 'CPS';
-    return type;
-}
 export type DataEntryStatus = 'pending' | 'confirmed';
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
 export type ReportStatusParam = 'confirmed' | 'unconfirmed' | 'pending' | 'all';
@@ -106,11 +89,16 @@ export interface Media {
   notes: string | null;
   status: EntityStatus;
   upstreamId?: number;
+  adOrderId?: number | null;
   adTypeCode?: string;          // From upstream.adType.code
   adTypeName?: string | null;   // Business display name
   billingMethod?: EntryType;
   currentUnitPrice?: number;
   currentRatio?: number;
+}
+
+export interface ListMediaParams {
+  adOrderId?: number;
 }
 
 export interface AdType {
@@ -172,7 +160,8 @@ export interface ListAdOrdersParams {
 export interface CreateAdOrderInput {
   advertiserId: number;
   adTypeCode: string;
-  name: string;
+  /** Optional. Leave blank to let the backend auto-generate `{code}-{seq padded 3}`. */
+  name?: string | null;
   notes?: string | null;
   status?: EntityStatus;
 }
@@ -215,7 +204,7 @@ export interface CreateAdIdInput {
   adOrderId?: number;
   adTypeCode?: string;
   slot: string;
-  type: 'CPM' | 'RATIO' | 'CPA';
+  type: 'CPM' | 'CPS' | 'CPA';
   unitPrice?: number;
   ratio?: number;
   notes?: string | null;
@@ -227,7 +216,7 @@ export interface UpdateAdIdInput {
   adOrderId?: number | null;
   adTypeCode?: string;
   slot?: string;
-  type?: 'CPM' | 'RATIO' | 'CPA';
+  type?: 'CPM' | 'CPS' | 'CPA';
   unitPrice?: number;
   ratio?: number;
   notes?: string | null;

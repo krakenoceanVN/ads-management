@@ -80,7 +80,7 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete }:
 
 export function TypeTag({ tp }: { tp: string }) {
   const cls = tp === 'CPM' ? 'tag-cpm' : tp === 'CPA' ? 'tag-cpa' : 'tag-cps';
-  return <span className={`tag ${cls}`}>{tp === 'RATIO' ? 'CPS' : tp}</span>;
+  return <span className={`tag ${cls}`}>{tp}</span>;
 }
 
 export function StatusTag({ s, label }: { s: string, label: string }) {

@@ -5,7 +5,7 @@ import { Topbar } from './components/Topbar';
 import { MediaMgmt, MediaAdOrderMgmt, MediaIdMgmt } from './pages/Media';
 import { AiEntry, AdvEntry, MediaDataMgmt } from './pages/DataEntry';
 import { YiyiData } from './pages/YiyiData';
-import { AdvertiserList, AdOrderMgmt, AdIdMgmt } from './pages/Advertiser';
+import { AdvertiserList, AdIdMgmt } from './pages/Advertiser';
 import { TotalProfit, OrderProfit, AdvQuery, MediaQuery } from './pages/Reports';
 import { YiyiReport } from './pages/YiyiReport';
 import { AdvSettlement, MediaSettlement } from './pages/Settlement';
@@ -74,7 +74,7 @@ function MainContent({ onLogout }: { onLogout: () => void }) {
     const pageKey = isPageEnabled(currentPage) ? currentPage : FALLBACK_PAGE;
     switch (pageKey) {
       case 'pAdvertiserList': return <AdvertiserList />;
-      case 'pAdOrderMgmt': return <AdTypeMgmt />;
+      case 'pAdTypeMgmt': return <AdTypeMgmt />;
       case 'pAdIdMgmt': return <AdIdMgmt />;
       // pMediaMgmt is hidden from the sidebar (Phase 2 / Option B) but its route is
       // kept for backward compatibility — see lib/data.ts menu note.

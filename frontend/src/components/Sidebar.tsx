@@ -100,8 +100,11 @@ export function Sidebar() {
               </div>
               <div className={`sb-children ${isOpen ? 'open' : ''}`}>
                 {visibleChildren.map(c => (
-                  <div key={c.key} className={`sb-child ${currentPage === c.key ? 'active' : ''}`} onClick={() => setCurrentPage(c.key)}>
-                    {t(c.key)}
+                  <div key={c.key}>
+                    {(c as { divider?: boolean }).divider && <div className="sb-divider" />}
+                    <div className={`sb-child ${currentPage === c.key ? 'active' : ''}`} onClick={() => setCurrentPage(c.key)}>
+                      {t(c.key)}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
-import { Table } from '../components/Table';
+import { Table, type SortDirection } from '../components/Table';
 import { HardDeleteModal } from '../components/HardDeleteModal';
 import { listAdTypes, createAdType, updateAdType, hardDeleteAdType } from '../lib/bffApi';
 import type { AdType } from '../lib/bffTypes';
@@ -25,6 +25,7 @@ export function AdTypeMgmt() {
   const [rows, setRows] = useState<AdType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -33,6 +34,8 @@ export function AdTypeMgmt() {
   const [hardDeleteResult, setHardDeleteResult] = useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
   const [hardDeleteError, setHardDeleteError] = useState('');
+  const [codeSort, setCodeSort] = useState<SortDirection>('asc');
+  const [nameSort, setNameSort] = useState<SortDirection>('asc');
 
   const canWrite = can('role.update');
   const canHardDelete = can('masterData.hardDelete');
@@ -53,6 +56,31 @@ export function AdTypeMgmt() {
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
+
+  const sortedRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    const filtered = keyword
+      ? rows.filter(r => (r.code ?? '').toLowerCase().includes(keyword) || (r.name ?? '').toLowerCase().includes(keyword))
+      : rows;
+    const out = [...filtered];
+    out.sort((a, b) => {
+      const codeA = a.code ?? '';
+      const codeB = b.code ?? '';
+      const codeDelta = codeA.localeCompare(codeB, undefined, { sensitivity: 'base' });
+      const codeOrder = codeSort === 'asc' ? codeDelta : -codeDelta;
+      if (codeOrder !== 0) return codeOrder;
+      const nameA = a.name ?? '';
+      const nameB = b.name ?? '';
+      const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+      const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
+      if (nameOrder !== 0) return nameOrder;
+      return a.id - b.id;
+    });
+    return out;
+  }, [rows, codeSort, nameSort, search]);
+
+  const toggleCodeSort = () => setCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const openCreate = () => {
     setEditModal({ code: '', name: '' });
@@ -182,20 +210,25 @@ export function AdTypeMgmt() {
 
       <div className="page active">
         <div className="page-header">
-          <h1 className="page-title">{t('pAdOrderMgmt')}</h1>
-          {canWrite && (
-            <div className="toolbar-left">
-              <button className="btn-primary" onClick={openCreate}>{t('newAdType')}</button>
-            </div>
-          )}
+          <h1 className="page-title">{t('pAdTypeMgmt')}</h1>
         </div>
         <div className="card">
+          <div className="toolbar">
+            <div className="toolbar-left">
+              {canWrite && (
+                <button className="btn-primary" onClick={openCreate}>{t('newAdType')}</button>
+              )}
+            </div>
+            <div className="toolbar-right">
+              <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          </div>
           {error && <div className="form-error" style={{ margin: '8px 0' }}>{error}</div>}
           <Table
             columns={[
               { key: 'id', label: 'ID' },
-              { key: 'code', label: t('adOrderCode'), render: (r: AdType) => <code style={{ fontWeight: 600 }}>{r.code}</code> },
-              { key: 'name', label: t('adOrderName') },
+              { key: 'code', label: t('adOrderCode'), render: (r: AdType) => <code style={{ fontWeight: 600 }}>{r.code}</code>, sortDirection: codeSort, onSortClick: toggleCodeSort },
+              { key: 'name', label: t('adOrderName'), sortDirection: nameSort, onSortClick: toggleNameSort },
               { key: 'createdAt', label: t('createdAt'), render: (r: AdType) => new Date(r.createdAt).toLocaleDateString() },
               {
                 key: '__actions__',
@@ -208,7 +241,7 @@ export function AdTypeMgmt() {
                 ) : <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>—</span>,
               },
             ]}
-            data={rows}
+            data={sortedRows}
             emptyText={rows.length === 0 && !loading ? (t('noData') || '—') : undefined}
           />
         </div>

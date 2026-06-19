@@ -1,19 +1,15 @@
-@"
-backend/node_modules/
-frontend/node_modules/
-backend/dist/
-frontend/dist/
+node_modules/
+dist/
 
-backend/.env
-frontend/.env
-frontend/.env.local
-frontend/.env.production
+.env
+.env.local
+.env.production
 
 *.rar
 *.zip
 *.tar.gz
 *.log
+*.csv
+
 .vscode/
 .DS_Store
-"@ | Out-File -Encoding utf8 .gitignorenode_modules/
-.env

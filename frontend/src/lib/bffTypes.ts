@@ -158,6 +158,10 @@ export interface AdOrder {
   notes: string | null;
   status: EntityStatus;
   isVirtual?: boolean;
+  advertiserName?: string;
+  adSiteCount: number;
+  billingMethods: string[];
+  createdAt?: string;
 }
 
 export interface ListAdOrdersParams {

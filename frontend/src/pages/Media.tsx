@@ -495,16 +495,18 @@ export function MediaAdOrderMgmt() {
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
     if (!keyword) return true;
-    return [row.name, row.adTypeCode, row.notes].some(value =>
+    const advertiserName = advertisersById.get(row.advId)?.name ?? '';
+    return [row.name, row.adTypeCode, row.notes, advertiserName].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   });
 
-  const countMediaIds = (_order: AdOrder) => 0;
-
   const mediaAdOrderColumns: CsvColumn<AdOrder>[] = [
     { label: t('mediaAdOrder'), value: r => displayName(r.name) },
+    { label: t('advertiser'), value: r => displayName(advertisersById.get(r.advId)?.name ?? '-') },
     { label: t('adType'), value: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
+    { label: t('billingMethod'), value: r => (r.billingMethods?.length ? r.billingMethods.join(', ') : '-') },
+    { label: t('adSiteCount'), value: r => r.adSiteCount ?? 0 },
     { label: t('notes'), value: r => r.notes ?? '-' },
   ];
 
@@ -560,6 +562,11 @@ export function MediaAdOrderMgmt() {
   const adTypeNameByCode = React.useMemo(
     () => new Map(adTypes.map(at => [at.code, at.name ?? at.code])),
     [adTypes]
+  );
+
+  const advertisersById = React.useMemo(
+    () => new Map(advertisers.map(a => [a.id, a])),
+    [advertisers]
   );
 
   const submitForm = async () => {
@@ -622,8 +629,25 @@ export function MediaAdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('mediaAdOrder'), render: r => displayName(r.name) },
+              { key: 'name', label: t('mediaAdOrder'), render: r => {
+                const dup = !!(r.adTypeName && r.name && r.name === r.adTypeName);
+                return (
+                  <span className="cell-name">
+                    {displayName(r.name)}
+                    {dup && (
+                      <span
+                        className="badge-warn"
+                        title={t('duplicateNameWarning')}
+                        aria-label={t('duplicateNameWarning')}
+                      >⚠️</span>
+                    )}
+                  </span>
+                );
+              }},
+              { key: 'advId', label: t('advertiser'), render: r => displayName(advertisersById.get(r.advId)?.name ?? '-') },
               { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
+              { key: 'billingMethods', label: t('billingMethod'), render: r => (r.billingMethods?.length ? r.billingMethods.join(', ') : '-') },
+              { key: 'adSiteCount', label: t('adSiteCount'), render: r => String(r.adSiteCount ?? 0) },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
               { key: '__actions__', label: t('actions') },
             ]}

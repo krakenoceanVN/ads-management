@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { initialDb, i18n } from './lib/data';
+import { i18n } from './lib/data';
 import { displayName as localizeName, renderOperationLog, type Lang, type OperationLog } from './lib/i18n';
 import { getAuthToken, BFF_AUTH_TOKEN_CHANGED_EVENT, getCurrentUser } from './lib/bffApi';
 import type { UserRole } from './lib/bffTypes';
@@ -7,11 +7,6 @@ import type { UserRole } from './lib/bffTypes';
 type DetailPresetFilter = {
   ownerId: string;
   adTypeCode: string;
-} | null;
-
-type ModalState = {
-  type: string;
-  record?: any;
 } | null;
 
 interface CurrentUserInfo {
@@ -32,14 +27,7 @@ interface AppState {
   setLang: (l: Lang) => void;
   currentPage: string;
   setCurrentPage: (p: string) => void;
-  db: typeof initialDb;
-  setDb: React.Dispatch<React.SetStateAction<typeof initialDb>>;
   t: (key: string) => string;
-  modal: string | null;
-  modalRecord: any;
-  modalMode: 'create' | 'edit';
-  openModal: (type: string, record?: any) => void;
-  closeModal: () => void;
   displayName: (value: string | number | undefined | null) => string;
   renderLog: (log: OperationLog) => string;
   adIdPresetFilter: DetailPresetFilter;
@@ -86,8 +74,6 @@ interface AppProviderProps {
 export function AppProvider({ children, initialCurrentUser }: AppProviderProps) {
   const [lang, setLang] = useState<Lang>('zh');
   const [currentPage, setCurrentPage] = useState('pAdvertiserList');
-  const [db, setDb] = useState(initialDb);
-  const [modalState, setModalState] = useState<ModalState>(null);
   const [adIdPresetFilter, setAdIdPresetFilter] = useState<DetailPresetFilter>(null);
   const [mediaIdPresetFilter, setMediaIdPresetFilter] = useState<DetailPresetFilter>(null);
   const [currentUser, setCurrentUserState] = useState<CurrentUserInfo | null>(
@@ -171,14 +157,7 @@ export function AppProvider({ children, initialCurrentUser }: AppProviderProps) 
       setLang,
       currentPage,
       setCurrentPage,
-      db,
-      setDb,
       t,
-      modal: modalState?.type || null,
-      modalRecord: modalState?.record || null,
-      modalMode: modalState?.record ? 'edit' : 'create',
-      openModal: (type, record) => setModalState({ type, record }),
-      closeModal: () => setModalState(null),
       displayName,
       renderLog,
       adIdPresetFilter,

@@ -4,6 +4,9 @@ import { config } from './config';
 async function main() {
   const app = createApp();
 
+  app.set('trust proxy', 1);   // 👈 thêm dòng này
+
+
   app.listen(config.port, () => {
     console.log(`[server] listening on port ${config.port} (${config.nodeEnv})`);
   });

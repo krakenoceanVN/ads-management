@@ -59,7 +59,10 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { adType: AdType 
   };
 }
 
-export function mapAdOrder(order: PrismaAdOrder & { upstream: Upstream; adType: AdType }): AdOrder {
+export function mapAdOrder(
+  order: PrismaAdOrder & { upstream: Upstream; adType: AdType; _count?: { adSites: number } },
+  billingMethods: string[] = []
+): AdOrder {
   return {
     id: order.id,
     advId: order.upstreamId,
@@ -68,6 +71,11 @@ export function mapAdOrder(order: PrismaAdOrder & { upstream: Upstream; adType: 
     adTypeName: order.adType?.name ?? null,
     notes: order.notes,
     status: order.status as EntityStatus,
+    isVirtual: (order as { isVirtual?: boolean }).isVirtual,
+    advertiserName: order.upstream?.name ?? undefined,
+    adSiteCount: order._count?.adSites ?? 0,
+    billingMethods: Array.isArray(billingMethods) ? billingMethods : [],
+    createdAt: order.createdAt ? order.createdAt.toISOString() : undefined,
   };
 }
 

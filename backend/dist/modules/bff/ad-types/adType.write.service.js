@@ -12,14 +12,14 @@ const client_1 = require("../../../shared/prisma/client");
 const AppError_1 = require("../../../shared/errors/AppError");
 // Check if adType code is referenced by any business table
 async function isCodeReferenced(code) {
-    const [upstream, upstreamAdType, adOrder, adSite, downstream] = await Promise.all([
+    const [upstream, upstreamAdType, adOrder, adSite, downstreamAdType] = await Promise.all([
         client_1.prisma.upstream.count({ where: { adType: { code } } }),
         client_1.prisma.upstreamAdType.count({ where: { adType: { code } } }),
         client_1.prisma.adOrder.count({ where: { adType: { code } } }),
         client_1.prisma.adSite.count({ where: { OR: [{ adOrder: { adType: { code } } }, { adOrderId: null, upstream: { adType: { code } } }] } }),
-        client_1.prisma.downstream.count({ where: { adType: { code } } }),
+        client_1.prisma.downstreamAdType.count({ where: { adType: { code } } }),
     ]);
-    return upstream > 0 || upstreamAdType > 0 || adOrder > 0 || adSite > 0 || downstream > 0;
+    return upstream > 0 || upstreamAdType > 0 || adOrder > 0 || adSite > 0 || downstreamAdType > 0;
 }
 async function createAdType(input) {
     const code = input.code?.trim().toUpperCase();

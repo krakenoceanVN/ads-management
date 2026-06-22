@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveAdOrderId = resolveAdOrderId;
 exports.createAdId = createAdId;
 exports.updateAdId = updateAdId;
 exports.deleteAdId = deleteAdId;
@@ -44,20 +45,49 @@ async function resolveAdOrderId(advertiserId, adTypeCode, existingAdOrderId) {
     const adType = linkedAdTypes.find(item => item.code === requestedAdTypeCode);
     if (!adType)
         throw new AppError_1.BadRequestError('Invalid adTypeCode: ' + requestedAdTypeCode);
-    const existing = await client_1.prisma.adOrder.findFirst({
-        where: { upstreamId: advertiserId, adTypeId: adType.id },
-    });
-    if (existing)
-        return existing.id;
-    const created = await client_1.prisma.adOrder.create({
-        data: {
-            upstreamId: advertiserId,
-            adTypeId: adType.id,
-            name: adType.name ?? requestedAdTypeCode,
-            status: 'active',
-        },
-    });
-    return created.id;
+    // Auto-create path. Retry semantics differ from the form path
+    // (modules/bff/ad-orders/seq.ts):
+    //   * On P2002, ANOTHER concurrent caller just inserted seq=1 for the same
+    //     pair. We must NOT increment to seq=2 — we re-findFirst and reuse.
+    //   * We only ever create a row when the pair has no AdOrder yet; this
+    //     preserves the existing "one AdOrder per (advertiser, adType) pair
+    //     via auto-create" behavior. The form path can create additional
+    //     rows for the same pair.
+    const SEQ_UNIQUE_COLUMNS = ['upstreamId', 'adTypeId', 'seq'];
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const existing = await client_1.prisma.adOrder.findFirst({
+            where: { upstreamId: advertiserId, adTypeId: adType.id },
+        });
+        if (existing)
+            return existing.id;
+        try {
+            const created = await client_1.prisma.adOrder.create({
+                data: {
+                    upstreamId: advertiserId,
+                    adTypeId: adType.id,
+                    seq: 1,
+                    name: `${adType.code}-001`,
+                    status: 'active',
+                },
+            });
+            return created.id;
+        }
+        catch (e) {
+            const err = e;
+            if (err?.code === 'P2002') {
+                const target = err.meta?.target;
+                const targetArr = Array.isArray(target) ? target : typeof target === 'string' ? [target] : [];
+                const onSeq = SEQ_UNIQUE_COLUMNS.every(col => targetArr.includes(col));
+                if (onSeq && attempt < MAX_ATTEMPTS - 1) {
+                    // Pair was just created by a concurrent request — re-loop and reuse.
+                    continue;
+                }
+            }
+            throw e;
+        }
+    }
+    throw new Error('resolveAdOrderId: exhausted retries');
 }
 async function createAdId(input) {
     const { advertiserId, adOrderId, adTypeCode, slot, type, ...rest } = input;

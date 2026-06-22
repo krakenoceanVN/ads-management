@@ -1,11 +1,14 @@
 /**
  * Downstream BFF Write Service
  * Handles create and update for Downstream (下游).
- * A downstream is a payout channel (ML | LE | YIYI) attached to an AdType.
+ * A downstream is a payout channel (ML | LE | YIYI) that owns a set of AdTypes
+ * via the DownstreamAdType junction (mirrors UpstreamAdType). Phase-2 dropped
+ * the legacy scalar Downstream.adTypeId — the junction is the single source of
+ * truth.
  */
 import type { DownstreamDto } from '../bff.types';
 export interface CreateDownstreamInput {
-    adTypeId: number;
+    adTypeCodes: string[];
     downstreamType: string;
     payoutRate?: number;
     status?: string;
@@ -14,6 +17,7 @@ export interface UpdateDownstreamInput {
     downstreamType?: string;
     payoutRate?: number;
     status?: string;
+    adTypeCodes?: string[];
 }
 export declare function createDownstream(input: CreateDownstreamInput): Promise<DownstreamDto>;
 export declare function updateDownstream(id: number, input: UpdateDownstreamInput): Promise<DownstreamDto>;

@@ -52,6 +52,10 @@ export interface AdOrder {
     notes: string | null;
     status: EntityStatus;
     isVirtual?: boolean;
+    advertiserName?: string;
+    adSiteCount: number;
+    billingMethods: string[];
+    createdAt?: string;
 }
 export interface AdId {
     id: number;
@@ -92,9 +96,15 @@ export interface MediaId {
 export interface DownstreamDto {
     id: number;
     downstreamType: string;
-    adTypeId: number;
+    adTypeIds: number[];
+    adTypeCodes: string[];
+    adTypes: Array<{
+        id: number;
+        code: string;
+        name: string;
+    }>;
     adTypeCode: string;
-    adTypeName?: string | null;
+    adTypeName: string | null;
     payoutRate: number | null;
     status: EntityStatus;
 }

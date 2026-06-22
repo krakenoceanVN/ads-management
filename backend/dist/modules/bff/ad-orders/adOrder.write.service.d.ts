@@ -1,7 +1,7 @@
 import type { EntityStatus } from '../bff.types';
 export interface CreateAdOrderInput {
     advertiserId: number;
-    name: string;
+    name?: string | null;
     adTypeCode: string;
     notes?: string | null;
     status?: EntityStatus;

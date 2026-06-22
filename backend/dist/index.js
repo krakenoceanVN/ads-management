@@ -4,6 +4,7 @@ const app_1 = require("./app");
 const config_1 = require("./config");
 async function main() {
     const app = (0, app_1.createApp)();
+    app.set('trust proxy', 1); // 👈 thêm dòng này
     app.listen(config_1.config.port, () => {
         console.log(`[server] listening on port ${config_1.config.port} (${config_1.config.nodeEnv})`);
     });

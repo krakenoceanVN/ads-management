@@ -1,1 +1,1 @@
-{"version":3,"file":"downstream.router.d.ts","sourceRoot":"","sources":["../../../../src/modules/bff/downstreams/downstream.router.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAKtC,wBAAgB,gBAAgB,CAAC,MAAM,EAAE,MAAM,QAK9C"}
+{"version":3,"file":"downstream.router.d.ts","sourceRoot":"","sources":["../../../../src/modules/bff/downstreams/downstream.router.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAKtC,wBAAgB,gBAAgB,CAAC,MAAM,EAAE,MAAM,QAM9C"}

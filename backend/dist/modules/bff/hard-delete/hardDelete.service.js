@@ -152,7 +152,7 @@ async function countAdTypeDependencies(adTypeId) {
         client_1.prisma.upstream.count({ where: { adTypeId } }),
         client_1.prisma.adOrder.count({ where: { adTypeId } }),
         client_1.prisma.adSite.count({ where: adSiteWhere }),
-        client_1.prisma.downstream.count({ where: { adTypeId } }),
+        client_1.prisma.downstreamAdType.count({ where: { adTypeId } }),
         client_1.prisma.adSiteDownstream.count({ where: { adSite: adSiteWhere } }),
         client_1.prisma.adSiteRebateRate.count({ where: { adSite: adSiteWhere } }),
         client_1.prisma.adSiteEvent.count({ where: { adSite: adSiteWhere } }),

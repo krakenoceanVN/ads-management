@@ -264,6 +264,7 @@ export function DownstreamMgmt() {
 
   const columns: Column<DownstreamDto>[] = [
     { key: '__no__', label: t('no') },
+    { key: 'id', label: 'ID' },
     { key: 'downstreamType', label: t('downstreamType'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.downstreamType}</code>, sortDirection: nameSort, onSortClick: toggleNameSort },
     { key: 'adTypeCodes', label: t('adType'), render: (r: DownstreamDto) => getAdTypeNames(r) },
     { key: 'payoutRate', label: t('payoutRate'), render: (r: DownstreamDto) => `${Math.round((r.payoutRate ?? 0) * 1000) / 10}%` },

@@ -398,6 +398,7 @@ export function AdvertiserList() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
+              { key: 'id', label: 'ID' },
               { key: 'name', label: t('advertiser'), render: r => displayName(r.name), sortDirection: nameSort, onSortClick: toggleNameSort },
               { key: 'adTypeCode', label: t('adType'), render: r => getAdvertiserAdTypeNames(r, adTypeNameByCode) },
               { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-') },
@@ -812,6 +813,7 @@ export function AdIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
+              { key: 'id', label: 'ID' },
               { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName) },
               { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               { key: 'slot', label: t('adId'), sortDirection: slotSort, onSortClick: toggleSlotSort },

@@ -1,5 +1,5 @@
 import type { Advertiser, Media, AdOrder, AdId, MediaId, DownstreamDto } from './bff.types';
-import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, AdType, UpstreamAdType } from '../../shared/prisma/client';
+import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, DownstreamAdType, AdType, UpstreamAdType } from '../../shared/prisma/client';
 export declare function mapAdvertiser(upstream: Upstream & {
     adType: AdType;
     adTypeLinks?: Array<UpstreamAdType & {
@@ -17,7 +17,10 @@ export declare function mapMedia(site: AdSite & {
 export declare function mapAdOrder(order: PrismaAdOrder & {
     upstream: Upstream;
     adType: AdType;
-}): AdOrder;
+    _count?: {
+        adSites: number;
+    };
+}, billingMethods?: string[]): AdOrder;
 export declare function mapAdId(site: AdSite & {
     upstream: Upstream & {
         adType: AdType;
@@ -38,6 +41,8 @@ export declare function mapMediaId(j: AdSiteDownstream & {
     downstream: Downstream;
 }): MediaId;
 export declare function mapDownstream(d: Downstream & {
-    adType: AdType;
+    adTypeLinks: Array<DownstreamAdType & {
+        adType: AdType;
+    }>;
 }): DownstreamDto;
 //# sourceMappingURL=mappers.d.ts.map

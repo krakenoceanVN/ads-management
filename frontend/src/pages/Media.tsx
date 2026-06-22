@@ -362,6 +362,7 @@ export function MediaMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
+              { key: 'id', label: 'ID' },
               { key: 'name', label: t('media'), render: r => displayName(r.name) },
               { key: 'upstreamId', label: t('advertiser'), render: r => advertiserName(r.upstreamId) },
               { key: 'billingMethod', label: t('type') },
@@ -676,6 +677,7 @@ export function MediaAdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
+              { key: 'id', label: 'ID' },
               { key: 'name', label: t('mediaAdOrder'), render: r => {
                 const dup = !!(r.adTypeName && r.name && r.name === r.adTypeName);
                 return (
@@ -1141,6 +1143,7 @@ export function MediaIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
+              { key: 'junctionId', label: 'ID' },
               { key: 'mediaName', label: t('media'), render: r => displayName(r.mediaName), sortDirection: nameSort, onSortClick: toggleNameSort },
               { key: 'adTypeCode', label: t('mediaAdOrder'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
               { key: 'slot', label: t('mediaId') },

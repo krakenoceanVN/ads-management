@@ -58,7 +58,7 @@ function mapMedia(site) {
         currentRatio: decimalToNum(site.currentRatio),
     };
 }
-function mapAdOrder(order) {
+function mapAdOrder(order, billingMethods = []) {
     return {
         id: order.id,
         advId: order.upstreamId,
@@ -67,6 +67,11 @@ function mapAdOrder(order) {
         adTypeName: order.adType?.name ?? null,
         notes: order.notes,
         status: order.status,
+        isVirtual: order.isVirtual,
+        advertiserName: order.upstream?.name ?? undefined,
+        adSiteCount: order._count?.adSites ?? 0,
+        billingMethods: Array.isArray(billingMethods) ? billingMethods : [],
+        createdAt: order.createdAt ? order.createdAt.toISOString() : undefined,
     };
 }
 function mapAdId(site) {
@@ -115,12 +120,18 @@ function mapMediaId(j) {
     };
 }
 function mapDownstream(d) {
+    const linked = (d.adTypeLinks ?? []).map(l => l.adType).filter(Boolean);
+    const adTypes = linked;
+    const adTypeCodes = Array.from(new Set(adTypes.map(at => at.code)));
+    const primary = adTypes[0];
     return {
         id: d.id,
         downstreamType: d.downstreamType,
-        adTypeId: d.adTypeId,
-        adTypeCode: d.adType?.code ?? '',
-        adTypeName: d.adType?.name ?? null,
+        adTypeIds: adTypes.map(at => at.id),
+        adTypeCodes,
+        adTypes: adTypes.map(at => ({ id: at.id, code: at.code, name: at.name })),
+        adTypeCode: primary?.code ?? '',
+        adTypeName: primary?.name ?? null,
         payoutRate: Number(d.payoutRate),
         status: d.status,
     };

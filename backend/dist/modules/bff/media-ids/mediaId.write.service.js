@@ -19,11 +19,16 @@ async function createMediaId(input) {
     });
     if (!adSite)
         throw new AppError_1.BadRequestError(`AdSite (ID quảng cáo) with id '${adSiteId}' does not exist`);
-    const downstream = await client_1.prisma.downstream.findUnique({ where: { id: downstreamId } });
+    const downstream = await client_1.prisma.downstream.findUnique({
+        where: { id: downstreamId },
+        include: { adTypeLinks: { include: { adType: true } } },
+    });
     if (!downstream)
         throw new AppError_1.BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
+    // The adSite's adType must be one of the downstream's adTypes.
     const adSiteAdTypeId = adSite.adOrder?.adTypeId ?? adSite.upstream.adTypeId;
-    if (adSiteAdTypeId !== downstream.adTypeId) {
+    const allowedAdTypeIds = new Set(downstream.adTypeLinks.map(link => link.adTypeId));
+    if (!allowedAdTypeIds.has(adSiteAdTypeId)) {
         throw new AppError_1.BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
     }
     // Do not allow creating NEW links to an inactive downstream.

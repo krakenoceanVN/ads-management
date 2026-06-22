@@ -2,7 +2,10 @@
 /**
  * Downstream BFF Write Service
  * Handles create and update for Downstream (下游).
- * A downstream is a payout channel (ML | LE | YIYI) attached to an AdType.
+ * A downstream is a payout channel (ML | LE | YIYI) that owns a set of AdTypes
+ * via the DownstreamAdType junction (mirrors UpstreamAdType). Phase-2 dropped
+ * the legacy scalar Downstream.adTypeId — the junction is the single source of
+ * truth.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDownstream = createDownstream;
@@ -11,15 +14,12 @@ exports.deleteDownstream = deleteDownstream;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 const AppError_1 = require("../../../shared/errors/AppError");
-// downstreamType is free-form (new types like LS/LI can be added without a code
-// change); ML/LE/YIYI are just UI suggestions on the frontend.
+const downstream_service_1 = require("./downstream.service");
 const ALLOWED_STATUSES = ['active', 'inactive'];
 function normalizeType(raw) {
     const value = raw?.trim().toUpperCase();
     if (!value)
         throw new AppError_1.BadRequestError('downstreamType is required');
-    // Free-form code (so new types can be added without a code change) — but kept
-    // to a clean, normalized shape to avoid typos like trailing spaces.
     if (!/^[A-Z0-9_]{1,20}$/.test(value)) {
         throw new AppError_1.BadRequestError('downstreamType must be 1–20 chars: A–Z, 0–9, _ only');
     }
@@ -29,8 +29,6 @@ function validatePayoutRate(rate) {
     if (typeof rate !== 'number' || Number.isNaN(rate)) {
         throw new AppError_1.BadRequestError('payoutRate must be a number');
     }
-    // Rate is a ratio, not capped at 1 — real data has rates above 100% (e.g. 1.45).
-    // Only guard against negatives and absurd typos.
     if (rate < 0 || rate > 100) {
         throw new AppError_1.BadRequestError('payoutRate must be 0 or greater');
     }
@@ -41,33 +39,56 @@ function validateStatus(status) {
     }
     return status;
 }
-async function loadWithAdType(id) {
-    const row = await client_1.prisma.downstream.findUnique({ where: { id }, include: { adType: true } });
-    if (!row)
-        throw new AppError_1.NotFoundError('Downstream not found');
-    return (0, mappers_1.mapDownstream)(row);
+function normalizeAdTypeCodes(input) {
+    if (input.adTypeCodes === undefined)
+        return [];
+    return Array.from(new Set(input.adTypeCodes.map(c => c.trim()).filter(Boolean)));
+}
+async function resolveAdTypesByCodes(codes, tx) {
+    if (!codes.length)
+        throw new AppError_1.BadRequestError('at least one adTypeCode is required');
+    const adTypes = await tx.adType.findMany({ where: { code: { in: codes } }, orderBy: { id: 'asc' } });
+    const found = new Set(adTypes.map(t => t.code));
+    const missing = codes.filter(c => !found.has(c));
+    if (missing.length)
+        throw new AppError_1.BadRequestError(`Invalid adTypeCode: ${missing.join(', ')}`);
+    return codes.map(code => adTypes.find(t => t.code === code));
+}
+async function syncDownstreamAdTypes(downstreamId, adTypeIds, tx) {
+    await tx.downstreamAdType.deleteMany({ where: { downstreamId, adTypeId: { notIn: adTypeIds } } });
+    await Promise.all(adTypeIds.map(adTypeId => tx.downstreamAdType.upsert({
+        where: { downstreamId_adTypeId: { downstreamId, adTypeId } },
+        update: {},
+        create: { downstreamId, adTypeId },
+    })));
 }
 async function createDownstream(input) {
-    const adTypeId = Number(input.adTypeId);
-    if (!adTypeId || Number.isNaN(adTypeId))
-        throw new AppError_1.BadRequestError('adTypeId is required');
-    const adType = await client_1.prisma.adType.findUnique({ where: { id: adTypeId } });
-    if (!adType)
-        throw new AppError_1.BadRequestError(`AdType with id '${adTypeId}' does not exist`);
     const downstreamType = normalizeType(input.downstreamType);
     const payoutRate = input.payoutRate ?? 0.8;
     validatePayoutRate(payoutRate);
     const status = validateStatus(input.status ?? 'active');
-    // One downstreamType per AdType
-    const existing = await client_1.prisma.downstream.findFirst({ where: { adTypeId, downstreamType } });
-    if (existing) {
-        throw new AppError_1.ConflictError(`Downstream '${downstreamType}' already exists for this ad type`);
-    }
-    const created = await client_1.prisma.downstream.create({
-        data: { adTypeId, downstreamType, payoutRate, status },
-        include: { adType: true },
+    const adTypeCodes = normalizeAdTypeCodes(input);
+    const row = await client_1.prisma.$transaction(async (tx) => {
+        await resolveAdTypesByCodes(adTypeCodes, tx);
+        // DB-level partial unique on (downstreamType) where status='active' will also
+        // throw P2002 — catch that here for a clean 409.
+        let created;
+        try {
+            created = await tx.downstream.create({
+                data: { downstreamType, payoutRate, status },
+            });
+        }
+        catch (err) {
+            if (err?.code === 'P2002') {
+                throw new AppError_1.ConflictError(`Downstream '${downstreamType}' already exists`);
+            }
+            throw err;
+        }
+        const adTypes = await resolveAdTypesByCodes(adTypeCodes, tx);
+        await syncDownstreamAdTypes(created.id, adTypes.map(t => t.id), tx);
+        return tx.downstream.findUniqueOrThrow({ where: { id: created.id }, include: downstream_service_1.downstreamInclude });
     });
-    return (0, mappers_1.mapDownstream)(created);
+    return (0, mappers_1.mapDownstream)(row);
 }
 async function updateDownstream(id, input) {
     if (!id || Number.isNaN(id))
@@ -79,12 +100,11 @@ async function updateDownstream(id, input) {
     if (input.downstreamType !== undefined) {
         const downstreamType = normalizeType(input.downstreamType);
         if (downstreamType !== existing.downstreamType) {
-            const duplicate = await client_1.prisma.downstream.findFirst({
-                where: { adTypeId: existing.adTypeId, downstreamType, id: { not: id } },
+            const dup = await client_1.prisma.downstream.findFirst({
+                where: { downstreamType, id: { not: id }, status: 'active' },
             });
-            if (duplicate) {
-                throw new AppError_1.ConflictError(`Downstream '${downstreamType}' already exists for this ad type`);
-            }
+            if (dup)
+                throw new AppError_1.ConflictError(`Downstream '${downstreamType}' already exists`);
         }
         data.downstreamType = downstreamType;
     }
@@ -95,8 +115,27 @@ async function updateDownstream(id, input) {
     if (input.status !== undefined) {
         data.status = validateStatus(input.status);
     }
-    await client_1.prisma.downstream.update({ where: { id }, data });
-    return loadWithAdType(id);
+    const shouldSyncAdTypes = input.adTypeCodes !== undefined;
+    const row = await client_1.prisma.$transaction(async (tx) => {
+        if (shouldSyncAdTypes) {
+            const codes = normalizeAdTypeCodes(input);
+            const adTypes = await resolveAdTypesByCodes(codes, tx);
+            await syncDownstreamAdTypes(id, adTypes.map(t => t.id), tx);
+        }
+        if (Object.keys(data).length) {
+            try {
+                await tx.downstream.update({ where: { id }, data });
+            }
+            catch (err) {
+                if (err?.code === 'P2002') {
+                    throw new AppError_1.ConflictError(`Downstream '${data.downstreamType ?? existing.downstreamType}' already exists`);
+                }
+                throw err;
+            }
+        }
+        return tx.downstream.findUniqueOrThrow({ where: { id }, include: downstream_service_1.downstreamInclude });
+    });
+    return (0, mappers_1.mapDownstream)(row);
 }
 async function deleteDownstream(id) {
     if (!id || Number.isNaN(id))
@@ -104,14 +143,11 @@ async function deleteDownstream(id) {
     const existing = await client_1.prisma.downstream.findUnique({ where: { id } });
     if (!existing)
         throw new AppError_1.NotFoundError('Downstream not found');
-    // Count every relation that carries operational/financial meaning.
     const [mediaIds, periods, dailyRates] = await Promise.all([
         client_1.prisma.adSiteDownstream.count({ where: { downstreamId: id } }),
         client_1.prisma.downstreamPeriod.count({ where: { downstreamId: id } }),
         client_1.prisma.dailyDownstreamRate.count({ where: { downstreamId: id } }),
     ]);
-    // Only hard-delete when the downstream is completely unused; otherwise soft-delete
-    // (set inactive) so historical reporting/settlement data stays intact.
     if (mediaIds === 0 && periods === 0 && dailyRates === 0) {
         await client_1.prisma.downstream.delete({ where: { id } });
         return { mode: 'deleted', id };

@@ -6,8 +6,8 @@ export interface CreateAdvertiserInput {
     email?: string | null;
     notes?: string | null;
     status?: EntityStatus;
-    adTypeCode?: string;
-    adTypeCodes?: string[];
+    adTypeId?: string;
+    adTypeIds?: string[];
 }
 export interface UpdateAdvertiserInput {
     name?: string;
@@ -16,10 +16,10 @@ export interface UpdateAdvertiserInput {
     email?: string | null;
     notes?: string | null;
     status?: EntityStatus;
-    adTypeCode?: string;
-    adTypeCodes?: string[];
+    adTypeId?: string;
+    adTypeIds?: string[];
 }
 export declare function createAdvertiser(input: CreateAdvertiserInput): Promise<import("../bff.types").Advertiser>;
-export declare function updateAdvertiser(id: number, input: UpdateAdvertiserInput): Promise<import("../bff.types").Advertiser>;
-export declare function deleteAdvertiser(id: number): Promise<import("../bff.types").Advertiser>;
+export declare function updateAdvertiser(id: string, input: UpdateAdvertiserInput): Promise<import("../bff.types").Advertiser>;
+export declare function deleteAdvertiser(id: string): Promise<import("../bff.types").Advertiser>;
 //# sourceMappingURL=advertiser.write.service.d.ts.map

@@ -13,7 +13,7 @@ const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(req, res) {
     const { mediaId, adTypeCode, type, archived } = req.query;
     const filters = {
-        mediaId: mediaId ? parseInt(String(mediaId), 10) : undefined,
+        mediaId: mediaId ? String(mediaId) : undefined,
         adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
         type: type ? String(type) : undefined,
         archived: archived !== undefined ? archived === 'true' : undefined,
@@ -22,10 +22,10 @@ async function getAll(req, res) {
     res.json((0, success_1.bffData)(data));
 }
 async function getById(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid media id');
-    const mediaId = await (0, mediaId_service_1.getMediaId)(id);
+    const mediaId = await (0, mediaId_service_1.getMediaId)(String(id));
     if (!mediaId)
         throw new AppError_1.NotFoundError('Media id not found');
     res.json((0, success_1.bffData)(mediaId));
@@ -49,15 +49,15 @@ async function create(req, res) {
     res.status(201).json((0, success_1.bffData)(mediaId));
 }
 async function update(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid media id');
     const body = req.body;
     // Reject status="inactive" on PUT
     if (body.status !== undefined && body.status !== 'active') {
         throw new AppError_1.BadRequestError('status must be "active" — MediaId.status is a read-only compatibility field');
     }
-    const mediaId = await (0, mediaId_write_service_1.updateMediaId)(id, {
+    const mediaId = await (0, mediaId_write_service_1.updateMediaId)(String(id), {
         customPrice: body.customPrice,
         status: body.status,
     });
@@ -65,10 +65,10 @@ async function update(req, res) {
     res.json((0, success_1.bffData)(mediaId));
 }
 async function remove(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid media id');
-    await (0, mediaId_write_service_1.deleteMediaId)(id);
+    await (0, mediaId_write_service_1.deleteMediaId)(String(id));
     res.json((0, success_1.bffData)({ deleted: true }));
 }
 //# sourceMappingURL=mediaId.controller.js.map

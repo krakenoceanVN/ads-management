@@ -18,7 +18,7 @@ export async function postAdvertiserBatch(req: Request, res: Response) {
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
   try {
     const result = await saveAdvertiserBatch(items, userId);
     res.json(bffData(result));
@@ -30,13 +30,13 @@ export async function postAdvertiserBatch(req: Request, res: Response) {
 // ─── Advertiser Confirm Batch ────────────────────────────────────────────────
 
 export async function postAdvertiserConfirmBatch(req: Request, res: Response) {
-  const { recordDate, adSiteIds } = req.body as { recordDate: string; adSiteIds: number[] };
+  const { recordDate, adSiteIds } = req.body as { recordDate: string; adSiteIds: string[] };
   if (!recordDate || !Array.isArray(adSiteIds) || adSiteIds.length === 0) {
     res.status(400).json({ success: false, error: 'recordDate and adSiteIds[] are required', code: 'BAD_REQUEST' });
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
   const result = await confirmAdvertiserBatch(recordDate, adSiteIds, userId);
   res.json(bffData(result));
 }
@@ -44,7 +44,7 @@ export async function postAdvertiserConfirmBatch(req: Request, res: Response) {
 // ─── Advertiser Unconfirm ────────────────────────────────────────────────────
 
 export async function putAdvertiserUnconfirm(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
+  const id = req.params['id'] as string;
   if (!id) {
     res.status(400).json({ success: false, error: 'invalid id', code: 'BAD_REQUEST' });
     return;
@@ -68,7 +68,7 @@ export async function postMediaBatch(req: Request, res: Response) {
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
   try {
     const result = await saveMediaBatch(items, userId);
     res.json(bffData(result));
@@ -80,13 +80,13 @@ export async function postMediaBatch(req: Request, res: Response) {
 // ─── Media Confirm Batch ─────────────────────────────────────────────────────
 
 export async function postMediaConfirmBatch(req: Request, res: Response) {
-  const { recordDate, adSiteIds } = req.body as { recordDate: string; adSiteIds: number[] };
+  const { recordDate, adSiteIds } = req.body as { recordDate: string; adSiteIds: string[] };
   if (!recordDate || !Array.isArray(adSiteIds) || adSiteIds.length === 0) {
     res.status(400).json({ success: false, error: 'recordDate and adSiteIds[] are required', code: 'BAD_REQUEST' });
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
   const result = await confirmMediaBatch(recordDate, adSiteIds, userId);
   res.json(bffData(result));
 }
@@ -94,7 +94,7 @@ export async function postMediaConfirmBatch(req: Request, res: Response) {
 // ─── Media Unconfirm ─────────────────────────────────────────────────────────
 
 export async function putMediaUnconfirm(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
+  const id = req.params['id'] as string;
   if (!id) {
     res.status(400).json({ success: false, error: 'invalid id', code: 'BAD_REQUEST' });
     return;

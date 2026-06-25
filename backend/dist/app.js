@@ -14,7 +14,6 @@ const user_router_1 = require("./modules/users/user.router");
 const role_router_1 = require("./modules/roles/role.router");
 const advertiser_router_1 = require("./modules/bff/advertisers/advertiser.router");
 const media_router_1 = require("./modules/bff/media/media.router");
-const adOrder_router_1 = require("./modules/bff/ad-orders/adOrder.router");
 const adId_router_1 = require("./modules/bff/ad-ids/adId.router");
 const mediaId_router_1 = require("./modules/bff/media-ids/mediaId.router");
 const downstream_router_1 = require("./modules/bff/downstreams/downstream.router");
@@ -25,6 +24,7 @@ const quarantine_router_1 = require("./modules/bff/quarantine/quarantine.router"
 const oplog_router_1 = require("./modules/bff/operation-logs/oplog.router");
 const dashboard_router_1 = require("./modules/bff/dashboard/dashboard.router");
 const adType_router_1 = require("./modules/bff/ad-types/adType.router");
+const mediaAdOrder_router_1 = require("./modules/bff/media-ad-orders/mediaAdOrder.router");
 const yiyi_router_1 = require("./modules/yiyi/yiyi.router");
 const hardDelete_router_1 = require("./modules/bff/hard-delete/hardDelete.router");
 function createApp() {
@@ -47,7 +47,6 @@ function createApp() {
     const bff = express_1.default.Router();
     (0, advertiser_router_1.advertiserRouter)(bff);
     (0, media_router_1.mediaRouter)(bff);
-    (0, adOrder_router_1.adOrderRouter)(bff);
     (0, adId_router_1.adIdRouter)(bff);
     (0, mediaId_router_1.mediaIdRouter)(bff);
     (0, downstream_router_1.downstreamRouter)(bff);
@@ -58,6 +57,7 @@ function createApp() {
     (0, oplog_router_1.oplogRouter)(bff);
     (0, dashboard_router_1.dashboardRouter)(bff);
     (0, adType_router_1.adTypeRouter)(bff);
+    (0, mediaAdOrder_router_1.mediaAdOrderRouter)(bff);
     (0, hardDelete_router_1.hardDeleteRouter)(bff);
     app.use('/api/bff', bff);
     app.use(errorHandler_1.errorHandler);

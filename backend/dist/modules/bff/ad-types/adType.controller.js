@@ -19,8 +19,8 @@ async function getAll(_req, res) {
     res.json((0, success_1.bffData)(data));
 }
 async function getById(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid adType id');
     const adType = await (0, adType_service_1.getAdType)(id);
     if (!adType)
@@ -28,27 +28,30 @@ async function getById(req, res) {
     res.json((0, success_1.bffData)(adType));
 }
 async function create(req, res) {
-    const { code, name } = req.body;
-    if (!code)
-        throw new AppError_1.BadRequestError('code is required');
+    const { name, upstreamId, notes, status } = req.body;
     if (!name)
         throw new AppError_1.BadRequestError('name is required');
-    const result = await (0, adType_write_service_1.createAdType)({ code, name });
+    const result = await (0, adType_write_service_1.createAdType)({ name, upstreamId, notes, status: status });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'CREATE_AD_TYPE', 'adType', result.id, result.name);
     res.status(201).json((0, success_1.bffData)(result));
 }
 async function update(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid adType id');
-    const { code, name } = req.body;
-    const result = await (0, adType_write_service_1.updateAdType)(id, { code, name });
+    const { name, upstreamId, notes, status } = req.body;
+    const result = await (0, adType_write_service_1.updateAdType)(id, {
+        name,
+        upstreamId: upstreamId ?? undefined,
+        notes: notes ?? undefined,
+        status: status,
+    });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_AD_TYPE', 'adType', result.id, result.name);
     res.json((0, success_1.bffData)(result));
 }
 async function remove(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid adType id');
     await (0, adType_write_service_1.deleteAdType)(id);
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_AD_TYPE', 'adType', id, null);

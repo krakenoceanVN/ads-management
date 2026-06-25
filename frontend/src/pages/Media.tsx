@@ -6,34 +6,36 @@ import { QuarantineConfirmModal } from '../components/QuarantineConfirmModal';
 import { useQuarantineAction } from '../hooks/useQuarantineAction';
 import { HardDeleteModal } from '../components/HardDeleteModal';
 import {
-  createAdOrder,
   createMedia,
+  createMediaAdOrder,
   createMediaId,
   getMedia,
   hardDeleteMedia,
   hardDeleteMediaAdOrder,
   hardDeleteMediaId,
-  listAdOrders,
   listAdTypes,
   listAdvertisers,
   listDownstreams,
   listMedia,
+  listMediaAdOrders,
   listMediaIds,
-  updateAdOrder,
   updateMedia,
+  updateMediaAdOrder,
   updateMediaId,
 } from '../lib/bffApi';
 import type { HardDeleteResult } from '../lib/bffApi';
 import type {
-  AdOrder,
   AdType,
   Advertiser,
-  CreateAdOrderInput,
+  CreateMediaAdOrderInput,
   CreateMediaInput,
+  DownstreamDto,
   EntityStatus,
   EntryType,
   Media,
+  MediaAdOrder,
   MediaId,
+  UpdateMediaAdOrderInput,
   UpdateMediaInput,
 } from '../lib/bffTypes';
 
@@ -97,8 +99,8 @@ type MediaFormState = {
 };
 
 type AdOrderFormState = {
-  upstreamId: string;
-  adTypeCode: string;
+  downstreamId: string;
+  adTypeId: string;
   name: string;
   notes: string;
   status: EntityStatus;
@@ -123,18 +125,18 @@ function defaultMediaForm(upstreamId = ''): MediaFormState {
 
 function defaultAdOrderForm(): AdOrderFormState {
   return {
-    upstreamId: '',
-    adTypeCode: '',
+    downstreamId: '',
+    adTypeId: '',
     name: '',
     notes: '',
     status: 'active',
   };
 }
 
-function adOrderFormFromRecord(record: AdOrder): AdOrderFormState {
+function adOrderFormFromRecord(record: MediaAdOrder): AdOrderFormState {
   return {
-    upstreamId: String(record.advId),
-    adTypeCode: record.adTypeCode ?? '',
+    downstreamId: record.downstreamId ?? '',
+    adTypeId: record.adTypeId ?? '',
     name: record.name ?? '',
     notes: record.notes ?? '',
     status: record.status ?? 'active',
@@ -174,9 +176,22 @@ export function MediaMgmt() {
   const { t, displayName, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
 
+  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
+  const [contactSort, setContactSort] = React.useState<SortDirection>('asc');
+  const [phoneSort, setPhoneSort] = React.useState<SortDirection>('asc');
+  const [emailSort, setEmailSort] = React.useState<SortDirection>('asc');
+  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
+  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
+  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleContactSort = () => setContactSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const togglePhoneSort = () => setPhoneSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleEmailSort = () => setEmailSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+
   const quarantine = useQuarantineAction({
     scope: 'media',
-    targetId: editing?.id ?? 0,
+    targetId: String(editing?.id ?? ''),
     targetName: editing?.name ?? '',
   });
 
@@ -185,7 +200,8 @@ export function MediaMgmt() {
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
   const [hardDeleteError, setHardDeleteError] = React.useState('');
 
-  const openHardDelete = () => {
+  const openHardDelete = (row?: Media) => {
+    if (row) setEditing(row);
     setHardDeleteResult(null);
     setHardDeleteError('');
     setHardDeleteOpen(true);
@@ -223,8 +239,6 @@ export function MediaMgmt() {
 
   const mediaColumns: CsvColumn<Media>[] = [
     { label: t('media'), value: r => displayName(r.name) },
-    { label: t('advertiser'), value: r => advertiserName(r.upstreamId) },
-    { label: t('type'), value: r => r.billingMethod ?? '' },
     { label: t('contact'), value: r => r.contact ?? '-' },
     { label: t('phone'), value: r => r.phone ?? '-' },
     { label: t('email'), value: r => r.email ?? '-' },
@@ -263,6 +277,38 @@ export function MediaMgmt() {
     return [row.name, row.upstreamId, advertiserName(row.upstreamId), row.billingMethod, row.status].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
+  }).sort((a, b) => {
+    const nameA = displayName(a.name);
+    const nameB = displayName(b.name);
+    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
+    if (nameOrder !== 0) return nameOrder;
+    const contactA = a.contact ?? '';
+    const contactB = b.contact ?? '';
+    const contactDelta = contactA.localeCompare(contactB, undefined, { sensitivity: 'base' });
+    const contactOrder = contactSort === 'asc' ? contactDelta : -contactDelta;
+    if (contactOrder !== 0) return contactOrder;
+    const phoneA = a.phone ?? '';
+    const phoneB = b.phone ?? '';
+    const phoneDelta = phoneA.localeCompare(phoneB, undefined, { sensitivity: 'base' });
+    const phoneOrder = phoneSort === 'asc' ? phoneDelta : -phoneDelta;
+    if (phoneOrder !== 0) return phoneOrder;
+    const emailA = a.email ?? '';
+    const emailB = b.email ?? '';
+    const emailDelta = emailA.localeCompare(emailB, undefined, { sensitivity: 'base' });
+    const emailOrder = emailSort === 'asc' ? emailDelta : -emailDelta;
+    if (emailOrder !== 0) return emailOrder;
+    const notesA = a.notes ?? '';
+    const notesB = b.notes ?? '';
+    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
+    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
+    if (notesOrder !== 0) return notesOrder;
+    const aActive = a.status === 'active' ? 1 : 0;
+    const bActive = b.status === 'active' ? 1 : 0;
+    const statusDelta = aActive - bActive;
+    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
+    if (statusOrder !== 0) return statusOrder;
+    return a.id - b.id;
   });
 
   const openCreate = () => {
@@ -327,9 +373,11 @@ export function MediaMgmt() {
     }
   };
 
-  const removeRecord = async () => {
-    if (!editing) return;
+  const removeRecord = (row?: Media) => {
+    const target = row ?? editing;
+    if (!target) return;
     if (!window.confirm(t('confirmDelete'))) return;
+    setEditing(target);
     quarantine.openModal();
   };
 
@@ -362,19 +410,18 @@ export function MediaMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: t('media'), render: r => displayName(r.name) },
-              { key: 'upstreamId', label: t('advertiser'), render: r => advertiserName(r.upstreamId) },
-              { key: 'billingMethod', label: t('type') },
-              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-') },
-              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-' },
-              { key: 'email', label: t('email'), render: r => r.email ?? '-' },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} /> },
+              { key: 'name', label: t('media'), render: r => displayName(r.name), sortDirection: nameSort, onSortClick: toggleNameSort },
+              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: contactSort, onSortClick: toggleContactSort },
+              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: phoneSort, onSortClick: togglePhoneSort },
+              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: emailSort, onSortClick: toggleEmailSort },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
               { key: '__actions__', label: t('actions') }
             ]}
             data={visibleRows}
             onEdit={openEdit}
+            onDelete={removeRecord}
+            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -418,8 +465,6 @@ export function MediaMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
-              {editing && <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>}
-              {editing && canHardDelete && <button className="btn-danger" onClick={openHardDelete} disabled={saving}>{t('hardDelete')}</button>}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
@@ -452,55 +497,48 @@ export function MediaMgmt() {
 
 export function MediaAdOrderMgmt() {
   const [search, setSearch] = React.useState('');
-  const [upstreamFilter, setUpstreamFilter] = React.useState('');
-  const [rows, setRows] = React.useState<AdOrder[]>([]);
+  const [mediaFilter, setMediaFilter] = React.useState('');
+  const [rows, setRows] = React.useState<MediaAdOrder[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
-  const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
+  const [media, setMedia] = React.useState<Media[]>([]);
+  const [downstreams, setDownstreams] = React.useState<DownstreamDto[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
-  const [editing, setEditing] = React.useState<AdOrder | null>(null);
+  const [editing, setEditing] = React.useState<MediaAdOrder | null>(null);
   const [formOpen, setFormOpen] = React.useState(false);
   const [form, setForm] = React.useState<AdOrderFormState>(defaultAdOrderForm());
   const [formError, setFormError] = React.useState('');
   const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
+  const [downstreamSort, setDownstreamSort] = React.useState<SortDirection>('asc');
+  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
   const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
-  const { t, displayName, can, navigateToMediaIds } = useAppContext();
+  const { t, displayName, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
   const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
   const [hardDeleteError, setHardDeleteError] = React.useState('');
 
-  const advertisersById = React.useMemo(
-    () => new Map(advertisers.map(a => [a.id, a])),
-    [advertisers]
+  const downstreamById = React.useMemo(
+    () => new Map(downstreams.map(d => [String(d.id), d])),
+    [downstreams]
   );
-
-  const quarantine = useQuarantineAction({
-    scope: 'advertiser',
-    targetId: editing?.advId ?? 0,
-    targetName: editing ? (advertisersById.get(editing.advId)?.name ?? '') : '',
-  });
-
-  const removeRecord = () => {
-    if (!editing) return;
-    if (!window.confirm(t('confirmDelete'))) return;
-    quarantine.openModal();
-  };
 
   const loadRows = React.useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [mediaRows, advertiserRows, adTypeRows] = await Promise.all([
-        listAdOrders(),
-        listAdvertisers(),
+      const [mediaOrderRows, mediaRows, adTypeRows, downstreamRows] = await Promise.all([
+        listMediaAdOrders(),
+        listMedia(),
         listAdTypes(),
+        listDownstreams(),
       ]);
-      setRows(mediaRows);
-      setAdvertisers(advertiserRows);
+      setRows(mediaOrderRows);
+      setMedia(mediaRows);
       setAdTypes(adTypeRows);
+      setDownstreams((downstreamRows ?? []).filter(d => d.status === 'active'));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -514,10 +552,10 @@ export function MediaAdOrderMgmt() {
 
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
-    if (upstreamFilter && row.advId !== Number(upstreamFilter)) return false;
+    if (mediaFilter && row.downstreamId !== mediaFilter) return false;
     if (!keyword) return true;
-    const advertiserName = advertisersById.get(row.advId)?.name ?? '';
-    return [row.name, row.adTypeCode, row.notes, advertiserName].some(value =>
+    const downstreamName = displayName(downstreamById.get(row.downstreamId)?.name ?? row.downstreamId);
+    return [row.name, row.adTypeCode, row.notes, downstreamName].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   }).sort((a, b) => {
@@ -531,28 +569,38 @@ export function MediaAdOrderMgmt() {
     const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
     if (nameOrder !== 0) return nameOrder;
-    return a.id - b.id;
+    const downA = a.downstreamId ?? '';
+    const downB = b.downstreamId ?? '';
+    const downDelta = downA.localeCompare(downB, undefined, { sensitivity: 'base' });
+    const downOrder = downstreamSort === 'asc' ? downDelta : -downDelta;
+    if (downOrder !== 0) return downOrder;
+    const notesA = a.notes ?? '';
+    const notesB = b.notes ?? '';
+    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
+    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
+    if (notesOrder !== 0) return notesOrder;
+    return a.id.localeCompare(b.id);
   });
 
   const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleDownstreamSort = () => setDownstreamSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
   const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
-  const updateStatus = async (record: AdOrder, active: boolean) => {
+  const updateStatus = async (record: MediaAdOrder, active: boolean) => {
     const nextStatus: EntityStatus = active ? 'active' : 'inactive';
     try {
-      await updateAdOrder(record.id, { status: nextStatus });
+      await updateMediaAdOrder(record.id, { status: nextStatus });
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
     }
   };
 
-  const mediaAdOrderColumns: CsvColumn<AdOrder>[] = [
+  const mediaAdOrderColumns: CsvColumn<MediaAdOrder>[] = [
     { label: t('mediaAdOrder'), value: r => displayName(r.name) },
-    { label: t('adType'), value: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
-    { label: t('advertiser'), value: r => displayName(advertisersById.get(r.advId)?.name ?? '-') },
-    { label: t('billingMethod'), value: r => (r.billingMethods?.length ? r.billingMethods.join(', ') : '-') },
-    { label: t('adSiteCount'), value: r => r.adSiteCount ?? 0 },
+    { label: t('adType'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
+    { label: t('media'), value: r => displayName(downstreamById.get(r.downstreamId)?.name ?? '-') },
     { label: t('notes'), value: r => r.notes ?? '-' },
   ];
 
@@ -563,14 +611,28 @@ export function MediaAdOrderMgmt() {
     setFormOpen(true);
   };
 
-  const openEdit = (record: AdOrder) => {
+  const removeRecord = async (row?: MediaAdOrder) => {
+    const target = row ?? editing;
+    if (!target) return;
+    if (!window.confirm(t('confirmDelete'))) return;
+    setEditing(target);
+    try {
+      await updateMediaAdOrder(target.id, { status: 'inactive' });
+      await loadRows();
+    } catch (err) {
+      setFormError(errorMessage(err));
+    }
+  };
+
+  const openEdit = (record: MediaAdOrder) => {
     setEditing(record);
     setForm(adOrderFormFromRecord(record));
     setFormError('');
     setFormOpen(true);
   };
 
-  const openHardDelete = () => {
+  const openHardDelete = (row?: MediaAdOrder) => {
+    if (row) setEditing(row);
     setHardDeleteResult(null);
     setHardDeleteError('');
     setHardDeleteOpen(true);
@@ -601,18 +663,13 @@ export function MediaAdOrderMgmt() {
     setHardDeleteError('');
   };
 
-  const adTypeOptions = React.useMemo(() => {
-    return adTypes.map(at => at.code).sort();
-  }, [adTypes]);
-
-  const adTypeNameByCode = React.useMemo(
-    () => new Map(adTypes.map(at => [at.code, at.name ?? at.code])),
+  const adTypeNameByName = React.useMemo(
+    () => new Map(adTypes.map(at => [at.name, at.name])),
     [adTypes]
   );
 
   const submitForm = async () => {
-    const upstreamId = Number(form.upstreamId);
-    if (!upstreamId || !form.adTypeCode) {
+    if (!form.downstreamId || !form.adTypeId) {
       setFormError(t('requiredFields'));
       return;
     }
@@ -621,35 +678,28 @@ export function MediaAdOrderMgmt() {
     setFormError('');
     try {
       const trimmedName = form.name.trim();
-      const payload: CreateAdOrderInput = {
-        advertiserId: upstreamId,
-        adTypeCode: form.adTypeCode,
-        // Empty name = backend auto-generates `{adTypeCode}-{seq padded 3}`.
-        // User-supplied names override the auto-generated value (rule 10).
+      const payload: CreateMediaAdOrderInput = {
+        downstreamId: form.downstreamId,
+        adTypeId: form.adTypeId,
         name: trimmedName || null,
         notes: form.notes.trim() || null,
         status: form.status,
       };
 
       if (editing) {
-        const updated = await updateAdOrder(editing.id, {
+        const updatePayload: UpdateMediaAdOrderInput = {
           name: trimmedName,
           notes: form.notes.trim() || null,
           status: form.status,
-        });
+        };
+        await updateMediaAdOrder(editing.id, updatePayload);
         await loadRows();
       } else {
-        const created = await createAdOrder(payload);
-        setRows(prev => [...prev, created]);
+        await createMediaAdOrder(payload);
+        await loadRows();
       }
       setFormOpen(false);
     } catch (err: unknown) {
-      const apiErr = err as { status?: number; payload?: { data?: { data?: AdOrder } } };
-      if (apiErr.status === 409 && apiErr.payload?.data?.data) {
-        setFormOpen(false);
-        openEdit(apiErr.payload.data.data);
-        return;
-      }
       setFormError(errorMessage(err));
     } finally {
       setSaving(false);
@@ -665,9 +715,9 @@ export function MediaAdOrderMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaAdOrder')}</button>
           </div>
           <div className="toolbar-right">
-            <select className="filter-select" value={upstreamFilter} onChange={e => setUpstreamFilter(e.target.value)}>
-              <option value="">{t('selectAdvertiser')}</option>
-              {advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
+            <select className="filter-select" value={mediaFilter} onChange={e => setMediaFilter(e.target.value)}>
+              <option value="">{t('selectMedia')}</option>
+              {downstreams.map(d => <option key={d.id} value={String(d.id)}>{displayName(d.name ?? d.downstreamType)}</option>)}
             </select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media-ad-orders.csv', mediaAdOrderColumns, visibleRows)}>{t('export')}</button>
@@ -677,7 +727,7 @@ export function MediaAdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'id', label: 'ID' },
+              { key: 'downstreamId', label: t('media'), render: r => displayName(downstreamById.get(r.downstreamId)?.name ?? '-'), sortDirection: downstreamSort, onSortClick: toggleDownstreamSort },
               { key: 'name', label: t('mediaAdOrder'), render: r => {
                 const dup = !!(r.adTypeName && r.name && r.name === r.adTypeName);
                 return (
@@ -693,19 +743,8 @@ export function MediaAdOrderMgmt() {
                   </span>
                 );
               }, sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
-              { key: 'advId', label: t('advertiser'), render: r => displayName(advertisersById.get(r.advId)?.name ?? '-') },
-              { key: 'billingMethods', label: t('billingMethod'), render: r => (r.billingMethods?.length ? r.billingMethods.join(', ') : '-') },
-              {
-                key: '__count__',
-                label: t('adSiteCount'),
-                render: r => {
-                  const count = r.adSiteCount ?? 0;
-                  if (!count || !upstreamFilter) return <span>{count}</span>;
-                  return <button type="button" className="count-link" onClick={() => navigateToMediaIds(Number(upstreamFilter), r.adTypeCode)}>{count}</button>;
-                }
-              },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-') },
+              { key: 'linkCount', label: t('linkCount'), render: r => r.linkCount ?? 0 },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
               {
                 key: 'status',
                 label: t('status'),
@@ -717,6 +756,8 @@ export function MediaAdOrderMgmt() {
             ]}
             data={visibleRows}
             onEdit={openEdit}
+            onDelete={removeRecord}
+            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -728,16 +769,16 @@ export function MediaAdOrderMgmt() {
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
             <div className="modal-body">
-              <div className="form-group"><label>{t('selectAdvertiser')}</label>
-                <select value={form.upstreamId} onChange={e => setForm(prev => ({ ...prev, upstreamId: e.target.value }))}>
+              <div className="form-group"><label>{t('selectMedia')}</label>
+                <select value={form.downstreamId} onChange={e => setForm(prev => ({ ...prev, downstreamId: e.target.value }))}>
                   <option value="">-</option>
-                  {advertisers.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}
+                  {downstreams.map(item => <option key={item.id} value={String(item.id)}>{displayName(item.name ?? item.downstreamType)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('adType')}</label>
-                <select value={form.adTypeCode} onChange={e => setForm(prev => ({ ...prev, adTypeCode: e.target.value }))}>
+                <select value={form.adTypeId} onChange={e => setForm(prev => ({ ...prev, adTypeId: e.target.value }))}>
                   <option value="">-</option>
-                  {adTypes.map(at => <option key={at.code} value={at.code}>{displayName(at.name)}</option>)}
+                  {adTypes.map(at => <option key={at.id} value={at.id}>{displayName(at.name)}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>{t('mediaAdOrderName')}</label>
@@ -760,8 +801,6 @@ export function MediaAdOrderMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
-              {editing && <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>}
-              {editing && canHardDelete && <button className="btn-danger" onClick={openHardDelete} disabled={saving}>{t('hardDelete')}</button>}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
@@ -777,16 +816,6 @@ export function MediaAdOrderMgmt() {
         onConfirm={handleHardDeleteConfirm}
         onClose={handleHardDeleteClose}
       />
-      <QuarantineConfirmModal
-        open={quarantine.open}
-        scope="advertiser"
-        targetName={editing ? (advertisersById.get(editing.advId)?.name ?? '') : quarantine.targetName}
-        loading={quarantine.loading}
-        error={quarantine.error}
-        result={quarantine.result}
-        onConfirm={quarantine.confirm}
-        onClose={quarantine.closeModal}
-      />
     </div>
   );
 }
@@ -798,13 +827,21 @@ export function MediaIdMgmt() {
   const [typeFilter, setTypeFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
   const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
+  const [upstreamNameSort, setUpstreamNameSort] = React.useState<SortDirection>('asc');
+  const [adTypeCodeSort, setAdTypeCodeSort] = React.useState<SortDirection>('asc');
+  const [adSiteNameSort, setAdSiteNameSort] = React.useState<SortDirection>('asc');
+  const [downstreamNameSort, setDownstreamNameSort] = React.useState<SortDirection>('asc');
+  const [mediaAdTypeCodeSort, setMediaAdTypeCodeSort] = React.useState<SortDirection>('asc');
+  const [slotSort, setSlotSort] = React.useState<SortDirection>('asc');
+  const [shareRatioSort, setShareRatioSort] = React.useState<SortDirection>('asc');
+  const [rateSort, setRateSort] = React.useState<SortDirection>('asc');
+  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
   const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<MediaId[]>([]);
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
-  const [adOrders, setAdOrders] = React.useState<AdOrder[]>([]);
-  const [adSites, setAdSites] = React.useState<{ id: number; name: string; upstreamId: number; adOrderId: number | null; adTypeCode?: string }[]>([]);
-  const [downstreams, setDownstreams] = React.useState<{ id: number; name: string; adTypeCodes: string[] }[]>([]);
+  const [adSites, setAdSites] = React.useState<{ id: string; name: string; upstreamId: string; adTypeCode?: string }[]>([]);
+  const [downstreams, setDownstreams] = React.useState<{ id: string; name: string; adTypeIds: string[] }[]>([]);
   const [downstreamLoading, setDownstreamLoading] = React.useState(false);
   const [downstreamError, setDownstreamError] = React.useState('');
   const [loading, setLoading] = React.useState(true);
@@ -812,16 +849,30 @@ export function MediaIdMgmt() {
   const [saving, setSaving] = React.useState(false);
   const [editing, setEditing] = React.useState<MediaId | null>(null);
   const [formOpen, setFormOpen] = React.useState(false);
-  const [form, setForm] = React.useState({ advertiserId: '', adOrderId: '', adSiteId: '', downstreamId: '', customPrice: '', status: 'active' as EntityStatus });
+  // Form 8 fields per docx §2.3:
+  //   1. Nhà quảng cáo (advertiser)
+  //   2. Đơn quảng cáo (adType) — filter theo advertiser
+  //   3. ID quảng cáo (adSite) — filter theo advertiser + adType
+  //   4. MEDIA — dropdown chọn Downstream (ML/LE/YIYI)
+  //   5. Đơn quảng cáo MEDIA — dropdown chọn MediaAdOrder (filter theo adSite + downstream)
+  //   6. ID MEDIA (mediaIdName) — text input do người dùng tự đặt
+  //   7. Cột chia lợi nhuận từng link Ở hạ nguồn (pctHal)
+  //   8. Đơn giá Ở hạ nguồn (customPrice)
+  const [form, setForm] = React.useState({
+    advertiserId: '',
+    adTypeId: '',
+    adSiteId: '',
+    downstreamId: '',
+    mediaAdOrderId: '',
+    mediaIdName: '',
+    pctHal: '',
+    customPrice: '',
+    status: 'active' as EntityStatus,
+  });
+  const [mediaAdOrders, setMediaAdOrders] = React.useState<MediaAdOrder[]>([]);
   const [formError, setFormError] = React.useState('');
   const { t, displayName, mediaIdPresetFilter, clearMediaIdPresetFilter, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
-
-  const quarantine = useQuarantineAction({
-    scope: 'media',
-    targetId: editing?.adSiteId ?? 0,
-    targetName: adSites.find(s => s.id === editing?.adSiteId)?.name ?? '',
-  });
 
   const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
@@ -833,18 +884,16 @@ export function MediaIdMgmt() {
     setLoading(true);
     setError('');
     try {
-      const [mediaIdRows, adSiteRows, adTypeRows, advertiserRows, adOrderRows] = await Promise.all([
+      const [mediaIdRows, adSiteRows, adTypeRows, advertiserRows] = await Promise.all([
         listMediaIds(),
         listMedia(),
         listAdTypes(),
         listAdvertisers(),
-        listAdOrders(),
       ]);
       setRows(mediaIdRows);
-      setAdSites(adSiteRows.map((s: Media) => ({ id: s.id, name: s.name, upstreamId: s.upstreamId ?? 0, adOrderId: s.adOrderId ?? null, adTypeCode: s.adTypeCode })));
+      setAdSites(adSiteRows.map((s: Media) => ({ id: String(s.id), name: s.name, upstreamId: String(s.upstreamId ?? ''), adTypeCode: s.adTypeCode })));
       setAdTypes(adTypeRows);
       setAdvertisers(advertiserRows);
-      setAdOrders(adOrderRows);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -859,10 +908,10 @@ export function MediaIdMgmt() {
     setDownstreamError('');
     listDownstreams()
       .then(data => {
-        setDownstreams(data.map((d: { downstreamType: string; id: number; adTypeCode?: string; adTypeCodes?: string[] }) => ({
-          id: d.id,
+        setDownstreams(data.map((d: { downstreamType: string; id: string | number; adTypeIds?: string[]; adTypeCodes?: string[]; adTypeCode?: string }) => ({
+          id: String(d.id),
           name: d.downstreamType,
-          adTypeCodes: d.adTypeCodes?.length ? d.adTypeCodes : d.adTypeCode ? [d.adTypeCode] : [],
+          adTypeIds: d.adTypeIds?.length ? d.adTypeIds : d.adTypeCodes?.length ? d.adTypeCodes : d.adTypeCode ? [d.adTypeCode] : [],
         })));
       })
       .catch(() => setDownstreamError(t('failedToLoadDownstreams') || 'Failed to load downstreams'))
@@ -874,74 +923,71 @@ export function MediaIdMgmt() {
     adSites.find(s => String(s.id) === form.adSiteId),
     [adSites, form.adSiteId]
   );
-  const selectedAdTypeCode = selectedAdSite?.adTypeCode;
+  const selectedAdTypeName = selectedAdSite?.adTypeCode; // DTO adTypeCode is now display name
+  const selectedAdTypeId = React.useMemo(
+    () => adTypes.find(at => at.name === selectedAdTypeName)?.id,
+    [adTypes, selectedAdTypeName]
+  );
 
-  // Cascade: Advertiser → AdOrder options (filtered by advertiserId)
-  const adOrderOptions = React.useMemo(() => {
+  // Cascade (1) Advertiser → AdType options (lọc theo upstreamId)
+  const advertiserAdTypeOptions = React.useMemo(() => {
     if (!form.advertiserId) return [];
-    return adOrders.filter(o => String(o.advId) === form.advertiserId);
-  }, [adOrders, form.advertiserId]);
+    const adv = advertisers.find(a => String(a.id) === form.advertiserId);
+    if (!adv) return [];
+    const names = (adv.adTypeCodes && adv.adTypeCodes.length) ? adv.adTypeCodes : (adv.adTypeCode ? [adv.adTypeCode] : []);
+    return adTypes.filter(at => names.includes(at.name));
+  }, [form.advertiserId, advertisers, adTypes]);
 
-  // Cascade: AdOrder → AdSite options (filtered by adOrderId)
+  // Cascade (2) Advertiser → AdSite options (lọc theo upstreamId)
   const adSiteOptions = React.useMemo(() => {
-    if (!form.adOrderId) return [];
-    return adSites.filter(s => String(s.adOrderId ?? '') === form.adOrderId);
-  }, [adSites, form.adOrderId]);
+    if (!form.advertiserId) return [];
+    return adSites.filter(s => String(s.upstreamId) === form.advertiserId);
+  }, [adSites, form.advertiserId]);
 
-  // Cascade: AdSite → Downstream options (filtered by AdSite's adTypeCode)
-  const filteredDownstreams = React.useMemo(() => {
-    if (!selectedAdTypeCode) return downstreams;
-    return downstreams.filter(d => d.adTypeCodes.includes(selectedAdTypeCode));
-  }, [downstreams, selectedAdTypeCode]);
+  // Cascade (3) AdSite → filtered adTypeCode
+  // (cascading forward: chọn AdSite sẽ tự fill adTypeId)
+  React.useEffect(() => {
+    if (selectedAdTypeId && form.adTypeId !== selectedAdTypeId) {
+      setForm(prev => ({ ...prev, adTypeId: selectedAdTypeId }));
+    }
+  }, [selectedAdTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When advertiser changes: reset adOrderId + adSiteId + downstreamId (strict)
+  // Cascade (4) MEDIA: dropdown Downstream (ML/LE/YIYI) — filter theo AdSite's adType
+  const filteredDownstreamOptions = React.useMemo(() => {
+    if (!selectedAdTypeId) return downstreams;
+    return downstreams.filter(d => d.adTypeIds.includes(selectedAdTypeId));
+  }, [downstreams, selectedAdTypeId]);
+
+  // Cascade (5) Đơn QC MEDIA: dropdown MediaAdOrder của cùng Downstream đã chọn
+  const filteredMediaAdOrderOptions = React.useMemo(() => {
+    if (!form.downstreamId) return [];
+    return mediaAdOrders.filter(mao => mao.downstreamId === form.downstreamId);
+  }, [mediaAdOrders, form.downstreamId]);
+
+  // Load MediaAdOrders khi đã chọn Downstream
+  React.useEffect(() => {
+    if (!form.downstreamId) {
+      setMediaAdOrders([]);
+      return;
+    }
+    listMediaAdOrders({ downstreamId: form.downstreamId })
+      .then(setMediaAdOrders)
+      .catch(() => setMediaAdOrders([]));
+  }, [form.downstreamId]);
+
+  // When advertiser changes: reset các field phụ thuộc
   React.useEffect(() => {
     if (!form.advertiserId) {
-      if (form.adOrderId || form.adSiteId || form.downstreamId) {
-        setForm(prev => ({ ...prev, adOrderId: '', adSiteId: '', downstreamId: '' }));
-      }
-      return;
+      setForm(prev => ({ ...prev, adTypeCode: '', adSiteId: '', downstreamId: '', mediaAdOrderId: '', mediaIdName: '', pctHal: '', customPrice: '' }));
     }
-    // advertiser set but adOrder set → if adOrder doesn't belong to this advertiser, reset
-    if (form.adOrderId) {
-      const stillValid = adOrders.some(o => String(o.id) === form.adOrderId && String(o.advId) === form.advertiserId);
-      if (!stillValid) {
-        setForm(prev => ({ ...prev, adOrderId: '', adSiteId: '', downstreamId: '' }));
-      }
-    }
-  }, [form.advertiserId]); // intentionally not depending on form.adOrderId — only fires when advertiserId changes
+  }, [form.advertiserId]);
 
-  // When adOrder changes: reset adSiteId + downstreamId (strict)
-  React.useEffect(() => {
-    if (!form.adOrderId) {
-      if (form.adSiteId || form.downstreamId) {
-        setForm(prev => ({ ...prev, adSiteId: '', downstreamId: '' }));
-      }
-      return;
-    }
-    if (form.adSiteId) {
-      const stillValid = adSites.some(s => String(s.id) === form.adSiteId && String(s.adOrderId ?? '') === form.adOrderId);
-      if (!stillValid) {
-        setForm(prev => ({ ...prev, adSiteId: '', downstreamId: '' }));
-      }
-    }
-  }, [form.adOrderId]);
-
-  // When adSite changes: reset downstreamId if not in filteredDownstreams
+  // When AdSite changes: clear downstream + mediaAdOrder
   React.useEffect(() => {
     if (!form.adSiteId) {
-      if (form.downstreamId) {
-        setForm(prev => ({ ...prev, downstreamId: '' }));
-      }
-      return;
+      setForm(prev => ({ ...prev, downstreamId: '', mediaAdOrderId: '' }));
     }
-    if (form.downstreamId && selectedAdTypeCode) {
-      const stillValid = filteredDownstreams.some(d => String(d.id) === form.downstreamId);
-      if (!stillValid) {
-        setForm(prev => ({ ...prev, downstreamId: '' }));
-      }
-    }
-  }, [form.adSiteId, selectedAdTypeCode]);
+  }, [form.adSiteId]);
 
   React.useEffect(() => {
     void loadRows();
@@ -957,15 +1003,15 @@ export function MediaIdMgmt() {
     clearMediaIdPresetFilter();
   }, [mediaIdPresetFilter, clearMediaIdPresetFilter]);
 
-  const adTypeNameByCode = React.useMemo(() => new Map(adTypes.map(t => [t.code, t.name ?? t.code])), [adTypes]);
-  const mediaOptions = React.useMemo(() => {
-    const byId = new Map<number, string>();
+  const adTypeNameByName = React.useMemo(() => new Map(adTypes.map(t => [t.name, t.name])), [adTypes]);
+  const mediaIdOptions = React.useMemo(() => {
+    const byId = new Map<string, string>();
     rows.forEach(row => byId.set(row.mediaId, row.mediaName));
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
   }, [rows]);
-  const mediaScopedRows = mediaFilter ? rows.filter(row => row.mediaId === Number(mediaFilter)) : rows;
-  const availableAdTypeCodes = Array.from(new Set(mediaScopedRows.map(row => row.adTypeCode).filter(Boolean)));
-  const adTypeOptions = adTypes.filter(t => availableAdTypeCodes.includes(t.code));
+  const mediaScopedRows = mediaFilter ? rows.filter(row => row.mediaId === mediaFilter) : rows;
+  const availableAdTypeNames = Array.from(new Set(mediaScopedRows.map(row => row.adTypeCode).filter((c): c is string => !!c)));
+  const adTypeOptions = adTypes.filter(t => availableAdTypeNames.includes(t.name));
   const adTypeScopedRows = orderFilter ? mediaScopedRows.filter(row => row.adTypeCode === orderFilter) : mediaScopedRows;
   const typeOptions = Array.from(new Set(adTypeScopedRows.map(row => row.type).filter(Boolean)));
   const keyword = normalizeText(search);
@@ -975,7 +1021,7 @@ export function MediaIdMgmt() {
     if (!keyword) return true;
     const values = [
       row.mediaName,
-      adTypeNameByCode.get(row.adTypeCode),
+      adTypeNameByName.get(row.adTypeCode ?? '') ?? row.adTypeCode,
       row.slot,
       row.type,
       row.rate,
@@ -989,20 +1035,77 @@ export function MediaIdMgmt() {
     const statusDelta = aActive - bActive;
     const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
     if (statusOrder !== 0) return statusOrder;
-    const nameA = a.mediaName ?? '';
-    const nameB = b.mediaName ?? '';
-    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-    if (nameOrder !== 0) return nameOrder;
-    return a.id - b.id;
+    const upA = displayName(a.upstreamName ?? '');
+    const upB = displayName(b.upstreamName ?? '');
+    const upDelta = upA.localeCompare(upB, undefined, { sensitivity: 'base' });
+    const upOrder = upstreamNameSort === 'asc' ? upDelta : -upDelta;
+    if (upOrder !== 0) return upOrder;
+    const adTypeA = adTypeNameByName.get(a.adTypeCode ?? '') ?? a.adTypeCode ?? '';
+    const adTypeB = adTypeNameByName.get(b.adTypeCode ?? '') ?? b.adTypeCode ?? '';
+    const adTypeDelta = adTypeA.localeCompare(adTypeB, undefined, { sensitivity: 'base' });
+    const adTypeOrder = adTypeCodeSort === 'asc' ? adTypeDelta : -adTypeDelta;
+    if (adTypeOrder !== 0) return adTypeOrder;
+    const adSiteA = displayName(a.adSiteName ?? '');
+    const adSiteB = displayName(b.adSiteName ?? '');
+    const adSiteDelta = adSiteA.localeCompare(adSiteB, undefined, { sensitivity: 'base' });
+    const adSiteOrder = adSiteNameSort === 'asc' ? adSiteDelta : -adSiteDelta;
+    if (adSiteOrder !== 0) return adSiteOrder;
+    const downA = displayName(a.downstreamName ?? '');
+    const downB = displayName(b.downstreamName ?? '');
+    const downDelta = downA.localeCompare(downB, undefined, { sensitivity: 'base' });
+    const downOrder = downstreamNameSort === 'asc' ? downDelta : -downDelta;
+    if (downOrder !== 0) return downOrder;
+    const maA = displayName(a.mediaAdTypeCode ?? '');
+    const maB = displayName(b.mediaAdTypeCode ?? '');
+    const maDelta = maA.localeCompare(maB, undefined, { sensitivity: 'base' });
+    const maOrder = mediaAdTypeCodeSort === 'asc' ? maDelta : -maDelta;
+    if (maOrder !== 0) return maOrder;
+    const slotA = a.slot ?? '';
+    const slotB = b.slot ?? '';
+    const slotDelta = slotA.localeCompare(slotB, undefined, { sensitivity: 'base' });
+    const slotOrder = slotSort === 'asc' ? slotDelta : -slotDelta;
+    if (slotOrder !== 0) return slotOrder;
+    const srA = a.shareRatio;
+    const srB = b.shareRatio;
+    if (srA == null && srB != null) return shareRatioSort === 'asc' ? 1 : -1;
+    if (srA != null && srB == null) return shareRatioSort === 'asc' ? -1 : 1;
+    if (srA != null && srB != null) {
+      const srDelta = srA - srB;
+      const srOrder = shareRatioSort === 'asc' ? srDelta : -srDelta;
+      if (srOrder !== 0) return srOrder;
+    }
+    const rA = a.rate;
+    const rB = b.rate;
+    if (rA == null && rB != null) return rateSort === 'asc' ? 1 : -1;
+    if (rA != null && rB == null) return rateSort === 'asc' ? -1 : 1;
+    if (rA != null && rB != null) {
+      const rDelta = rA - rB;
+      const rOrder = rateSort === 'asc' ? rDelta : -rDelta;
+      if (rOrder !== 0) return rOrder;
+    }
+    const notesA = a.notes ?? '';
+    const notesB = b.notes ?? '';
+    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
+    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
+    if (notesOrder !== 0) return notesOrder;
+    return String(a.id).localeCompare(String(b.id));
   });
 
   const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleUpstreamNameSort = () => setUpstreamNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleAdTypeCodeSort = () => setAdTypeCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleAdSiteNameSort = () => setAdSiteNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleDownstreamNameSort = () => setDownstreamNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleMediaAdTypeCodeSort = () => setMediaAdTypeCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleSlotSort = () => setSlotSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleShareRatioSort = () => setShareRatioSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleRateSort = () => setRateSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
   const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const mediaIdColumns: CsvColumn<MediaId>[] = [
     { label: t('media'), value: r => displayName(r.mediaName) },
-    { label: t('mediaAdOrder'), value: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
+    { label: t('mediaAdOrder'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
     { label: t('mediaId'), value: r => r.slot ?? '' },
     { label: t('type'), value: r => r.type ?? '' },
     { label: t('rate'), value: r => formatMgmtRate(r.type, r.rate) },
@@ -1012,30 +1115,43 @@ export function MediaIdMgmt() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ advertiserId: '', adOrderId: '', adSiteId: '', downstreamId: '', customPrice: '', status: 'active' });
+    setForm({
+      advertiserId: '',
+      adTypeId: '',
+      adSiteId: '',
+      downstreamId: '',
+      mediaAdOrderId: '',
+      mediaIdName: '',
+      pctHal: '',
+      customPrice: '',
+      status: 'active',
+    });
     setFormError('');
     setFormOpen(true);
   };
 
   const openEdit = (record: MediaId) => {
     setEditing(record);
-    // Derive Advertiser + AdOrder from the AdSite's adOrderId + upstreamId
-    const site = adSites.find(s => s.id === record.adSiteId);
+    const site = adSites.find(s => String(s.id) === String(record.adSiteId));
     const advId = site?.upstreamId ? String(site.upstreamId) : '';
-    const adOrderId = site?.adOrderId ? String(site.adOrderId) : '';
+    const adTypeId = adTypes.find(at => at.name === site?.adTypeCode)?.id ?? '';
     setForm({
       advertiserId: advId,
-      adOrderId,
+      adTypeId,
       adSiteId: String(record.adSiteId),
       downstreamId: String(record.downstreamId),
-      customPrice: '',
+      mediaAdOrderId: '',
+      mediaIdName: record.mediaIdName ?? '',
+      pctHal: record.pctHal != null ? String(record.pctHal) : '',
+      customPrice: record.rate != null ? String(record.rate) : '',
       status: record.status,
     });
     setFormError('');
     setFormOpen(true);
   };
 
-  const openHardDelete = () => {
+  const openHardDelete = (row?: MediaId) => {
+    if (row) setEditing(row);
     setHardDeleteResult(null);
     setHardDeleteError('');
     setHardDeleteOpen(true);
@@ -1068,36 +1184,49 @@ export function MediaIdMgmt() {
 
   const handleHardDeleteGoToQuarantine = () => {
     setHardDeleteOpen(false);
-    quarantine.openModal();
   };
 
   const submitForm = async () => {
-    if (!form.advertiserId) { setFormError(t('selectAdvertiser')); return; }
-    if (!form.adOrderId) { setFormError(t('selectAdOrder') || 'Vui lòng chọn đơn quảng cáo'); return; }
-    const adSiteId = Number(form.adSiteId);
-    if (!adSiteId) { setFormError(t('selectAdSite')); return; }
-    const downstreamId = Number(form.downstreamId);
-    if (!downstreamId) { setFormError(t('selectDownstream')); return; }
+    if (!form.advertiserId) { setFormError(t('selectAdvertiser') || 'Vui lòng chọn Nhà quảng cáo'); return; }
+    if (!form.adTypeId) { setFormError('Vui lòng chọn Đơn quảng cáo'); return; }
+    if (!form.adSiteId) { setFormError('Vui lòng chọn ID quảng cáo'); return; }
+    if (!form.downstreamId) { setFormError('Vui lòng chọn MEDIA'); return; }
+    if (!form.mediaIdName.trim()) { setFormError('Vui lòng nhập ID MEDIA'); return; }
 
     setSaving(true);
     setFormError('');
     try {
-      const payload: { adSiteId: number; downstreamId: number; customPrice?: number | null; status?: string } = {
-        adSiteId,
-        downstreamId,
+      const basePayload: {
+        adSiteId: string;
+        customPrice?: number | null;
+        pctHal?: number | null;
+        mediaIdName?: string | null;
+      } = {
+        adSiteId: form.adSiteId,
       };
       const customPriceVal = form.customPrice.trim();
       if (customPriceVal) {
         const parsed = parseFloat(customPriceVal);
-        if (Number.isFinite(parsed)) payload.customPrice = parsed;
+        if (Number.isFinite(parsed)) basePayload.customPrice = parsed;
+        else basePayload.customPrice = null;
       }
+      const pctHalVal = form.pctHal.trim();
+      if (pctHalVal) {
+        const parsed = parseFloat(pctHalVal);
+        if (Number.isFinite(parsed)) basePayload.pctHal = parsed;
+        else basePayload.pctHal = null;
+      }
+      if (form.mediaIdName.trim()) basePayload.mediaIdName = form.mediaIdName.trim();
 
       if (editing && editing.junctionId) {
-        // PUT to junction endpoint
-        await updateMediaId(editing.junctionId, { customPrice: payload.customPrice ?? null });
+        await updateMediaId(editing.junctionId, {
+          customPrice: basePayload.customPrice ?? null,
+          pctHal: basePayload.pctHal ?? null,
+          mediaIdName: basePayload.mediaIdName ?? null,
+        });
         await loadRows();
       } else {
-        const created = await createMediaId(payload as any);
+        const created = await createMediaId({ ...basePayload, downstreamId: form.downstreamId } as any);
         setRows(prev => [...prev, created]);
         await loadRows();
       }
@@ -1116,10 +1245,27 @@ export function MediaIdMgmt() {
     }
   };
 
-  const removeRecord = async () => {
-    if (!editing || !editing.junctionId) return;
+  const removeRecord = async (row?: MediaId) => {
+    const target = row ?? editing;
+    if (!target || !target.junctionId) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    quarantine.openModal();
+    setEditing(target);
+    try {
+      await updateMediaId(String(target.junctionId), { status: 'inactive' });
+      await loadRows();
+    } catch (err) {
+      setFormError(errorMessage(err));
+    }
+  };
+
+  const updateStatus = async (record: MediaId, active: boolean) => {
+    const nextStatus: EntityStatus = active ? 'active' : 'inactive';
+    try {
+      await updateMediaId(String(record.junctionId), { status: nextStatus });
+      await loadRows();
+    } catch (err) {
+      setFormError(errorMessage(err));
+    }
   };
 
   return (
@@ -1131,8 +1277,8 @@ export function MediaIdMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
           <div className="toolbar-right">
-            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{adTypeOptions.map(t => <option key={t.code} value={t.code}>{displayName(t.name ?? t.code)}</option>)}</select>
+            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{adTypeOptions.map(t => <option key={t.id} value={t.name}>{displayName(t.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
@@ -1143,18 +1289,22 @@ export function MediaIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'junctionId', label: 'ID' },
-              { key: 'mediaName', label: t('media'), render: r => displayName(r.mediaName), sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'adTypeCode', label: t('mediaAdOrder'), render: r => displayName(adTypeNameByCode.get(r.adTypeCode) ?? r.adTypeCode) },
-              { key: 'slot', label: t('mediaId') },
-              { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} /> },
-              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate) },
-              { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio ?? '-' },
-              { key: 'status', label: t('status'), render: r => r.status, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'upstreamName', label: t('advertiser'), render: r => displayName(r.upstreamName ?? '-'), sortDirection: upstreamNameSort, onSortClick: toggleUpstreamNameSort },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? ''), sortDirection: adTypeCodeSort, onSortClick: toggleAdTypeCodeSort },
+              { key: 'adSiteName', label: t('adId'), render: r => displayName(r.adSiteName ?? '-'), sortDirection: adSiteNameSort, onSortClick: toggleAdSiteNameSort },
+              { key: 'downstreamName', label: t('media'), render: r => displayName(r.downstreamName ?? '-'), sortDirection: downstreamNameSort, onSortClick: toggleDownstreamNameSort },
+              { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdTypeCode ?? '-'), sortDirection: mediaAdTypeCodeSort, onSortClick: toggleMediaAdTypeCodeSort },
+              { key: 'slot', label: t('mediaId'), sortDirection: slotSort, onSortClick: toggleSlotSort },
+              { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio != null ? `${r.shareRatio}` : '-', sortDirection: shareRatioSort, onSortClick: toggleShareRatioSort },
+              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: rateSort, onSortClick: toggleRateSort },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
               { key: '__actions__', label: t('actions') },
             ]}
             data={visibleRows}
             onEdit={openEdit}
+            onDelete={removeRecord}
+            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -1166,61 +1316,76 @@ export function MediaIdMgmt() {
               <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
             </div>
             <div className="modal-body">
-              <div className="form-group"><label>{t('advertiser')} <span style={{ color: 'red' }}>*</span></label>
+              {/* (1) Nhà quảng cáo */}
+              <div className="form-group">
+                <label>{t('advertiser') || 'Nhà quảng cáo'} <span style={{ color: 'red' }}>*</span></label>
                 <select value={form.advertiserId} onChange={e => setForm(prev => ({ ...prev, advertiserId: e.target.value }))}>
                   <option value="">-</option>
                   {advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>{t('selectAdOrder')} <span style={{ color: 'red' }}>*</span></label>
-                <select value={form.adOrderId} onChange={e => setForm(prev => ({ ...prev, adOrderId: e.target.value }))} disabled={!form.advertiserId}>
+              {/* (2) Đơn quảng cáo — lọc theo upstream */}
+              <div className="form-group">
+                <label>Đơn quảng cáo <span style={{ color: 'red' }}>*</span></label>
+                <select value={form.adTypeId} onChange={e => setForm(prev => ({ ...prev, adTypeId: e.target.value, adSiteId: '' }))} disabled={!form.advertiserId}>
                   <option value="">-</option>
-                  {adOrderOptions.map(o => <option key={o.id} value={o.id}>{displayName(o.name)}</option>)}
+                  {advertiserAdTypeOptions.map(at => <option key={at.id} value={at.id}>{displayName(at.name)}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>{t('selectAdSite')} <span style={{ color: 'red' }}>*</span></label>
-                <select value={form.adSiteId} onChange={e => setForm(prev => ({ ...prev, adSiteId: e.target.value }))} disabled={!form.adOrderId}>
+              {/* (3) ID quảng cáo (AdSite) — lọc theo upstream + adType */}
+              <div className="form-group">
+                <label>ID quảng cáo <span style={{ color: 'red' }}>*</span></label>
+                <select value={form.adSiteId} onChange={e => setForm(prev => ({ ...prev, adSiteId: e.target.value }))} disabled={!form.adTypeId}>
                   <option value="">-</option>
-                  {adSiteOptions.map(s => <option key={s.id} value={s.id}>{displayName(s.name)}</option>)}
+                  {adSiteOptions.filter(s => !form.adTypeId || adTypes.find(at => at.id === form.adTypeId)?.name === s.adTypeCode).map(s => <option key={s.id} value={s.id}>{displayName(s.name)}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>{t('selectDownstream')} <span style={{ color: 'red' }}>*</span></label>
-                <select value={form.downstreamId} onChange={e => setForm(prev => ({ ...prev, downstreamId: e.target.value }))} disabled={!form.adSiteId || downstreamLoading}>
+              {/* (4) MEDIA — dropdown Downstream (loại hạ nguồn: ML/LE/YIYI) */}
+              <div className="form-group">
+                <label>MEDIA (Downstream) <span style={{ color: 'red' }}>*</span></label>
+                <select value={form.downstreamId} onChange={e => setForm(prev => ({ ...prev, downstreamId: e.target.value }))} disabled={!form.adSiteId}>
                   <option value="">-</option>
-                  {filteredDownstreams.map(item => <option key={item.id} value={item.id}>{item.name} ({item.adTypeCodes.join(', ')})</option>)}
+                  {filteredDownstreamOptions.map(d => <option key={d.id} value={d.id}>{displayName(d.name)}</option>)}
                 </select>
-                {downstreamError && <div className="form-error">{downstreamError}</div>}
               </div>
-              <div className="form-group"><label>{t('unitPriceRevenueShare')}</label>
-                <input type="text" value={form.customPrice} onChange={e => setForm(prev => ({ ...prev, customPrice: e.target.value }))} placeholder={t('valuePlaceholder')} />
+              {/* (5) Đơn quảng cáo MEDIA — dropdown MediaAdOrder của cùng AdSite đã chọn */}
+              <div className="form-group">
+                <label>Đơn quảng cáo MEDIA</label>
+                <select value={form.mediaAdOrderId} onChange={e => setForm(prev => ({ ...prev, mediaAdOrderId: e.target.value }))} disabled={!form.adSiteId}>
+                  <option value="">-</option>
+                  {filteredMediaAdOrderOptions.map(mao => <option key={mao.id} value={mao.id}>{displayName(mao.name)}</option>)}
+                </select>
               </div>
-              <div className="form-group"><label>{t('status')}</label>
+              {/* (6) ID MEDIA (text input — người dùng tự đặt) */}
+              <div className="form-group">
+                <label>ID MEDIA <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" value={form.mediaIdName} onChange={e => setForm(prev => ({ ...prev, mediaIdName: e.target.value }))} placeholder="Nhập ID media..." />
+              </div>
+              {/* (7) Cột chia lợi nhuận từng link Ở hạ nguồn (pctHal) */}
+              <div className="form-group">
+                <label>Cột chia lợi nhuận từng link Ở hạ nguồn</label>
+                <input type="number" step="0.01" min="0" max="1" value={form.pctHal} onChange={e => setForm(prev => ({ ...prev, pctHal: e.target.value }))} placeholder="0.8 (= 80%)" />
+              </div>
+              {/* (8) Đơn giá Ở hạ nguồn (customPrice) */}
+              <div className="form-group">
+                <label>Đơn giá Ở hạ nguồn</label>
+                <input type="number" step="0.01" min="0" value={form.customPrice} onChange={e => setForm(prev => ({ ...prev, customPrice: e.target.value }))} placeholder={t('valuePlaceholder') || 'Nhập đơn giá...'} />
+              </div>
+              {editing && <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>
                   <option value="active">{t('online')}</option>
                   <option value="inactive">{t('offline')}</option>
                 </select>
-              </div>
+              </div>}
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
-              {editing && <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>}
-              {editing && canHardDelete && <button className="btn-danger" onClick={openHardDelete} disabled={saving}>{t('hardDelete')}</button>}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
           </div>
         </div>
       )}
-      <QuarantineConfirmModal
-        open={quarantine.open}
-        scope="media"
-        targetName={adSites.find(s => s.id === editing?.adSiteId)?.name ?? quarantine.targetName}
-        loading={quarantine.loading}
-        error={quarantine.error}
-        result={quarantine.result}
-        onConfirm={quarantine.confirm}
-        onClose={quarantine.closeModal}
-      />
       <HardDeleteModal
         open={hardDeleteOpen}
         entityName={editing?.slot ?? ''}
@@ -1229,7 +1394,6 @@ export function MediaIdMgmt() {
         result={hardDeleteResult}
         onConfirm={handleHardDeleteConfirm}
         onClose={handleHardDeleteClose}
-        onGoToQuarantine={handleHardDeleteGoToQuarantine}
       />
     </div>
   );

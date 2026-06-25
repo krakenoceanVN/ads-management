@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import type { EntryType } from '../bff.types';
 
 export interface ListMediaIdsFilters {
-  mediaId?: number;
+  mediaId?: string;
   adTypeCode?: string;
   type?: EntryType;
   archived?: boolean;
@@ -13,18 +13,15 @@ export interface ListMediaIdsFilters {
 export async function listMediaIds(filters?: ListMediaIdsFilters) {
   const where: Prisma.AdSiteDownstreamWhereInput = {};
 
-  if (filters?.mediaId != null) {
+  if (filters?.mediaId) {
     where.adSiteId = filters.mediaId;
   }
 
   if (filters?.adTypeCode || filters?.type !== undefined || filters?.archived !== undefined) {
     where.adSite = {
-      OR: filters.adTypeCode ? [
-        { adOrder: { adType: { code: filters.adTypeCode } } },
-        { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
-      ] : undefined,
-      billingMethod: filters.type,
-      isArchived: filters.archived,
+      ...(filters.adTypeCode ? { upstream: { defaultAdType: { name: filters.adTypeCode } } } : {}),
+      ...(filters.type !== undefined ? { billingMethod: filters.type } : {}),
+      ...(filters.archived !== undefined ? { isArchived: filters.archived } : {}),
     };
   }
 
@@ -33,11 +30,11 @@ export async function listMediaIds(filters?: ListMediaIdsFilters) {
     include: {
       adSite: {
         include: {
-          upstream: { include: { adType: true } },
-          adOrder: { include: { adType: true } },
+          upstream: { include: { defaultAdType: true } },
         },
       },
       downstream: true,
+      mediaAdType: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -45,17 +42,17 @@ export async function listMediaIds(filters?: ListMediaIdsFilters) {
   return rows.map(r => mapMediaId(r));
 }
 
-export async function getMediaId(id: number) {
+export async function getMediaId(id: string) {
   const row = await prisma.adSiteDownstream.findUnique({
     where: { id },
     include: {
       adSite: {
         include: {
-          upstream: { include: { adType: true } },
-          adOrder: { include: { adType: true } },
+          upstream: { include: { defaultAdType: true } },
         },
       },
       downstream: true,
+      mediaAdType: true,
     },
   });
   if (!row) return null;

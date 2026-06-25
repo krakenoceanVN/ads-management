@@ -14,7 +14,7 @@ exports.deleteMediaAdOrder = deleteMediaAdOrder;
 exports.deleteMediaId = deleteMediaId;
 const hardDelete_service_1 = require("./hardDelete.service");
 function getUserId(req) {
-    return req.authUser?.id ?? 0;
+    return req.authUser?.id ?? '';
 }
 function getUsername(req) {
     return req.authUser?.username ?? null;
@@ -39,10 +39,9 @@ function sendResult(res, result) {
             res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: 'Unexpected error' });
     }
 }
-// ─── DELETE /api/bff/hard-delete/advertisers/:id ─────────────────────────────────
 async function deleteAdvertiser(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }
@@ -58,10 +57,9 @@ async function deleteAdvertiser(req, res) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
     }
 }
-// ─── DELETE /api/bff/hard-delete/ad-types/:id ─────────────────────────────────
 async function deleteAdType(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }
@@ -77,10 +75,9 @@ async function deleteAdType(req, res) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
     }
 }
-// ─── DELETE /api/bff/hard-delete/ad-ids/:id ───────────────────────────────────
 async function deleteAdId(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }
@@ -96,10 +93,9 @@ async function deleteAdId(req, res) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
     }
 }
-// ─── DELETE /api/bff/hard-delete/media/:id ─────────────────────────────────────
 async function deleteMedia(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }
@@ -115,25 +111,23 @@ async function deleteMedia(req, res) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
     }
 }
-// ─── DELETE /api/bff/hard-delete/media-ad-orders/:id ──────────────────────────
 async function deleteMediaAdOrder(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }
     try {
-        const result = await (0, hardDelete_service_1.hardDeleteAdOrder)(id, { userId: getUserId(req), username: getUsername(req) });
+        const result = await (0, hardDelete_service_1.hardDeleteMediaAdOrder)(id, { userId: getUserId(req), username: getUsername(req) });
         sendResult(res, result);
     }
     catch (err) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
     }
 }
-// ─── DELETE /api/bff/hard-delete/media-ids/:id ────────────────────────────────
 async function deleteMediaId(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (!id || isNaN(id)) {
+    const id = req.params['id'];
+    if (!id) {
         res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
         return;
     }

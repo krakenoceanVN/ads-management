@@ -16,9 +16,6 @@ import type { Response, NextFunction } from 'express';
  *   media.create       -> permAdmin
  *   media.update      -> permAdmin
  *   media.delete      -> permAdmin
- *   adOrder.create    -> permAdmin
- *   adOrder.update    -> permAdmin
- *   adOrder.delete    -> permAdmin
  *   adId.create       -> permAdmin
  *   adId.update       -> permAdmin
  *   adId.delete       -> permAdmin
@@ -74,9 +71,6 @@ export function requirePermission(permissionKey: string) {
       'media.create': 'permAdmin',
       'media.update': 'permAdmin',
       'media.delete': 'permAdmin',
-      'adOrder.create': 'permAdmin',
-      'adOrder.update': 'permAdmin',
-      'adOrder.delete': 'permAdmin',
       'adId.create': 'permAdmin',
       'adId.update': 'permAdmin',
       'adId.delete': 'permAdmin',

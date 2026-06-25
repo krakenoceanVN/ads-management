@@ -10,7 +10,7 @@ export async function getAll(req: Request, res: Response) {
   const { mediaId, adTypeCode, type, archived } = req.query;
 
   const filters = {
-    mediaId: mediaId ? parseInt(String(mediaId), 10) : undefined,
+    mediaId: mediaId ? String(mediaId) : undefined,
     adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
     type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
@@ -21,9 +21,9 @@ export async function getAll(req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid media id');
-  const mediaId = await getMediaId(id);
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid media id');
+  const mediaId = await getMediaId(String(id));
   if (!mediaId) throw new NotFoundError('Media id not found');
   res.json(bffData(mediaId));
 }
@@ -32,11 +32,6 @@ export async function create(req: Request, res: Response) {
   const body = req.body as CreateMediaIdInput;
   if (!body || !body.adSiteId) throw new BadRequestError('adSiteId is required');
   if (!body.downstreamId) throw new BadRequestError('downstreamId is required');
-
-  // Reject status="inactive" on create
-  if ((body as any).status && (body as any).status !== 'active') {
-    throw new BadRequestError('status must be "active" — MediaId.status is a read-only compatibility field');
-  }
 
   const mediaId = await createMediaId({
     adSiteId: body.adSiteId,
@@ -48,16 +43,11 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid media id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid media id');
   const body = req.body as UpdateMediaIdInput;
 
-  // Reject status="inactive" on PUT
-  if ((body as any).status !== undefined && (body as any).status !== 'active') {
-    throw new BadRequestError('status must be "active" — MediaId.status is a read-only compatibility field');
-  }
-
-  const mediaId = await updateMediaId(id, {
+  const mediaId = await updateMediaId(String(id), {
     customPrice: body.customPrice,
     status: (body as any).status,
   });
@@ -66,8 +56,8 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function remove(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid media id');
-  await deleteMediaId(id);
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid media id');
+  await deleteMediaId(String(id));
   res.json(bffData({ deleted: true }));
 }

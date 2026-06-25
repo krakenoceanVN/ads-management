@@ -54,7 +54,7 @@ export async function login(input: LoginInput): Promise<{ token: string; user: A
   return { token, user: authUser };
 }
 
-export async function getUserById(id: number): Promise<AuthUser | null> {
+export async function getUserById(id: string): Promise<AuthUser | null> {
   const user = await prisma.user.findUnique({
     where: { id },
     include: { roleRef: { include: { permissions: { include: { permission: true } } } } },

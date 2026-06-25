@@ -17,29 +17,13 @@ exports.getOrderProfit = getOrderProfit;
 const client_1 = require("../../../shared/prisma/client");
 const payout_service_1 = require("../../../shared/services/payout.service");
 const yiyi_service_1 = require("../../yiyi/yiyi.service");
-function actualAdType(site) {
-    return site.adOrder?.adType ?? site.upstream.adType ?? null;
-}
-function actualAdTypeWhere(adTypeCode) {
+function actualAdTypeWhere(adTypeId) {
     return {
-        OR: [
-            { adOrder: { adType: { code: adTypeCode } } },
-            { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
-        ],
+        upstream: { defaultAdType: { id: adTypeId } },
     };
 }
-// Test data sources excluded from official financial reports
 const TEST_UPSTREAM_NAMES = ['百战-bz'];
-const TEST_AD_SITE_NAMES = ['TestCPM', 'TestRATIO'];
-// ─── Yiyi Cost Calculator ─────────────────────────────────────────────────────
-/**
- * Calculate total Yiyi cost for a given date range.
- * yiyiCost = SUM(dayTraffic / 1000 * (unitPrice + profitUnitPrice))
- * where dayTraffic = yy-02-01 + yy-02-02 + yy-02-03 + yy-02-04
- *
- * Yiyi is a standalone source (YiyiDailyData/YiyiDailyPricing), NOT in DailyInput.
- * Added as downstream YIYI cost for SM profit report Excel parity.
- */
+const TEST_AD_SITE_NAMES = ['TestCPM', 'TestCPS'];
 async function computeYiyiCost(year, month) {
     const rows = await (0, yiyi_service_1.getYiyiMonthly)(year, month);
     let totalYiyiCost = 0;
@@ -50,16 +34,13 @@ async function computeYiyiCost(year, month) {
             continue;
         const unitPrice = row.unit_price;
         const profitUnitPrice = row.profit_unit_price;
-        // yiyiCost per day = dayTraffic / 1000 * (unitPrice + profitUnitPrice), rounded
         const yiyiCost = Math.round((dayTraffic / 1000 * (unitPrice + profitUnitPrice)) * 100) / 100;
         yiyiByDate.set(row.date, yiyiCost);
         totalYiyiCost += yiyiCost;
     }
-    // Round total to 2 decimal places
     totalYiyiCost = Math.round(totalYiyiCost * 100) / 100;
     return { totalYiyiCost, yiyiByDate };
 }
-// ─── Shared Date Filter Builder ───────────────────────────────────────────────
 function buildDateFilter(params) {
     if (params.date) {
         const d = new Date(params.date + 'T00:00:00.000Z');
@@ -74,7 +55,6 @@ function buildDateFilter(params) {
 }
 async function getTotalProfit(params) {
     const dateFilter = buildDateFilter(params);
-    // Determine year/month for Yiyi cost — needed for downstream integration
     let year = null;
     let month = null;
     if (params.date) {
@@ -87,7 +67,6 @@ async function getTotalProfit(params) {
         year = parseInt(y, 10);
         month = parseInt(m, 10);
     }
-    // Compute Yiyi cost for the relevant month(s)
     const yiyiByDate = new Map();
     if (year != null && month != null) {
         const { yiyiByDate: ybd } = await computeYiyiCost(year, month);
@@ -112,8 +91,7 @@ async function getTotalProfit(params) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                     downstreams: { include: { downstream: true } },
                 },
             },
@@ -127,7 +105,7 @@ async function getTotalProfit(params) {
         if (!groups.has(key)) {
             groups.set(key, {
                 date: di.recordDate.toISOString().slice(0, 10),
-                upstreamId: upstream.id,
+                upstreamId: String(upstream.id),
                 upstream: upstream.name,
                 billingMethod: di.adSite.billingMethod,
                 qtySum: 0,
@@ -143,17 +121,12 @@ async function getTotalProfit(params) {
         g.inputs.push(di);
     }
     const rows = [];
-    // Yiyi is a global standalone cost per date — add it only ONCE per date,
-    // not to every (date, upstream, billingMethod) group, otherwise the Yiyi
-    // cost gets multiplied by the number of groups on that date.
     const yiyiAppliedDates = new Set();
     for (const g of groups.values()) {
         const { totalCost, errors } = await (0, payout_service_1.aggregateDownstreamCost)(g.inputs);
         if (errors.length > 0) {
-            // Log but don't throw — partial results acceptable
             console.warn('Downstream cost errors for total-profit group:', errors);
         }
-        // Add Yiyi cost for this date as downstream YIYI cost — once per date only
         let yiyiCost = 0;
         if (!yiyiAppliedDates.has(g.date)) {
             yiyiCost = yiyiByDate.get(g.date) ?? 0;
@@ -179,7 +152,7 @@ async function getTotalProfit(params) {
     return rows.sort((a, b) => {
         if (a.date !== b.date)
             return a.date.localeCompare(b.date);
-        return a.upstreamId - b.upstreamId;
+        return String(a.upstreamId).localeCompare(String(b.upstreamId));
     });
 }
 async function getOrderProfit(params) {
@@ -203,8 +176,7 @@ async function getOrderProfit(params) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                     downstreams: { include: { downstream: true } },
                 },
             },
@@ -214,17 +186,14 @@ async function getOrderProfit(params) {
     const groups = new Map();
     for (const di of dailyInputs) {
         const upstream = di.adSite.upstream;
-        const adOrder = di.adSite.adOrder;
-        const adType = actualAdType(di.adSite);
-        const key = `${di.recordDate.toISOString().slice(0, 10)}|${adOrder?.id ?? 0}|${adType?.code ?? ''}|${upstream.id}|${di.adSite.billingMethod}`;
+        const adType = upstream?.defaultAdType ?? null;
+        const key = `${di.recordDate.toISOString().slice(0, 10)}|${adType?.id ?? ''}|${upstream.id}|${di.adSite.billingMethod}`;
         if (!groups.has(key)) {
             groups.set(key, {
                 date: di.recordDate.toISOString().slice(0, 10),
-                orderId: adOrder?.id ?? null,
-                orderName: adOrder?.name ?? null,
-                adTypeCode: adType?.code ?? null,
+                adTypeCode: adType?.name ?? null,
                 adTypeName: adType?.name ?? null,
-                upstreamId: upstream.id,
+                upstreamId: String(upstream.id),
                 upstream: upstream.name,
                 billingMethod: di.adSite.billingMethod,
                 qtySum: 0,
@@ -248,8 +217,8 @@ async function getOrderProfit(params) {
         const profitRes = (0, payout_service_1.calculateProfit)(g.revenueSum, totalCost);
         rows.push({
             date: g.date,
-            orderId: g.orderId,
-            orderName: g.orderName,
+            orderId: null,
+            orderName: null,
             adTypeCode: g.adTypeCode,
             adTypeName: g.adTypeName,
             upstreamId: g.upstreamId,
@@ -268,9 +237,7 @@ async function getOrderProfit(params) {
     return rows.sort((a, b) => {
         if (a.date !== b.date)
             return a.date.localeCompare(b.date);
-        if ((a.orderId ?? 0) !== (b.orderId ?? 0))
-            return (a.orderId ?? 0) - (b.orderId ?? 0);
-        return a.upstreamId - b.upstreamId;
+        return String(a.upstreamId).localeCompare(String(b.upstreamId));
     });
 }
 //# sourceMappingURL=profitReport.service.js.map

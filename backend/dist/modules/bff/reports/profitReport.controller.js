@@ -16,8 +16,8 @@ async function getTotalProfitReport(req, res) {
         ...(date !== undefined && { date: String(date) }),
         ...(startDate !== undefined && { startDate: String(startDate) }),
         ...(endDate !== undefined && { endDate: String(endDate) }),
-        ...(advertiserId !== undefined && { advertiserId: parseInt(String(advertiserId), 10) }),
-        ...(upstreamId !== undefined && { upstreamId: parseInt(String(upstreamId), 10) }),
+        ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
+        ...(upstreamId !== undefined && { upstreamId: String(upstreamId) }),
         ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
     };
     try {
@@ -34,8 +34,8 @@ async function getOrderProfitReport(req, res) {
         ...(date !== undefined && { date: String(date) }),
         ...(startDate !== undefined && { startDate: String(startDate) }),
         ...(endDate !== undefined && { endDate: String(endDate) }),
-        ...(advertiserId !== undefined && { advertiserId: parseInt(String(advertiserId), 10) }),
-        ...(upstreamId !== undefined && { upstreamId: parseInt(String(upstreamId), 10) }),
+        ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
+        ...(upstreamId !== undefined && { upstreamId: String(upstreamId) }),
         ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
     };
     try {

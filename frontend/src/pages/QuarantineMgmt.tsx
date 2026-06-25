@@ -4,10 +4,10 @@ import { Table } from '../components/Table';
 import { listQuarantineBatches, restoreQuarantineBatch, type QuarantineResult } from '../lib/bffApi';
 
 type QuarantineBatchRow = {
-  id: number;
+  id: string;
   scopeType: string;
-  advertiserId: number | null;
-  adSiteId: number | null;
+  advertiserId: string | null;
+  adSiteId: string | null;
   startDate: string;
   endDate: string;
   reason: string | null;
@@ -15,7 +15,7 @@ type QuarantineBatchRow = {
   totalRevenue: string;
   createdAt: string;
   restoredAt: string | null;
-  restoredBy: number | null;
+  restoredBy: string | null;
 };
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -44,15 +44,15 @@ export function QuarantineMgmt() {
   const [rows, setRows] = useState<QuarantineBatchRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [restoringId, setRestoringId] = useState<number | null>(null);
-  const [confirmRestoreId, setConfirmRestoreId] = useState<number | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState('');
 
   const loadBatches = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await listQuarantineBatches() as QuarantineBatchRow[];
+      const data = await listQuarantineBatches() as unknown as QuarantineBatchRow[];
       setRows(data ?? []);
     } catch (err) {
       setError(errorMessage(err));

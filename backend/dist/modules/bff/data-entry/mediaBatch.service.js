@@ -33,7 +33,7 @@ function validateMediaBatchItem(item, billingMethod) {
         if (qty < 0)
             throw new Error(`${billingMethod}: qty must be >= 0`);
     }
-    else if (billingMethod === 'RATIO' || billingMethod === 'CPS') {
+    else if (billingMethod === 'CPS') {
         const hasA1 = Object.prototype.hasOwnProperty.call(item, 'amount1') && item.amount1 !== undefined && item.amount1 !== null && String(item.amount1).trim() !== '';
         const hasA2 = Object.prototype.hasOwnProperty.call(item, 'amount2') && item.amount2 !== undefined && item.amount2 !== null && String(item.amount2).trim() !== '';
         const hasRatio = Object.prototype.hasOwnProperty.call(item, 'ratio') && item.ratio !== undefined && item.ratio !== null && String(item.ratio).trim() !== '';
@@ -56,10 +56,10 @@ function validateMediaBatchItem(item, billingMethod) {
 }
 async function saveMediaBatch(items, userId) {
     const result = { success: true, saved: 0, updated: 0, skipped: 0, errors: [] };
-    const siteIds = [...new Set(items.map(i => i.adSiteId))];
+    const siteIds = [...new Set(items.map(i => String(i.adSiteId)))];
     const sites = await client_2.prisma.adSite.findMany({
         where: { id: { in: siteIds } },
-        include: { upstream: { include: { adType: true } } },
+        include: { upstream: { include: { defaultAdType: true } } },
     });
     const siteById = new Map(sites.map(s => [s.id, s]));
     for (const item of items) {
@@ -120,6 +120,7 @@ async function saveMediaBatch(items, userId) {
             else {
                 await client_2.prisma.dailyInput.create({
                     data: {
+                        id: `di_${item.adSiteId}_${item.recordDate.replace(/-/g, '')}`,
                         recordDate,
                         adSiteId: item.adSiteId,
                         qty: item.qty ?? 0,
@@ -163,6 +164,7 @@ async function confirmMediaBatch(recordDate, adSiteIds, userId) {
         });
         await tx.operationLog.create({
             data: {
+                id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 userId: userId || null,
                 username: null,
                 action: 'CONFIRM_MEDIA',
@@ -190,6 +192,7 @@ async function unconfirmMedia(id, userId) {
         });
         await tx.operationLog.create({
             data: {
+                id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 userId: userId || null,
                 username: null,
                 action: 'UNCONFIRM_MEDIA',

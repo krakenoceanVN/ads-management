@@ -1,24 +1,23 @@
 import { prisma } from '../../../shared/prisma/client';
 import type { Prisma } from '@prisma/client';
-import type { Upstream, AdSite, AdOrder, AdType, Downstream, AdSiteDownstream } from '../../../shared/prisma/client';
+import type { Upstream, AdSite, AdType, Downstream, AdSiteDownstream } from '../../../shared/prisma/client';
 import type { AdvertiserEntryRow, MediaEntryRow } from './dataEntry.types';
 import type { DataEntryStatus, EntryType } from '../bff.types';
 
 export interface ListAdvertiserEntriesParams {
   date: string;
-  advertiserId?: number;
-  adTypeCode?: string;
-  status?: string; // 'pending' | 'confirmed' | 'unconfirmed' | 'all'
+  advertiserId?: string | number;
+  adTypeId?: string;
+  status?: string;
 }
 
 export interface ListMediaEntriesParams {
   date: string;
-  mediaId?: number;
-  adTypeCode?: string;
+  mediaId?: string | number;
+  adTypeId?: string;
   status?: string;
 }
 
-// Map Prisma.Decimal to Number, returning undefined for null
 function toNum(d: Prisma.Decimal | null | undefined): number | undefined {
   if (d == null) return undefined;
   return d.toNumber();
@@ -29,46 +28,33 @@ function toStr(d: Prisma.Decimal | null | undefined): string {
   return d.toString();
 }
 
-function actualAdType(site: { adOrder?: { adType?: AdType | null } | null; upstream: { adType?: AdType | null } }) {
-  return site.adOrder?.adType ?? site.upstream.adType ?? null;
+async function adTypeFilterWhere(adTypeId: string): Promise<Prisma.AdSiteWhereInput> {
+  const adType = await prisma.adType.findUnique({ where: { id: adTypeId } });
+  if (!adType) return { id: '__none__' };
+  return { upstream: { adTypeId: adType.id } };
 }
 
-function actualAdTypeWhere(adTypeCode: string): Prisma.AdSiteWhereInput {
-  return {
-    OR: [
-      { adOrder: { adType: { code: adTypeCode } } },
-      { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
-    ],
-  };
-}
-
-// Load all AdIds for advertiser-side data entry, with optional filters
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
-  const { date, advertiserId, adTypeCode, status } = params;
+  const { date, advertiserId, adTypeId, status } = params;
 
-  // Normalize date to YYYY-MM-DD
   const d = new Date(date);
   const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const recordDate = new Date(dateStr);
 
-  // Build AdSite filter
   const siteWhere: Prisma.AdSiteWhereInput = {
     isArchived: false,
-    ...(advertiserId != null && { upstreamId: advertiserId }),
-    ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
+    ...(advertiserId != null && { upstreamId: String(advertiserId) }),
+    ...(adTypeId && await adTypeFilterWhere(adTypeId)),
   };
 
-  // Load all candidate AdSites for the filter
   const adSites = await prisma.adSite.findMany({
     where: siteWhere,
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
     orderBy: { id: 'asc' },
   });
 
-  // Load all DailyInput records for this date
   const dailyInputs = await prisma.dailyInput.findMany({
     where: {
       recordDate,
@@ -77,14 +63,11 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
   });
   const diBySiteId = new Map(dailyInputs.map(di => [di.adSiteId, di]));
 
-  // Build result rows
   const rows: AdvertiserEntryRow[] = adSites.map(site => {
     const di = diBySiteId.get(site.id);
     if (!di) {
-      // No DailyInput record for this adSite on this date
       return makeAdvertiserRow(site, recordDate, null);
     }
-    // Skip quarantined unless explicitly filtered
     if (di.status === 'quarantined' && status !== 'quarantined') {
       return null;
     }
@@ -94,18 +77,18 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
   return rows;
 }
 
-function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (AdOrder & { adType?: AdType }) | null }, recordDate: Date, di: Prisma.DailyInputGetPayload<{}> | null): AdvertiserEntryRow {
+function makeAdvertiserRow(
+  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } },
+  recordDate: Date,
+  di: Prisma.DailyInputGetPayload<{}> | null
+): AdvertiserEntryRow {
   const upstream = site.upstream;
-  const adOrder = site.adOrder;
-  const adType = actualAdType(site);
+  const adType = upstream.defaultAdType ?? null;
 
-  // Rate: CPM and CPA use unitPriceSnapshot;
-  // CPS uses ratioSnapshot
   const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);
 
-  // Traffic: CPM qty, CPS amount1, CPA amount2
   let traffic = '';
   let settlement = '';
   if (di) {
@@ -118,48 +101,44 @@ function makeAdvertiserRow(site: AdSite & { upstream: Upstream & { adType: AdTyp
   }
 
   const receivable = di ? toNum(di.revenue) ?? 0 : 0;
+  const id = di?.id ?? '';
 
   return {
-    id: di?.id ?? 0,
+    id,
     date: formatDate(recordDate),
     advertiser: upstream.name,
     advertiserId: upstream.id,
-    adOrder: adOrder?.name ?? '',
-    adOrderId: site.adOrderId ?? null,
-    adOrderCode: adType?.code ?? null,
-    adOrderName: adType?.name ?? null,
+    adTypeName: adType?.name ?? '',
+    adTypeCode: adType?.name ?? null,
     type: site.billingMethod as EntryType,
-    adId: site.name,                // slot = AdSite.name (real schema has no slot field)
+    adId: site.name,
     adIdNum: site.id,
     rate,
     traffic,
     settlement,
     receivable: receivable || '',
     status: (di?.status as DataEntryStatus) ?? 'pending',
+    uiKey: `${site.id}-${formatDate(recordDate)}`,
   };
 }
 
-// Load all MediaIds for media-side data entry, with optional filters
 export async function listMediaEntries(params: ListMediaEntriesParams) {
-  const { date, mediaId, adTypeCode, status } = params;
+  const { mediaId, adTypeId, status } = params;
 
   const dateStr = `${params.date}`.slice(0, 10);
   const recordDate = new Date(dateStr + 'T00:00:00.000Z');
 
-  // Build AdSite filter for media-side
   const siteWhere: Prisma.AdSiteWhereInput = {
     isArchived: false,
-    ...(mediaId != null && { id: mediaId }),
-    ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
-    // Only include sites that have JUNCTIONS (MediaIds) — we need MediaId rows
+    ...(mediaId != null && { id: String(mediaId) }),
+    ...(adTypeId && await adTypeFilterWhere(adTypeId)),
     downstreams: { some: {} },
   };
 
   const adSites = await prisma.adSite.findMany({
     where: siteWhere,
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
       downstreams: {
         include: { downstream: true },
         orderBy: { id: 'asc' },
@@ -168,7 +147,6 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
     orderBy: { id: 'asc' },
   });
 
-  // Load DailyInput for this date across all these adSites
   const siteIds = adSites.map(s => s.id);
   const dailyInputs = await prisma.dailyInput.findMany({
     where: {
@@ -179,7 +157,6 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
   });
   const diBySiteId = new Map(dailyInputs.map(di => [di.adSiteId, di]));
 
-  // Load DownstreamPeriod for payout rates
   const downstreamIds = adSites.flatMap(s => s.downstreams.map(d => d.downstreamId));
   const periods = await prisma.downstreamPeriod.findMany({
     where: {
@@ -195,11 +172,12 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
   for (const site of adSites) {
     for (const junction of site.downstreams) {
       const di = diBySiteId.get(site.id) ?? null;
-      if (!di && status && status !== 'all') continue; // skip non-existing if status filter active
+      if (!di && status && status !== 'all') continue;
       if (di?.status === 'quarantined' && status !== 'quarantined') continue;
 
-      const payoutRate = rateByDownstreamId.get(junction.downstreamId) ?? toNum(junction.downstream.payoutRate) ?? 0.8;
-      const row = makeMediaRow(site, junction, payoutRate, recordDate, di);
+      const payoutRate = rateByDownstreamId.get(junction.downstreamId) ?? 0;
+      const shareRatioResolved = 1;
+      const row = makeMediaRow(site, junction, payoutRate, shareRatioResolved, recordDate, di);
       rows.push(row);
     }
   }
@@ -208,18 +186,19 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
 }
 
 function makeMediaRow(
-  site: AdSite & { upstream: Upstream & { adType: AdType }; adOrder?: (AdOrder & { adType?: AdType }) | null; downstreams: (AdSiteDownstream & { downstream: Downstream })[] },
+  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; downstreams: (AdSiteDownstream & { downstream: Downstream })[] },
   junction: AdSiteDownstream & { downstream: Downstream },
   payoutRate: number,
+  shareRatioResolved: number,
   recordDate: Date,
   di: Prisma.DailyInputGetPayload<{}> | null
 ): MediaEntryRow {
   const upstream = site.upstream;
+  const adType = upstream.defaultAdType ?? null;
 
-  const adTypeCode = actualAdType(site)?.code ?? null;
-  const adTypeName = actualAdType(site)?.name ?? null;
+  const adTypeCode = adType?.name ?? null;
+  const adTypeName = adType?.name ?? null;
 
-  // Rate: CPM/CPA use unitPriceSnapshot or currentUnitPrice, CPS uses currentRatio
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);
@@ -235,29 +214,26 @@ function makeMediaRow(
     }
   }
 
-  // receivable is the full revenue from DailyInput
   const receivable = di ? toNum(di.revenue) ?? 0 : 0;
 
-  // shareRatio = payoutRate from Downstream/period
-  const shareRatioNum = payoutRate;
+  const shareRatioNum = shareRatioResolved;
   const shareRatio = shareRatioNum === 1 ? '1' : String(shareRatioNum);
 
-  // actualReceived = revenue * shareRatio
   const actualReceived = receivable && shareRatioNum
     ? Number((receivable * shareRatioNum).toFixed(3))
     : null;
 
+  const id = di?.id ?? '';
+
   return {
-    id: di?.id ?? 0,
+    id,
     date: formatDate(recordDate),
     media: upstream.name,
     mediaId: upstream.id,
-    mediaAdOrder: adTypeCode ?? '',
-    mediaAdOrderId: null,
-    mediaAdOrderCode: adTypeCode,
-    mediaAdOrderName: adTypeName,
+    mediaAdTypeName: adTypeName ?? '',
+    mediaAdTypeCode: adTypeCode,
     type: site.billingMethod as MediaEntryRow['type'],
-    mediaIdStr: site.name,          // slot = AdSite.name (no slot column in schema)
+    mediaIdStr: site.name,
     upstreamAdId: site.name,
     upstreamAdIdNum: site.id,
     rate,
@@ -269,6 +245,7 @@ function makeMediaRow(
     shareRatioNum,
     actualReceived,
     status: (di?.status as DataEntryStatus) ?? 'pending',
+    uiKey: `${junction.id}-${formatDate(recordDate)}`,
   };
 }
 

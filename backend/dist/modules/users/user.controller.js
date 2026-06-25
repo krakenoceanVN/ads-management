@@ -30,8 +30,8 @@ async function create(req, res) {
     res.status(201).json((0, success_1.bffData)(user));
 }
 async function update(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid user id');
     const body = req.body;
     const user = await (0, user_service_1.updateUser)(id, {
@@ -47,8 +47,8 @@ async function update(req, res) {
     res.json((0, success_1.bffData)(user));
 }
 async function doResetPassword(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid user id');
     const body = req.body;
     if (!body?.password?.trim())

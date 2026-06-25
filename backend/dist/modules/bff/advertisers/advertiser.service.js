@@ -5,7 +5,7 @@ exports.getAdvertiser = getAdvertiser;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 const advertiserInclude = {
-    adType: true,
+    defaultAdType: true,
     adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } },
 };
 async function listAdvertisers() {
@@ -17,7 +17,7 @@ async function listAdvertisers() {
 }
 async function getAdvertiser(id) {
     const row = await client_1.prisma.upstream.findUnique({
-        where: { id },
+        where: { id: String(id) },
         include: advertiserInclude,
     });
     if (!row)

@@ -11,7 +11,7 @@
  * Phase 1 is fully deterministic. No LLM call. No backend endpoint.
  */
 
-import type { AdOrder, AdTypeCode, EntryType } from './bffTypes';
+import type { AdTypeCode, EntryType } from './bffTypes';
 
 // Limits to keep the UI responsive and avoid runaway parsing.
 export const AI_IMPORT_LIMITS = {
@@ -95,8 +95,6 @@ export interface AiParseOptions {
   date: string;
   /** adTypeCode used to filter entities and disambiguate names. */
   adTypeCode?: AdTypeCode;
-  /** Ad orders dictionary to detect rate mismatch against system config. */
-  adOrders?: AdOrder[];
   /** Optional raw adTypeCode from a row, used to detect rateMismatch per row. */
   detectRateMismatch?: (row: AiPreviewRow) => boolean;
 }

@@ -6,17 +6,14 @@ const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 async function listMediaIds(filters) {
     const where = {};
-    if (filters?.mediaId != null) {
+    if (filters?.mediaId) {
         where.adSiteId = filters.mediaId;
     }
     if (filters?.adTypeCode || filters?.type !== undefined || filters?.archived !== undefined) {
         where.adSite = {
-            OR: filters.adTypeCode ? [
-                { adOrder: { adType: { code: filters.adTypeCode } } },
-                { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
-            ] : undefined,
-            billingMethod: filters.type,
-            isArchived: filters.archived,
+            ...(filters.adTypeCode ? { upstream: { defaultAdType: { name: filters.adTypeCode } } } : {}),
+            ...(filters.type !== undefined ? { billingMethod: filters.type } : {}),
+            ...(filters.archived !== undefined ? { isArchived: filters.archived } : {}),
         };
     }
     const rows = await client_1.prisma.adSiteDownstream.findMany({
@@ -24,11 +21,11 @@ async function listMediaIds(filters) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                 },
             },
             downstream: true,
+            mediaAdType: true,
         },
         orderBy: { id: 'asc' },
     });
@@ -40,11 +37,11 @@ async function getMediaId(id) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                 },
             },
             downstream: true,
+            mediaAdType: true,
         },
     });
     if (!row)

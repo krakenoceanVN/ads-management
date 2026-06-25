@@ -9,14 +9,6 @@
  * Cost calculated via payout.service aggregateDownstreamCost().
  * Tax applied per confirmed rules.
  */
-/**
- * Calculate total Yiyi cost for a given date range.
- * yiyiCost = SUM(dayTraffic / 1000 * (unitPrice + profitUnitPrice))
- * where dayTraffic = yy-02-01 + yy-02-02 + yy-02-03 + yy-02-04
- *
- * Yiyi is a standalone source (YiyiDailyData/YiyiDailyPricing), NOT in DailyInput.
- * Added as downstream YIYI cost for SM profit report Excel parity.
- */
 export declare function computeYiyiCost(year: number, month: number): Promise<{
     totalYiyiCost: number;
     yiyiByDate: Map<string, number>;
@@ -25,13 +17,13 @@ export interface TotalProfitParams {
     date?: string;
     startDate?: string;
     endDate?: string;
-    advertiserId?: number;
-    upstreamId?: number;
+    advertiserId?: string;
+    upstreamId?: string;
     adTypeCode?: string;
 }
 export interface TotalProfitRow {
     date: string;
-    upstreamId: number;
+    upstreamId: string;
     upstream: string;
     billingMethod: string;
     qty: number;
@@ -48,8 +40,8 @@ export interface OrderProfitParams {
     date?: string;
     startDate?: string;
     endDate?: string;
-    advertiserId?: number;
-    upstreamId?: number;
+    advertiserId?: string;
+    upstreamId?: string;
     adTypeCode?: string;
 }
 export interface OrderProfitRow {
@@ -58,7 +50,7 @@ export interface OrderProfitRow {
     orderName: string | null;
     adTypeCode: string | null;
     adTypeName: string | null;
-    upstreamId: number;
+    upstreamId: string;
     upstream: string;
     billingMethod: string;
     qty: number;

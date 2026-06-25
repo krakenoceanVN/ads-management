@@ -17,8 +17,8 @@ async function getAllPermissions(_req, res) {
     res.json((0, success_1.bffData)(permissions));
 }
 async function updatePermissions(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid role id');
     const body = req.body;
     if (!Array.isArray(body.permissionKeys)) {

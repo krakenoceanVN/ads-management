@@ -21,7 +21,7 @@ export interface RebateRateResult {
  * Resolve the effective rebate rate for an AdSite on a given recordDate.
  */
 export async function resolveRebateRate(
-  adSiteId: number,
+  adSiteId: string,
   recordDate: Date
 ): Promise<RebateRateResult> {
   // 1. Check active AdSiteRebateRate

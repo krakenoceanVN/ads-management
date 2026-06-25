@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.hardDeleteAdvertiser = hardDeleteAdvertiser;
 exports.hardDeleteAdType = hardDeleteAdType;
 exports.hardDeleteAdSite = hardDeleteAdSite;
-exports.hardDeleteAdOrder = hardDeleteAdOrder;
+exports.hardDeleteMediaAdOrder = hardDeleteMediaAdOrder;
 exports.hardDeleteMediaId = hardDeleteMediaId;
 const client_1 = require("../../../shared/prisma/client");
 const NOT_FOUND_MESSAGE = 'Không tìm thấy bản ghi cần xóa.';
@@ -42,7 +42,8 @@ function dependencyData(dependencies) {
 async function writeOperationLog(client, ctx, action, targetType, targetId, detail) {
     await client.operationLog.create({
         data: {
-            userId: ctx.userId,
+            id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            userId: ctx.userId != null ? String(ctx.userId) : null,
             username: ctx.username ?? null,
             action,
             module: 'masterData',
@@ -119,9 +120,8 @@ function successResult(entityType, entityId) {
     };
 }
 async function countAdvertiserDependencies(advertiserId) {
-    const [adSiteCount, adOrderCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] = await Promise.all([
+    const [adSiteCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] = await Promise.all([
         client_1.prisma.adSite.count({ where: { upstreamId: advertiserId } }),
-        client_1.prisma.adOrder.count({ where: { upstreamId: advertiserId } }),
         client_1.prisma.adSiteDownstream.count({ where: { adSite: { upstreamId: advertiserId } } }),
         client_1.prisma.adSiteRebateRate.count({ where: { adSite: { upstreamId: advertiserId } } }),
         client_1.prisma.adSiteEvent.count({ where: { adSite: { upstreamId: advertiserId } } }),
@@ -129,43 +129,40 @@ async function countAdvertiserDependencies(advertiserId) {
     ]);
     return {
         adSiteCount,
-        adOrderCount,
         upstreamCount: 0,
         downstreamCount: 0,
         adSiteDownstreamCount,
         rebateRateCount,
         adSiteEventCount,
+        mediaAdOrderCount: 0,
         ...financial,
     };
 }
 function adTypeAdSiteWhere(adTypeId) {
     return {
-        OR: [
-            { upstream: { adTypeId } },
-            { adOrder: { adTypeId } },
-        ],
+        upstream: { adTypeId },
     };
 }
 async function countAdTypeDependencies(adTypeId) {
     const adSiteWhere = adTypeAdSiteWhere(adTypeId);
-    const [upstreamCount, adOrderCount, adSiteCount, downstreamCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] = await Promise.all([
+    const [upstreamCount, adSiteCount, downstreamCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, mediaAdOrderCount, financial] = await Promise.all([
         client_1.prisma.upstream.count({ where: { adTypeId } }),
-        client_1.prisma.adOrder.count({ where: { adTypeId } }),
         client_1.prisma.adSite.count({ where: adSiteWhere }),
         client_1.prisma.downstreamAdType.count({ where: { adTypeId } }),
         client_1.prisma.adSiteDownstream.count({ where: { adSite: adSiteWhere } }),
         client_1.prisma.adSiteRebateRate.count({ where: { adSite: adSiteWhere } }),
         client_1.prisma.adSiteEvent.count({ where: { adSite: adSiteWhere } }),
+        client_1.prisma.mediaAdOrder.count({ where: { adTypeId } }),
         countFinancialData({ adSite: adSiteWhere }),
     ]);
     return {
         adSiteCount,
-        adOrderCount,
         upstreamCount,
         downstreamCount,
         adSiteDownstreamCount,
         rebateRateCount,
         adSiteEventCount,
+        mediaAdOrderCount,
         ...financial,
     };
 }
@@ -178,44 +175,17 @@ async function countAdSiteDependencies(adSiteId) {
     ]);
     return {
         adSiteCount: 0,
-        adOrderCount: 0,
         upstreamCount: 0,
         downstreamCount: 0,
         adSiteDownstreamCount,
         rebateRateCount,
         adSiteEventCount,
+        mediaAdOrderCount: 0,
         ...financial,
-    };
-}
-async function countAdOrderDependencies(adOrderId) {
-    const adSiteWhere = { adOrderId };
-    const [adSiteCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] = await Promise.all([
-        client_1.prisma.adSite.count({ where: adSiteWhere }),
-        client_1.prisma.adSiteDownstream.count({ where: { adSite: adSiteWhere } }),
-        client_1.prisma.adSiteRebateRate.count({ where: { adSite: adSiteWhere } }),
-        client_1.prisma.adSiteEvent.count({ where: { adSite: adSiteWhere } }),
-        countFinancialData({ adSite: adSiteWhere }),
-    ]);
-    return {
-        adSiteCount,
-        adOrderCount: 0,
-        upstreamCount: 0,
-        downstreamCount: 0,
-        adSiteDownstreamCount,
-        rebateRateCount,
-        adSiteEventCount,
-        ...financial,
-    };
-}
-function adSiteDependencyCounts(deps) {
-    return {
-        adSiteDownstreamCount: deps.adSiteDownstreamCount,
-        rebateRateCount: deps.rebateRateCount,
-        adSiteEventCount: deps.adSiteEventCount,
     };
 }
 async function hardDeleteAdvertiser(id, ctx) {
-    const target = await client_1.prisma.upstream.findUnique({ where: { id }, include: { adType: true } });
+    const target = await client_1.prisma.upstream.findUnique({ where: { id }, include: { defaultAdType: true } });
     if (!target)
         return notFound('advertiser', id, ctx);
     const deps = await countAdvertiserDependencies(id);
@@ -227,7 +197,6 @@ async function hardDeleteAdvertiser(id, ctx) {
     }
     const dependencies = {
         adSiteCount: deps.adSiteCount,
-        adOrderCount: deps.adOrderCount,
         adSiteDownstreamCount: deps.adSiteDownstreamCount,
         rebateRateCount: deps.rebateRateCount,
         adSiteEventCount: deps.adSiteEventCount,
@@ -259,12 +228,12 @@ async function hardDeleteAdType(id, ctx) {
     }
     const dependencies = {
         upstreamCount: deps.upstreamCount,
-        adOrderCount: deps.adOrderCount,
         adSiteCount: deps.adSiteCount,
         downstreamCount: deps.downstreamCount,
         adSiteDownstreamCount: deps.adSiteDownstreamCount,
         rebateRateCount: deps.rebateRateCount,
         adSiteEventCount: deps.adSiteEventCount,
+        mediaAdOrderCount: deps.mediaAdOrderCount,
     };
     if (Object.keys(dependencyData(dependencies)).length > 0) {
         return dependencyBlock('adType', id, ctx, dependencies, { snapshot: target, dependencyCheck: deps });
@@ -283,8 +252,7 @@ async function hardDeleteAdSite(id, ctx, side) {
     const target = await client_1.prisma.adSite.findUnique({
         where: { id },
         include: {
-            upstream: { include: { adType: true } },
-            adOrder: true,
+            upstream: { include: { defaultAdType: true } },
         },
     });
     if (!target)
@@ -296,7 +264,12 @@ async function hardDeleteAdSite(id, ctx, side) {
             detail: { snapshot: target, dependencyCheck: deps },
         });
     }
-    const dependencies = adSiteDependencyCounts(deps);
+    const dependencies = {
+        adSiteDownstreamCount: deps.adSiteDownstreamCount,
+        rebateRateCount: deps.rebateRateCount,
+        adSiteEventCount: deps.adSiteEventCount,
+        mediaAdOrderCount: deps.mediaAdOrderCount,
+    };
     if (Object.keys(dependencyData(dependencies)).length > 0) {
         return dependencyBlock(side, id, ctx, dependencies, { snapshot: target, dependencyCheck: deps });
     }
@@ -310,38 +283,20 @@ async function hardDeleteAdSite(id, ctx, side) {
     });
     return successResult(side, id);
 }
-async function hardDeleteAdOrder(id, ctx) {
-    const target = await client_1.prisma.adOrder.findUnique({
+async function hardDeleteMediaAdOrder(id, ctx) {
+    const target = await client_1.prisma.mediaAdOrder.findUnique({
         where: { id },
         include: {
-            upstream: true,
+            downstream: true,
             adType: true,
         },
     });
     if (!target)
         return notFound('mediaAdOrder', id, ctx);
-    const deps = await countAdOrderDependencies(id);
-    if (deps.dailyInputCount > 0) {
-        return financialBlock('mediaAdOrder', id, ctx, deps, {
-            message: `${FINANCIAL_BLOCK_MESSAGE} Hiện Cô lập dữ liệu chưa hỗ trợ trực tiếp theo Đơn quảng cáo media; ` +
-                'cần cô lập theo từng Media liên quan.',
-            detail: { snapshot: target, dependencyCheck: deps },
-        });
-    }
-    const dependencies = {
-        adSiteCount: deps.adSiteCount,
-        adSiteDownstreamCount: deps.adSiteDownstreamCount,
-        rebateRateCount: deps.rebateRateCount,
-        adSiteEventCount: deps.adSiteEventCount,
-    };
-    if (Object.keys(dependencyData(dependencies)).length > 0) {
-        return dependencyBlock('mediaAdOrder', id, ctx, dependencies, { snapshot: target, dependencyCheck: deps });
-    }
     await client_1.prisma.$transaction(async (tx) => {
-        await tx.adOrder.delete({ where: { id } });
+        await tx.mediaAdOrder.delete({ where: { id } });
         await writeOperationLog(tx, ctx, 'HARD_DELETE', 'mediaAdOrder', id, {
             snapshot: target,
-            dependencyCheck: deps,
             deleted: true,
         });
     });
@@ -351,28 +306,16 @@ async function hardDeleteMediaId(id, ctx) {
     const target = await client_1.prisma.adSiteDownstream.findUnique({
         where: { id },
         include: {
-            adSite: {
-                include: {
-                    upstream: { include: { adType: true } },
-                },
-            },
+            adSite: true,
             downstream: true,
         },
     });
     if (!target)
         return notFound('mediaId', id, ctx);
-    const financial = await countFinancialData({ adSiteId: target.adSiteId });
-    if (financial.dailyInputCount > 0) {
-        return financialBlock('mediaId', id, ctx, financial, {
-            quarantineTarget: { scope: 'media', adSiteId: target.adSiteId },
-            detail: { snapshot: target, dependencyCheck: financial },
-        });
-    }
     await client_1.prisma.$transaction(async (tx) => {
         await tx.adSiteDownstream.delete({ where: { id } });
         await writeOperationLog(tx, ctx, 'HARD_DELETE', 'mediaId', id, {
             snapshot: target,
-            dependencyCheck: financial,
             deleted: true,
         });
     });

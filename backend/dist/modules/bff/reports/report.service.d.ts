@@ -17,7 +17,7 @@ export interface AdvertiserReportParams {
     date?: string;
     startDate?: string;
     endDate?: string;
-    advertiserId?: number;
+    advertiserId?: string;
     adTypeCode?: string;
     status?: 'confirmed' | 'unconfirmed' | 'pending' | 'all';
 }
@@ -25,7 +25,7 @@ export interface MediaReportParams {
     date?: string;
     startDate?: string;
     endDate?: string;
-    mediaId?: number;
+    mediaId?: string;
     adTypeCode?: string;
     status?: 'confirmed' | 'unconfirmed' | 'pending' | 'all';
 }

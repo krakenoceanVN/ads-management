@@ -2,15 +2,15 @@
  * Downstream BFF Write Service
  * Handles create and update for Downstream (下游).
  * A downstream is a payout channel (ML | LE | YIYI) that owns a set of AdTypes
- * via the DownstreamAdType junction (mirrors UpstreamAdType). Phase-2 dropped
- * the legacy scalar Downstream.adTypeId — the junction is the single source of
- * truth.
+ * via the DownstreamAdType junction. payoutRate is now stored on
+ * DownstreamPeriod (per-period), not on Downstream itself.
  */
 
 import { prisma } from '../../../shared/prisma/client';
 import { mapDownstream } from '../mappers';
-import { BadRequestError, ConflictError, NotFoundError } from '../../../shared/errors/AppError';
 import { downstreamInclude } from './downstream.service';
+import { BadRequestError, ConflictError, NotFoundError } from '../../../shared/errors/AppError';
+import { generateShortId } from '../../../shared/ids';
 import type { Prisma } from '@prisma/client';
 import type { DownstreamDto } from '../bff.types';
 
@@ -19,17 +19,27 @@ const ALLOWED_STATUSES = ['active', 'inactive'] as const;
 type Tx = Prisma.TransactionClient;
 
 export interface CreateDownstreamInput {
-  adTypeCodes: string[];
+  adTypeIds: string[];
   downstreamType: string;
+  name?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
   payoutRate?: number;
   status?: string;
 }
 
 export interface UpdateDownstreamInput {
   downstreamType?: string;
+  name?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
   payoutRate?: number;
   status?: string;
-  adTypeCodes?: string[];
+  adTypeIds?: string[];
 }
 
 function normalizeType(raw: string): string {
@@ -57,26 +67,26 @@ function validateStatus(status: string): string {
   return status;
 }
 
-function normalizeAdTypeCodes(input: { adTypeCodes?: string[] }) {
-  if (input.adTypeCodes === undefined) return [];
-  return Array.from(new Set(input.adTypeCodes.map(c => c.trim()).filter(Boolean)));
+function normalizeAdTypeIds(input: { adTypeIds?: string[] }) {
+  if (input.adTypeIds === undefined) return [];
+  return Array.from(new Set(input.adTypeIds.map(id => id.trim()).filter(Boolean)));
 }
 
-async function resolveAdTypesByCodes(codes: string[], tx: Tx) {
-  if (!codes.length) throw new BadRequestError('at least one adTypeCode is required');
-  const adTypes = await tx.adType.findMany({ where: { code: { in: codes } }, orderBy: { id: 'asc' } });
-  const found = new Set(adTypes.map(t => t.code));
-  const missing = codes.filter(c => !found.has(c));
-  if (missing.length) throw new BadRequestError(`Invalid adTypeCode: ${missing.join(', ')}`);
-  return codes.map(code => adTypes.find(t => t.code === code)!);
+async function resolveAdTypesByIds(ids: string[], tx: Tx) {
+  if (!ids.length) return [];
+  const adTypes = await tx.adType.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+  const found = new Set(adTypes.map(t => t.id));
+  const missing = ids.filter(id => !found.has(id));
+  if (missing.length) throw new BadRequestError(`Invalid adTypeId: ${missing.join(', ')}`);
+  return ids.map(id => adTypes.find(t => t.id === id)!);
 }
 
-async function syncDownstreamAdTypes(downstreamId: number, adTypeIds: number[], tx: Tx) {
+async function syncDownstreamAdTypes(downstreamId: string, adTypeIds: string[], tx: Tx) {
   await tx.downstreamAdType.deleteMany({ where: { downstreamId, adTypeId: { notIn: adTypeIds } } });
   await Promise.all(adTypeIds.map(adTypeId => tx.downstreamAdType.upsert({
     where: { downstreamId_adTypeId: { downstreamId, adTypeId } },
     update: {},
-    create: { downstreamId, adTypeId },
+    create: { id: `dat_${downstreamId}_${adTypeId}`, downstreamId, adTypeId },
   })));
 }
 
@@ -85,17 +95,24 @@ export async function createDownstream(input: CreateDownstreamInput): Promise<Do
   const payoutRate = input.payoutRate ?? 0.8;
   validatePayoutRate(payoutRate);
   const status = validateStatus(input.status ?? 'active');
-  const adTypeCodes = normalizeAdTypeCodes(input);
+  const adTypeIds = normalizeAdTypeIds(input);
 
   const row = await prisma.$transaction(async tx => {
-    await resolveAdTypesByCodes(adTypeCodes, tx);
+    const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
 
-    // DB-level partial unique on (downstreamType) where status='active' will also
-    // throw P2002 — catch that here for a clean 409.
     let created;
     try {
       created = await tx.downstream.create({
-        data: { downstreamType, payoutRate, status },
+        data: {
+          id: generateShortId(),
+          downstreamType,
+          status,
+          name: input.name ?? null,
+          contact: input.contact ?? null,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          notes: input.notes ?? null,
+        },
       });
     } catch (err: any) {
       if (err?.code === 'P2002') {
@@ -103,7 +120,6 @@ export async function createDownstream(input: CreateDownstreamInput): Promise<Do
       }
       throw err;
     }
-    const adTypes = await resolveAdTypesByCodes(adTypeCodes, tx);
     await syncDownstreamAdTypes(created.id, adTypes.map(t => t.id), tx);
     return tx.downstream.findUniqueOrThrow({ where: { id: created.id }, include: downstreamInclude });
   });
@@ -111,13 +127,13 @@ export async function createDownstream(input: CreateDownstreamInput): Promise<Do
   return mapDownstream(row);
 }
 
-export async function updateDownstream(id: number, input: UpdateDownstreamInput): Promise<DownstreamDto> {
-  if (!id || Number.isNaN(id)) throw new BadRequestError('Invalid id');
+export async function updateDownstream(id: string, input: UpdateDownstreamInput): Promise<DownstreamDto> {
+  if (!id) throw new BadRequestError('Invalid id');
 
   const existing = await prisma.downstream.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Downstream not found');
 
-  const data: { downstreamType?: string; payoutRate?: number; status?: string } = {};
+  const data: { downstreamType?: string; status?: string; name?: string | null; contact?: string | null; phone?: string | null; email?: string | null; notes?: string | null } = {};
 
   if (input.downstreamType !== undefined) {
     const downstreamType = normalizeType(input.downstreamType);
@@ -132,19 +148,26 @@ export async function updateDownstream(id: number, input: UpdateDownstreamInput)
 
   if (input.payoutRate !== undefined) {
     validatePayoutRate(input.payoutRate);
-    data.payoutRate = input.payoutRate;
+    // payoutRate is no longer stored on Downstream; it lives on DownstreamPeriod.
+    // No-op here (kept for API compatibility).
   }
 
   if (input.status !== undefined) {
     data.status = validateStatus(input.status);
   }
 
-  const shouldSyncAdTypes = input.adTypeCodes !== undefined;
+  if (input.name !== undefined) data.name = input.name ?? null;
+  if (input.contact !== undefined) data.contact = input.contact ?? null;
+  if (input.phone !== undefined) data.phone = input.phone ?? null;
+  if (input.email !== undefined) data.email = input.email ?? null;
+  if (input.notes !== undefined) data.notes = input.notes ?? null;
+
+  const shouldSyncAdTypes = input.adTypeIds !== undefined;
 
   const row = await prisma.$transaction(async tx => {
     if (shouldSyncAdTypes) {
-      const codes = normalizeAdTypeCodes(input);
-      const adTypes = await resolveAdTypesByCodes(codes, tx);
+      const ids = normalizeAdTypeIds(input);
+      const adTypes = await resolveAdTypesByIds(ids, tx);
       await syncDownstreamAdTypes(id, adTypes.map(t => t.id), tx);
     }
     if (Object.keys(data).length) {
@@ -164,11 +187,11 @@ export async function updateDownstream(id: number, input: UpdateDownstreamInput)
 }
 
 export type DeleteDownstreamResult =
-  | { mode: 'deleted'; id: number }
-  | { mode: 'deactivated'; id: number; references: { mediaIds: number; periods: number; dailyRates: number } };
+  | { mode: 'deleted'; id: string }
+  | { mode: 'deactivated'; id: string; references: { mediaIds: number; periods: number; dailyRates: number } };
 
-export async function deleteDownstream(id: number): Promise<DeleteDownstreamResult> {
-  if (!id || Number.isNaN(id)) throw new BadRequestError('Invalid id');
+export async function deleteDownstream(id: string): Promise<DeleteDownstreamResult> {
+  if (!id) throw new BadRequestError('Invalid id');
 
   const existing = await prisma.downstream.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Downstream not found');

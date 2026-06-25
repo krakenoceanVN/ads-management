@@ -7,10 +7,10 @@ import { recordMasterDataOperation } from '../operation-logs/oplog.write.service
 import type { EntityStatus } from '../bff.types';
 
 export async function getAll(req: Request, res: Response) {
-  const { adTypeCode, status, keyword } = req.query;
+  const { adTypeId, status, keyword } = req.query;
 
   const filters = {
-    adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
+    adTypeId: adTypeId ? String(adTypeId) : undefined,
     status: status ? (String(status) as EntityStatus) : undefined,
     keyword: keyword ? String(keyword) : undefined,
   };
@@ -20,8 +20,8 @@ export async function getAll(req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid downstream id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid downstream id');
   const row = await getDownstreamById(id);
   if (!row) throw new NotFoundError('Downstream not found');
   res.json(bffData(row));
@@ -29,20 +29,27 @@ export async function getById(req: Request, res: Response) {
 
 export async function create(req: Request, res: Response) {
   const body = req.body as {
-    adTypeCodes?: string[];
+    adTypeIds?: string[];
     downstreamType?: string;
     payoutRate?: number;
     status?: string;
+    name?: string;
+    contact?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
   };
   if (!body.downstreamType) throw new BadRequestError('downstreamType is required');
-  const adTypeCodes = body.adTypeCodes?.map(c => c.trim()).filter(Boolean) ?? [];
-  if (!adTypeCodes.length) {
-    throw new BadRequestError('adTypeCodes is required (at least one)');
-  }
+  const adTypeIds = body.adTypeIds?.map(c => c.trim()).filter(Boolean) ?? [];
 
   const result = await createDownstream({
-    adTypeCodes,
+    adTypeIds,
     downstreamType: body.downstreamType,
+    name: body.name ?? null,
+    contact: body.contact ?? null,
+    phone: body.phone ?? null,
+    email: body.email ?? null,
+    notes: body.notes ?? null,
     payoutRate: body.payoutRate,
     status: body.status,
   });
@@ -51,27 +58,37 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid downstream id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid downstream id');
   const body = req.body as {
     downstreamType?: string;
     payoutRate?: number;
     status?: string;
-    adTypeCodes?: string[];
+    adTypeIds?: string[];
+    name?: string;
+    contact?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
   };
   const result = await updateDownstream(id, {
     downstreamType: body.downstreamType,
+    name: body.name ?? null,
+    contact: body.contact ?? null,
+    phone: body.phone ?? null,
+    email: body.email ?? null,
+    notes: body.notes ?? null,
     payoutRate: body.payoutRate,
     status: body.status,
-    adTypeCodes: body.adTypeCodes,
+    adTypeIds: body.adTypeIds,
   });
   await recordMasterDataOperation(req, 'UPDATE_DOWNSTREAM', 'downstream', result.id, result.downstreamType);
   res.json(bffData(result));
 }
 
 export async function remove(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid downstream id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid downstream id');
   const result = await deleteDownstream(id);
   await recordMasterDataOperation(req, 'DELETE_DOWNSTREAM', 'downstream', id, result.mode);
   res.json(bffData(result));

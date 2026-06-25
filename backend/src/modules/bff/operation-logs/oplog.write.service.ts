@@ -16,7 +16,7 @@ import { prisma } from '../../../shared/prisma/client';
 import { config } from '../../../config';
 
 export interface OperationActor {
-  userId: number | null;
+  userId: string | null;
   username: string | null;
 }
 
@@ -29,9 +29,9 @@ export interface OperationActor {
  * no usable token is present.
  */
 export function actorFromRequest(req: Request): OperationActor {
-  const authUser = (req as Request & { authUser?: { id?: number; username?: string } }).authUser;
+  const authUser = (req as Request & { authUser?: { id?: string; username?: string } }).authUser;
   if (authUser?.id) {
-    return { userId: authUser.id, username: authUser.username ?? null };
+    return { userId: String(authUser.id), username: authUser.username ?? null };
   }
 
   const header = req.headers['authorization'];
@@ -39,7 +39,7 @@ export function actorFromRequest(req: Request): OperationActor {
     const token = header.slice(7);
     try {
       const payload = jwt.verify(token, config.jwt.secret) as jwt.JwtPayload;
-      const userId = typeof payload.sub === 'number' ? payload.sub : null;
+      const userId = typeof payload.sub === 'string' ? payload.sub : null;
       const username = typeof payload['username'] === 'string' ? payload['username'] : null;
       return { userId, username };
     } catch {
@@ -70,6 +70,7 @@ export async function recordOperation(actor: OperationActor, entry: OperationLog
   try {
     await prisma.operationLog.create({
       data: {
+        id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: actor.userId,
         username: actor.username,
         action: entry.action,

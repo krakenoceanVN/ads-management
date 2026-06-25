@@ -37,7 +37,7 @@ export async function getPermissions() {
   }));
 }
 
-export async function updateRolePermissions(roleId: number, permissionKeys: string[]) {
+export async function updateRolePermissions(roleId: string, permissionKeys: string[]) {
   const role = await prisma.role.findUnique({ where: { id: roleId } });
   if (!role) throw new ConflictError('Role not found');
   if (role.isSystem) throw new ConflictError('Cannot modify system role');
@@ -58,7 +58,7 @@ export async function updateRolePermissions(roleId: number, permissionKeys: stri
       data: permissions.map(p => ({
         roleId,
         permissionId: p.id,
-      })),
+      })) as any,
     });
   }
 

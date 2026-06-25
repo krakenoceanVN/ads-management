@@ -6,7 +6,6 @@ import { TableCard } from '../components/common/TableCard';
 import {
   confirmAdvertiserEntryBatch,
   confirmMediaEntryBatch,
-  listAdOrders,
   listAdvertiserEntries,
   listMediaEntries,
   saveAdvertiserEntryBatch,
@@ -14,7 +13,7 @@ import {
   unconfirmAdvertiserEntry,
   unconfirmMediaEntry,
 } from '../lib/bffApi';
-import type { AdOrder, AdvertiserEntryRow, DataEntryStatus, EntryType, MediaEntryRow } from '../lib/bffTypes';
+import type { AdvertiserEntryRow, DataEntryStatus, EntryType, MediaEntryRow } from '../lib/bffTypes';
 import { normalizeDate, sortRowsByDate } from '../lib/date';
 
 function csvEscape(value: string | number) {
@@ -167,7 +166,6 @@ export function AdvEntry() {
   const { t, displayName } = useAppContext();
   const [filters, setFilters] = useState<EntryFilters>(emptyFilters);
   const [rows, setRows] = useState<AdvertiserEntryRow[]>([]);
-  const [adOrders, setAdOrders] = useState<AdOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -193,11 +191,8 @@ export function AdvEntry() {
     setLoading(true);
     setError('');
     try {
-      const [orders, dateRows] = await Promise.all([
-        listAdOrders(),
-        listAdvertiserEntries({ date }),
-      ]);
-      setAdOrders(orders);
+      const dateRows = await listAdvertiserEntries({ date });
+      // adOrder lookup removed (AdOrder table dropped). adTypeName is on each row.
       const nextRows = (Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type));
       setRows(mergeAdvertiserDrafts(nextRows));
     } catch (err) {
@@ -216,30 +211,30 @@ export function AdvEntry() {
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.advertiser === filters.first)
-      && (!filters.second || (row.adOrderCode ?? row.adOrder) === filters.second)
+      && (!filters.second || (row.adTypeCode ?? row.adTypeName) === filters.second)
       && (!filters.third || row.adId === filters.third)
       && matchesStatusFilter(row.status, filters.status)
-      && (!keyword || [row.advertiser, row.adOrder, row.adId, row.type, displayName(row.advertiser), displayName(row.adOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
+      && (!keyword || [row.advertiser, row.adTypeName, row.adId, row.type, displayName(row.advertiser), displayName(row.adTypeName)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
   }), [scopedRows, filters, displayName]);
 
   const visibleRows = useMemo(
-    () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['advertiser', 'adOrder', 'adId']),
+    () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['advertiser', 'adTypeName', 'adId']),
     [filteredRows, scopedRows]
   );
-  const adOrderOptions = uniqueOptions(scopedRows.map(row => row.adOrderCode ?? row.adOrder).filter(Boolean));
+  const adOrderOptions = uniqueOptions(scopedRows.map(row => row.adTypeCode ?? row.adTypeName).filter(Boolean));
   const adOrderOptionLabels = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const row of scopedRows) {
-      const value = row.adOrderCode ?? row.adOrder ?? '';
+      const value = row.adTypeCode ?? row.adTypeName ?? '';
       if (!value || map.has(value)) continue;
-      const name = (row.adOrderName ?? '').trim();
+      const name = (row.adTypeName ?? '').trim();
       map.set(value, name || value);
     }
     return map;
   }, [scopedRows]);
   const advertiserOptions = uniqueOptions(scopedRows.map(row => row.advertiser));
   const filteredByAdvertiser = filters.first ? scopedRows.filter(row => row.advertiser === filters.first) : scopedRows;
-  const filteredByOrder = filters.second ? filteredByAdvertiser.filter(row => (row.adOrderCode ?? row.adOrder) === filters.second) : filteredByAdvertiser;
+  const filteredByOrder = filters.second ? filteredByAdvertiser.filter(row => (row.adTypeCode ?? row.adTypeName) === filters.second) : filteredByAdvertiser;
   const adIdOptions = uniqueOptions(filteredByOrder.map(row => row.adId));
   const setAdvertiserFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setAdOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
@@ -249,20 +244,15 @@ export function AdvEntry() {
   }, 0);
 
   const adTypeCodeForRow = (row: AdvertiserEntryRow) => {
-    return row.adOrderCode
-      || adOrders.find(order => order.id === row.adOrderId)?.adTypeCode
-      || '';
+    return row.adTypeCode ?? '';
   };
 
   const adOrderNameForRow = (row: AdvertiserEntryRow) => {
-    return row.adOrderName
-      || adOrders.find(order => order.id === row.adOrderId)?.adTypeName
-      || '';
+    return row.adTypeName ?? '';
   };
 
   const adOrderDisplayForRow = (row: AdvertiserEntryRow) => {
-    const name = adOrderNameForRow(row).trim();
-    return name || adTypeCodeForRow(row) || row.adOrder;
+    return adOrderNameForRow(row).trim() || adTypeCodeForRow(row);
   };
 
   const getAdvertiserRowKey = (row: AdvertiserEntryRow) => `${row.advertiser} / ${adOrderDisplayForRow(row)} / ${row.adId}`;
@@ -350,7 +340,7 @@ export function AdvEntry() {
     setMessage('');
     try {
       await saveRows([row]);
-      await confirmAdvertiserEntryBatch({ recordDate: normalizeDate(row.date) ?? row.date, adSiteIds: [row.adIdNum] });
+      await confirmAdvertiserEntryBatch({ date: normalizeDate(row.date) ?? row.date, adSiteIds: [String(row.adIdNum)] });
       clearDrafts([row]);
       await loadRows();
       setMessage(t('confirmedRowSuccessfully'));
@@ -428,7 +418,7 @@ export function AdvEntry() {
     try {
       await saveRows(eligibleRows);
       const date = normalizeDate(eligibleRows[0].date) ?? eligibleRows[0].date;
-      const result = await confirmAdvertiserEntryBatch({ recordDate: date, adSiteIds: eligibleRows.map(r => r.adIdNum) });
+      const result = await confirmAdvertiserEntryBatch({ date, adSiteIds: eligibleRows.map(r => String(r.adIdNum)) });
       clearDrafts(eligibleRows);
       await loadRows();
       const invalidSummary = invalidRows.length
@@ -596,7 +586,6 @@ export function MediaDataMgmt() {
   const { t, displayName } = useAppContext();
   const [filters, setFilters] = useState<EntryFilters>(emptyFilters);
   const [rows, setRows] = useState<MediaEntryRow[]>([]);
-  const [adOrders, setAdOrders] = useState<AdOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -607,12 +596,8 @@ export function MediaDataMgmt() {
     setLoading(true);
     setError('');
     try {
-      const [orders, dateRows] = await Promise.all([
-        listAdOrders(),
-        listMediaEntries({ date }),
-      ]);
-      setAdOrders(orders);
-      setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
+      const dateRows = await listMediaEntries({ date });
+      setRows((Array.isArray(dateRows) ? (dateRows as unknown as MediaEntryRow[]) : []).filter(row => isAllowedEntryType(row.type)));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -629,30 +614,30 @@ export function MediaDataMgmt() {
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
     return (!filters.first || row.media === filters.first)
-      && (!filters.second || (row.mediaAdOrderCode ?? row.mediaAdOrder) === filters.second)
+      && (!filters.second || (row.mediaAdTypeCode ?? row.mediaAdTypeName) === filters.second)
       && (!filters.third || row.mediaIdStr === filters.third)
       && matchesStatusFilter(row.status, filters.status)
-      && (!keyword || [row.media, row.mediaAdOrder, row.mediaIdStr, row.type, displayName(row.media), displayName(row.mediaAdOrder)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
+      && (!keyword || [row.media, row.mediaAdTypeName, row.mediaIdStr, row.type, displayName(row.media), displayName(row.mediaAdTypeName)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
   }), [scopedRows, filters, displayName]);
 
   const visibleRows = useMemo(
-    () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['media', 'mediaAdOrder', 'mediaId']),
+    () => sortRowsByDate(filteredRows.length ? filteredRows : scopedRows, ['media', 'mediaAdTypeName', 'mediaId']),
     [filteredRows, scopedRows]
   );
   const mediaOptions = uniqueOptions(scopedRows.map(row => row.media));
-  const mediaOrderOptions = uniqueOptions(scopedRows.map(row => row.mediaAdOrderCode ?? row.mediaAdOrder).filter(Boolean));
+  const mediaOrderOptions = uniqueOptions(scopedRows.map(row => row.mediaAdTypeCode ?? row.mediaAdTypeName).filter(Boolean));
   const mediaOrderOptionLabels = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const row of scopedRows) {
-      const value = row.mediaAdOrderCode ?? row.mediaAdOrder ?? '';
+      const value = row.mediaAdTypeCode ?? row.mediaAdTypeName ?? '';
       if (!value || map.has(value)) continue;
-      const name = (row.mediaAdOrderName ?? '').trim();
+      const name = (row.mediaAdTypeName ?? '').trim();
       map.set(value, name || (value));
     }
     return map;
   }, [scopedRows]);
   const filteredByMedia = filters.first ? scopedRows.filter(row => row.media === filters.first) : scopedRows;
-  const filteredByOrder = filters.second ? filteredByMedia.filter(row => (row.mediaAdOrderCode ?? row.mediaAdOrder) === filters.second) : filteredByMedia;
+  const filteredByOrder = filters.second ? filteredByMedia.filter(row => (row.mediaAdTypeCode ?? row.mediaAdTypeName) === filters.second) : filteredByMedia;
   const mediaIdOptions = uniqueOptions(filteredByOrder.map(row => row.mediaIdStr));
   const setMediaFilter = (value: string) => setFilters(prev => ({ ...prev, first: value, second: '', third: '' }));
   const setMediaOrderFilter = (value: string) => setFilters(prev => ({ ...prev, second: value, third: '' }));
@@ -662,21 +647,11 @@ export function MediaDataMgmt() {
   }, 0);
   const totalDate = filters.startDate || visibleRows[0]?.date || t('total');
 
-  const adTypeCodeForRow = (row: MediaEntryRow) => {
-    return row.mediaAdOrderCode
-      || adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeCode
-      || '';
-  };
-
-  const adOrderNameForRow = (row: MediaEntryRow) => {
-    return row.mediaAdOrderName
-      || adOrders.find(order => order.id === row.mediaAdOrderId)?.adTypeName
-      || '';
-  };
+  const adTypeCodeForRow = (row: MediaEntryRow) => row.mediaAdTypeCode ?? '';
+  const adOrderNameForRow = (row: MediaEntryRow) => row.mediaAdTypeName ?? '';
 
   const mediaAdOrderDisplayForRow = (row: MediaEntryRow) => {
-    const name = adOrderNameForRow(row).trim();
-    return name || adTypeCodeForRow(row) || row.mediaAdOrder;
+    return adOrderNameForRow(row).trim() || adTypeCodeForRow(row);
   };
 
   const updateRow = (uiKey: string, field: keyof Pick<MediaEntryRow, 'rate' | 'traffic' | 'settlement' | 'dataCoefficient'>, value: string) => {
@@ -737,7 +712,7 @@ export function MediaDataMgmt() {
     setError('');
     try {
       await saveRows([row]);
-      await confirmMediaEntryBatch({ recordDate: normalizeDate(row.date) ?? row.date, adSiteIds: [row.upstreamAdIdNum] });
+      await confirmMediaEntryBatch({ date: normalizeDate(row.date) ?? row.date, adSiteIds: [String(row.upstreamAdIdNum)] });
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -783,7 +758,7 @@ export function MediaDataMgmt() {
     try {
       await saveRows(pendingRows);
       const date = normalizeDate(pendingRows[0].date) ?? pendingRows[0].date;
-      await confirmMediaEntryBatch({ recordDate: date, adSiteIds: pendingRows.map(r => r.upstreamAdIdNum) });
+      await confirmMediaEntryBatch({ date, adSiteIds: pendingRows.map(r => String(r.upstreamAdIdNum)) });
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));

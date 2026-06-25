@@ -19,17 +19,27 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
 }
 
+function isValidEmailForm(value: string) {
+  const raw = value.trim();
+  if (!raw) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw);
+}
+
 function getDownstreamAdTypeCodes(record: DownstreamDto): string[] {
-  if (record.adTypeCodes?.length) return record.adTypeCodes;
+  if (record.adTypeIds?.length) return record.adTypeIds;
   if (record.adTypeCode) return [record.adTypeCode];
   return [];
 }
 
 interface EditState {
   id?: number;
-  adTypeCodes: string[];
+  adTypeIds: string[];
   downstreamType: string;
-  payoutPercent: string;
+  name: string;
+  contact: string;
+  phone: string;
+  email: string;
+  notes: string;
   status: EntityStatus;
 }
 
@@ -78,7 +88,6 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 export function DownstreamMgmt() {
   const { t, displayName, can } = useAppContext();
   const canWrite = can('media.update');
-  const canHardDelete = can('masterData.hardDelete');
   const [rows, setRows] = useState<DownstreamDto[]>([]);
   const [adTypes, setAdTypes] = useState<AdType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,11 +100,15 @@ export function DownstreamMgmt() {
   const [filterStatus, setFilterStatus] = useState('');
   const [statusSort, setStatusSort] = useState<SortDirection>('asc');
   const [nameSort, setNameSort] = useState<SortDirection>('asc');
+  const [contactSort, setContactSort] = useState<SortDirection>('asc');
+  const [phoneSort, setPhoneSort] = useState<SortDirection>('asc');
+  const [emailSort, setEmailSort] = useState<SortDirection>('asc');
+  const [notesSort, setNotesSort] = useState<SortDirection>('asc');
   const [editing, setEditing] = useState<DownstreamDto | null>(null);
 
   const quarantine = useQuarantineAction({
     scope: 'advertiser',
-    targetId: editing?.id ?? 0,
+    targetId: String(editing?.id ?? ''),
     targetName: editing?.downstreamType ?? '',
   });
 
@@ -105,6 +118,10 @@ export function DownstreamMgmt() {
   const toggleNameSort = () => {
     setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
   };
+  const toggleContactSort = () => setContactSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const togglePhoneSort = () => setPhoneSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleEmailSort = () => setEmailSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -125,7 +142,7 @@ export function DownstreamMgmt() {
   }, [loadRows]);
 
   const adTypeName = useCallback(
-    (code: string) => displayName(adTypes.find(a => a.code === code)?.name ?? code),
+    (id: string) => displayName(adTypes.find(a => a.id === id)?.name ?? id),
     [adTypes, displayName],
   );
 
@@ -140,16 +157,19 @@ export function DownstreamMgmt() {
   const keyword = normalizeText(search);
   const filteredRows = useMemo(() => rows.filter(r => {
     if (filterAdType) {
-      const codes = getDownstreamAdTypeCodes(r);
-      if (!codes.includes(filterAdType)) return false;
+      const ids = getDownstreamAdTypeCodes(r);
+      if (!ids.includes(filterAdType)) return false;
     }
     if (filterStatus && r.status !== filterStatus) return false;
     if (!keyword) return true;
     return [
       r.downstreamType,
-      getAdTypeNames(r),
+      r.name,
+      r.contact,
+      r.phone,
+      r.email,
+      r.notes,
       getDownstreamAdTypeCodes(r).join(' '),
-      String(Math.round((r.payoutRate ?? 0) * 1000) / 10),
       r.status,
     ].some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
   }).sort((a, b) => {
@@ -158,25 +178,56 @@ export function DownstreamMgmt() {
     const statusDelta = aActive - bActive;
     const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
     if (statusOrder !== 0) return statusOrder;
-    const nameA = a.downstreamType ?? '';
-    const nameB = b.downstreamType ?? '';
+    const nameA = a.name ?? a.downstreamType ?? '';
+    const nameB = b.name ?? b.downstreamType ?? '';
     const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
     if (nameOrder !== 0) return nameOrder;
+    const contactA = a.contact ?? '';
+    const contactB = b.contact ?? '';
+    const contactDelta = contactA.localeCompare(contactB, undefined, { sensitivity: 'base' });
+    const contactOrder = contactSort === 'asc' ? contactDelta : -contactDelta;
+    if (contactOrder !== 0) return contactOrder;
+    const phoneA = a.phone ?? '';
+    const phoneB = b.phone ?? '';
+    const phoneDelta = phoneA.localeCompare(phoneB, undefined, { sensitivity: 'base' });
+    const phoneOrder = phoneSort === 'asc' ? phoneDelta : -phoneDelta;
+    if (phoneOrder !== 0) return phoneOrder;
+    const emailA = a.email ?? '';
+    const emailB = b.email ?? '';
+    const emailDelta = emailA.localeCompare(emailB, undefined, { sensitivity: 'base' });
+    const emailOrder = emailSort === 'asc' ? emailDelta : -emailDelta;
+    if (emailOrder !== 0) return emailOrder;
+    const notesA = a.notes ?? '';
+    const notesB = b.notes ?? '';
+    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
+    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
+    if (notesOrder !== 0) return notesOrder;
     return a.id - b.id;
-  }), [rows, filterAdType, filterStatus, keyword, getAdTypeNames, statusSort, nameSort, displayName]);
+  }), [rows, filterAdType, filterStatus, keyword, getAdTypeNames, statusSort, nameSort, contactSort, phoneSort, emailSort, notesSort, displayName]);
 
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [
-    { label: 'ID', value: r => r.id },
-    { label: t('downstreamType'), value: r => r.downstreamType },
-    { label: t('adType'), value: r => getAdTypeNames(r) },
-    { label: t('payoutRate'), value: r => `${Math.round((r.payoutRate ?? 0) * 1000) / 10}%` },
+    { label: t('downstreamType') + ' / ' + t('media'), value: r => r.downstreamType },
+    { label: t('mediaName'), value: r => r.name ?? '' },
+    { label: t('contact'), value: r => r.contact ?? '' },
+    { label: t('phone'), value: r => r.phone ?? '' },
+    { label: t('email'), value: r => r.email ?? '' },
+    { label: t('notes'), value: r => r.notes ?? '' },
     { label: t('status'), value: r => r.status ?? '' },
   ];
 
   const openCreate = () => {
     setEditing(null);
-    setEditModal({ adTypeCodes: [], downstreamType: '', payoutPercent: '80', status: 'active' });
+    setEditModal({
+      adTypeIds: [],
+      downstreamType: '',
+      name: '',
+      contact: '',
+      phone: '',
+      email: '',
+      notes: '',
+      status: 'active',
+    });
     setEditError('');
   };
 
@@ -184,9 +235,13 @@ export function DownstreamMgmt() {
     setEditing(row);
     setEditModal({
       id: row.id,
-      adTypeCodes: getDownstreamAdTypeCodes(row),
+      adTypeIds: getDownstreamAdTypeCodes(row),
       downstreamType: row.downstreamType,
-      payoutPercent: String(Math.round((row.payoutRate ?? 0) * 1000) / 10),
+      name: row.name ?? '',
+      contact: row.contact ?? '',
+      phone: row.phone ?? '',
+      email: row.email ?? '',
+      notes: row.notes ?? '',
       status: row.status,
     });
     setEditError('');
@@ -198,39 +253,47 @@ export function DownstreamMgmt() {
     setEditing(null);
   };
 
-  const toggleAdType = (code: string) => {
+  const toggleAdType = (id: string) => {
     setEditModal(prev => {
       if (!prev) return prev;
-      const exists = prev.adTypeCodes.includes(code);
+      const exists = prev.adTypeIds.includes(id);
       return {
         ...prev,
-        adTypeCodes: exists
-          ? prev.adTypeCodes.filter(c => c !== code)
-          : [...prev.adTypeCodes, code],
+        adTypeIds: exists
+          ? prev.adTypeIds.filter(c => c !== id)
+          : [...prev.adTypeIds, id],
       };
     });
   };
 
   const handleSave = async () => {
     if (!editModal) return;
-    const { id, adTypeCodes, downstreamType, payoutPercent, status } = editModal;
+    const { id, adTypeIds, downstreamType, name, contact, phone, email, notes, status } = editModal;
 
-    if (id === undefined && adTypeCodes.length === 0) { setEditError(t('requiredFields')); return; }
     if (!downstreamType.trim()) { setEditError(t('requiredFields')); return; }
-    const percent = Number(payoutPercent);
-    if (Number.isNaN(percent) || percent < 0 || percent > 10000) {
-      setEditError(t('payoutRateRange'));
+    if (email.trim() && !isValidEmailForm(email)) {
+      setEditError(t('invalidEmail') || 'Email không hợp lệ');
       return;
     }
-    const payoutRate = Math.round((percent / 100) * 10000) / 10000;
 
     setSaving(true);
     setEditError('');
     try {
+      const trimmed = (s: string) => s.trim() || null;
+      const common = {
+        downstreamType,
+        name: trimmed(name),
+        contact: trimmed(contact),
+        phone: trimmed(phone),
+        email: trimmed(email),
+        notes: trimmed(notes),
+        status,
+        adTypeIds,
+      };
       if (id !== undefined) {
-        await updateDownstream(id, { downstreamType, payoutRate, status, adTypeCodes });
+        await updateDownstream(id, common);
       } else {
-        await createDownstream({ adTypeCodes, downstreamType, payoutRate, status });
+        await createDownstream(common);
       }
       setEditModal(null);
       setEditing(null);
@@ -242,9 +305,11 @@ export function DownstreamMgmt() {
     }
   };
 
-  const removeRecord = () => {
-    if (!editing) return;
+  const removeRecord = (row?: DownstreamDto) => {
+    const target = row ?? editing;
+    if (!target) return;
     if (!window.confirm(t('confirmDelete'))) return;
+    setEditing(target);
     quarantine.openModal();
   };
 
@@ -258,16 +323,13 @@ export function DownstreamMgmt() {
     }
   };
 
-  const openHardDelete = () => {
-    // No backend route for hardDeleteDownstream — keep stub for parity.
-  };
-
   const columns: Column<DownstreamDto>[] = [
     { key: '__no__', label: t('no') },
-    { key: 'id', label: 'ID' },
-    { key: 'downstreamType', label: t('downstreamType'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.downstreamType}</code>, sortDirection: nameSort, onSortClick: toggleNameSort },
-    { key: 'adTypeCodes', label: t('adType'), render: (r: DownstreamDto) => getAdTypeNames(r) },
-    { key: 'payoutRate', label: t('payoutRate'), render: (r: DownstreamDto) => `${Math.round((r.payoutRate ?? 0) * 1000) / 10}%` },
+    { key: 'name', label: t('mediaName'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.name || r.downstreamType}</code>, sortDirection: nameSort, onSortClick: toggleNameSort },
+    { key: 'contact', label: t('contact'), render: (r: DownstreamDto) => displayName(r.contact ?? '-'), sortDirection: contactSort, onSortClick: toggleContactSort },
+    { key: 'phone', label: t('phone'), render: (r: DownstreamDto) => r.phone ?? '-', sortDirection: phoneSort, onSortClick: togglePhoneSort },
+    { key: 'email', label: t('email'), render: (r: DownstreamDto) => r.email ?? '-', sortDirection: emailSort, onSortClick: toggleEmailSort },
+    { key: 'notes', label: t('notes'), render: (r: DownstreamDto) => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
     {
       key: 'status',
       label: t('status'),
@@ -278,11 +340,6 @@ export function DownstreamMgmt() {
     {
       key: '__actions__',
       label: t('actions'),
-      render: (r: DownstreamDto) => canWrite ? (
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>
-        </div>
-      ) : <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>—</span>,
     },
   ];
 
@@ -299,25 +356,6 @@ export function DownstreamMgmt() {
             </div>
             <div className="modal-body">
               {editError && <div className="form-error" style={{ marginBottom: '8px' }}>{editError}</div>}
-              <div className="form-group">
-                <label>{t('adType')} <span style={{ color: 'red' }}>*</span></label>
-                <div className="checkbox-list">
-                  {adTypes.map(type => {
-                    const checked = editModal.adTypeCodes.includes(type.code);
-                    return (
-                      <label key={type.code} className="checkbox-list-item">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={saving}
-                          onChange={() => toggleAdType(type.code)}
-                        />
-                        <span>{displayName(type.name)} ({type.code})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
               <div className="form-group">
                 <label>{t('downstreamType')} <span style={{ color: 'red' }}>*</span></label>
                 <input
@@ -338,20 +376,72 @@ export function DownstreamMgmt() {
                 </div>
               </div>
               <div className="form-group">
-                <label>{t('payoutRate')} (%) <span style={{ color: 'red' }}>*</span></label>
+                <label>{t('mediaName')}</label>
                 <input
                   className="input"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={0.1}
-                  value={editModal.payoutPercent}
-                  onChange={e => setEditModal(prev => prev ? { ...prev, payoutPercent: e.target.value } : prev)}
+                  value={editModal.name}
                   disabled={saving}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, name: e.target.value } : prev)}
                 />
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                  {t('payoutRateHint')}
+              </div>
+              <div className="form-group">
+                <label>{t('adType')}</label>
+                <div className="checkbox-list">
+                  {adTypes.map(type => {
+                    const checked = editModal.adTypeIds.includes(type.id);
+                    return (
+                      <label key={type.id} className="checkbox-list-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={saving}
+                          onChange={() => toggleAdType(type.id)}
+                        />
+                        <span>{displayName(type.name)}</span>
+                      </label>
+                    );
+                  })}
                 </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
+                  {t('adTypeOptionalHint') || 'Có thể bỏ trống'}
+                </div>
+              </div>
+              <div className="form-group">
+                <label>{t('contact')}</label>
+                <input
+                  className="input"
+                  value={editModal.contact}
+                  disabled={saving}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, contact: e.target.value } : prev)}
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('phone')}</label>
+                <input
+                  className="input"
+                  value={editModal.phone}
+                  disabled={saving}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, phone: e.target.value } : prev)}
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('email')}</label>
+                <input
+                  className="input"
+                  type="email"
+                  value={editModal.email}
+                  disabled={saving}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, email: e.target.value } : prev)}
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('notes')}</label>
+                <input
+                  className="input"
+                  value={editModal.notes}
+                  disabled={saving}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, notes: e.target.value } : prev)}
+                />
               </div>
               <div className="form-group">
                 <label>{t('status')}</label>
@@ -366,7 +456,6 @@ export function DownstreamMgmt() {
               </div>
             </div>
             <div className="modal-footer">
-              {editing && <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>}
               <button className="btn-outline" onClick={closeModal} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={() => void handleSave()} disabled={saving}>
                 {saving ? '...' : t('submit')}
@@ -390,7 +479,7 @@ export function DownstreamMgmt() {
             <div className="toolbar-right">
               <select className="filter-select" value={filterAdType} onChange={e => setFilterAdType(e.target.value)}>
                 <option value="">{t('allAdTypes')}</option>
-                {adTypes.map(a => <option key={a.id} value={a.code}>{a.name} ({a.code})</option>)}
+                {adTypes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>
@@ -406,6 +495,8 @@ export function DownstreamMgmt() {
               columns={columns}
               data={filteredRows}
               emptyText={filteredRows.length === 0 && !loading ? (t('noData') || '—') : undefined}
+              onEdit={canWrite ? openEdit : undefined}
+              onDelete={canWrite ? removeRecord : undefined}
             />
           )}
         </div>

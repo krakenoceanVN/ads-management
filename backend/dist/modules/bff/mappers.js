@@ -4,10 +4,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapAdvertiser = mapAdvertiser;
 exports.mapMedia = mapMedia;
-exports.mapAdOrder = mapAdOrder;
 exports.mapAdId = mapAdId;
 exports.mapMediaId = mapMediaId;
 exports.mapDownstream = mapDownstream;
+exports.mapMediaAdOrder = mapMediaAdOrder;
 function decimalToNum(d) {
     if (d == null)
         return undefined;
@@ -22,8 +22,8 @@ function decimalToNull(d) {
 }
 function mapAdvertiser(upstream) {
     const linkedAdTypes = (upstream.adTypeLinks ?? []).map(link => link.adType).filter(Boolean);
-    const adTypes = linkedAdTypes.length ? linkedAdTypes : upstream.adType ? [upstream.adType] : [];
-    const adTypeCodes = Array.from(new Set(adTypes.map(adType => adType.code)));
+    const adTypes = linkedAdTypes.length ? linkedAdTypes : upstream.defaultAdType ? [upstream.defaultAdType] : [];
+    const adTypeCodes = Array.from(new Set(adTypes.map(adType => adType.name)));
     return {
         id: upstream.id,
         name: upstream.name,
@@ -32,16 +32,13 @@ function mapAdvertiser(upstream) {
         email: upstream.email,
         notes: upstream.notes,
         status: upstream.status,
-        adTypeCode: upstream.adType?.code ?? adTypeCodes[0],
+        adTypeCode: upstream.defaultAdType?.name ?? adTypeCodes[0],
         adTypeCodes,
-        adTypes: adTypes.map(adType => ({ id: adType.id, code: adType.code, name: adType.name })),
+        adTypes: adTypes.map(adType => ({ id: adType.id, name: adType.name })),
     };
 }
-function actualAdType(site) {
-    return site.adOrder?.adType ?? site.upstream?.adType ?? null;
-}
 function mapMedia(site) {
-    const adType = actualAdType(site);
+    const adType = site.upstream?.defaultAdType ?? null;
     return {
         id: site.id,
         name: site.name,
@@ -51,32 +48,15 @@ function mapMedia(site) {
         notes: null,
         status: site.status,
         upstreamId: site.upstreamId,
-        adTypeCode: adType?.code,
+        adTypeCode: adType?.name,
         adTypeName: adType?.name ?? null,
         billingMethod: site.billingMethod,
         currentUnitPrice: decimalToNum(site.currentUnitPrice),
         currentRatio: decimalToNum(site.currentRatio),
     };
 }
-function mapAdOrder(order, billingMethods = []) {
-    return {
-        id: order.id,
-        advId: order.upstreamId,
-        name: order.name,
-        adTypeCode: order.adType?.code ?? '',
-        adTypeName: order.adType?.name ?? null,
-        notes: order.notes,
-        status: order.status,
-        isVirtual: order.isVirtual,
-        advertiserName: order.upstream?.name ?? undefined,
-        adSiteCount: order._count?.adSites ?? 0,
-        billingMethods: Array.isArray(billingMethods) ? billingMethods : [],
-        createdAt: order.createdAt ? order.createdAt.toISOString() : undefined,
-    };
-}
 function mapAdId(site) {
-    // slot field — schema has no separate slot column; use adSite.name as slot identifier
-    // rate — currentUnitPrice for CPM/CPA, currentRatio for RATIO
+    const adType = site.upstream?.defaultAdType ?? null;
     const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
         ? decimalToNull(site.currentUnitPrice)
         : decimalToNull(site.currentRatio);
@@ -89,9 +69,8 @@ function mapAdId(site) {
         status: site.status,
         advertiserId: site.upstreamId,
         advertiserName: site.upstream?.name ?? '',
-        adTypeCode: actualAdType(site)?.code ?? '',
-        adTypeName: actualAdType(site)?.name ?? null,
-        adOrderId: site.adOrderId ?? null,
+        adTypeCode: adType?.name ?? '',
+        adTypeName: adType?.name ?? null,
         upstreamId: site.upstreamId,
         billingMethod: site.billingMethod,
         isActive: site.isActive,
@@ -99,41 +78,70 @@ function mapAdId(site) {
     };
 }
 function mapMediaId(j) {
+    const adType = j.adSite.upstream?.defaultAdType ?? null;
     return {
         id: j.adSite.id,
         junctionId: j.id,
         slot: j.adSite.name,
         type: j.adSite.billingMethod,
-        rate: decimalToNull(j.customPrice) ?? decimalToNull(j.downstream.payoutRate),
-        shareRatio: decimalToNull(j.downstream.payoutRate),
-        status: 'active', // AdSiteDownstream has no status column → default active
+        rate: decimalToNull(j.customPrice),
+        shareRatio: j.pctHal ? Number(j.pctHal) : null,
+        status: 'active',
         mediaId: j.adSite.id,
         mediaName: j.adSite.name,
-        adTypeCode: actualAdType(j.adSite)?.code ?? '',
-        adTypeName: actualAdType(j.adSite)?.name ?? null,
+        adTypeCode: adType?.name ?? '',
+        adTypeName: adType?.name ?? null,
         upstreamId: j.adSite.upstreamId,
+        upstreamName: j.adSite.upstream?.name ?? null,
+        downstreamId: j.downstreamId,
+        downstreamName: j.downstream?.downstreamType ?? null,
+        adSiteId: j.adSiteId,
+        adSiteName: j.adSite?.name ?? null,
+        notes: j.notes ?? null,
         billingMethod: j.adSite.billingMethod,
         isActive: j.adSite.isActive,
         isArchived: j.adSite.isArchived,
-        adSiteId: j.adSiteId,
-        downstreamId: j.downstreamId,
+        mediaAdTypeCode: j.mediaAdType?.name ?? null,
+        mediaIdName: j.mediaIdName ?? null,
+        pctHal: j.pctHal ? Number(j.pctHal) : null,
     };
 }
 function mapDownstream(d) {
     const linked = (d.adTypeLinks ?? []).map(l => l.adType).filter(Boolean);
     const adTypes = linked;
-    const adTypeCodes = Array.from(new Set(adTypes.map(at => at.code)));
+    const adTypeCodes = Array.from(new Set(adTypes.map(at => at.name)));
     const primary = adTypes[0];
     return {
         id: d.id,
         downstreamType: d.downstreamType,
+        name: d.name ?? null,
+        contact: d.contact ?? null,
+        phone: d.phone ?? null,
+        email: d.email ?? null,
+        notes: d.notes ?? null,
         adTypeIds: adTypes.map(at => at.id),
         adTypeCodes,
-        adTypes: adTypes.map(at => ({ id: at.id, code: at.code, name: at.name })),
-        adTypeCode: primary?.code ?? '',
+        adTypes: adTypes.map(at => ({ id: at.id, name: at.name })),
+        adTypeCode: primary?.name ?? '',
         adTypeName: primary?.name ?? null,
-        payoutRate: Number(d.payoutRate),
+        payoutRate: null,
         status: d.status,
+    };
+}
+function mapMediaAdOrder(row, linkCount = 0) {
+    return {
+        id: row.id,
+        downstreamId: row.downstreamId,
+        adTypeId: row.adTypeId,
+        adTypeCode: row.adType?.name ?? '',
+        adTypeName: row.adType?.name ?? null,
+        seq: row.seq,
+        name: row.name,
+        notes: row.notes,
+        status: row.status,
+        linkCount,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
     };
 }
 //# sourceMappingURL=mappers.js.map

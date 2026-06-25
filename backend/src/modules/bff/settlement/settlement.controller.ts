@@ -10,12 +10,12 @@ import { getAdvertiserSettlement, getMediaSettlement } from './settlement.servic
 import { bffData } from '../../../shared/response/success';
 
 export async function getAdvertiserSettlementHandler(req: Request, res: Response) {
-  const { period, advertiserId, adTypeCode } = req.query;
+  const { period, advertiserId, adTypeId } = req.query;
 
   const params = {
     ...(period !== undefined && { period: String(period) }),
-    ...(advertiserId !== undefined && { advertiserId: parseInt(String(advertiserId), 10) }),
-    ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
+    ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
+    ...(adTypeId !== undefined && { adTypeId: String(adTypeId) }),
   };
 
   try {
@@ -27,12 +27,12 @@ export async function getAdvertiserSettlementHandler(req: Request, res: Response
 }
 
 export async function getMediaSettlementHandler(req: Request, res: Response) {
-  const { period, mediaId, adTypeCode } = req.query;
+  const { period, mediaId, adTypeId } = req.query;
 
   const params = {
     ...(period !== undefined && { period: String(period) }),
-    ...(mediaId !== undefined && { mediaId: parseInt(String(mediaId), 10) }),
-    ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
+    ...(mediaId !== undefined && { mediaId: String(mediaId) }),
+    ...(adTypeId !== undefined && { adTypeId: String(adTypeId) }),
   };
 
   try {

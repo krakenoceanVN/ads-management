@@ -1,14 +1,14 @@
 import type { AdvertiserEntryRow, MediaEntryRow } from './dataEntry.types';
 export interface ListAdvertiserEntriesParams {
     date: string;
-    advertiserId?: number;
-    adTypeCode?: string;
+    advertiserId?: string | number;
+    adTypeId?: string;
     status?: string;
 }
 export interface ListMediaEntriesParams {
     date: string;
-    mediaId?: number;
-    adTypeCode?: string;
+    mediaId?: string | number;
+    adTypeId?: string;
     status?: string;
 }
 export declare function listAdvertiserEntries(params: ListAdvertiserEntriesParams): Promise<AdvertiserEntryRow[]>;

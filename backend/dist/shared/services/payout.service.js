@@ -107,14 +107,17 @@ async function resolveDownstreamRate(adSiteId, downstreamId, recordDate) {
             return { rate: round(val), source: 'DownstreamPeriod' };
         }
     }
-    // 4. Downstream.payoutRate — must still be active
+    // 4. Downstream.payoutRate — kept for backward compat (column may not exist on schema)
     const downstream = await client_1.prisma.downstream.findFirst({
         where: { id: downstreamId, status: 'active' },
     });
     if (downstream) {
-        const payoutRate = parseFloat(downstream.payoutRate.toString());
-        if (payoutRate > 0) {
-            return { rate: round(payoutRate), source: 'Downstream.payoutRate' };
+        const payoutRate = downstream.payoutRate;
+        if (payoutRate) {
+            const val = parseFloat(payoutRate.toString());
+            if (val > 0) {
+                return { rate: round(val), source: 'Downstream.payoutRate' };
+            }
         }
     }
     // No rate found — error (NOT default to 0)
@@ -197,8 +200,9 @@ async function aggregateDownstreamCost(inputs) {
                 continue;
             const recordDate = di.recordDate;
             const adSiteId = adSite.id;
-            // Normalize legacy 'RATIO' → 'CPS' so calculateCost matches the CPS branch
-            // (otherwise RATIO sites fall through to default and downstream cost = 0).
+            // Defensive: normalizeBillingMethod() maps any incoming 'RATIO' to 'CPS'
+            // so calculateCost matches the CPS branch. Once the DB is fully migrated
+            // (no more RATIO rows) this is a no-op, but kept as a safety net.
             const billingMethod = (0, revenue_service_1.normalizeBillingMethod)(adSite.billingMethod);
             try {
                 const { rate } = await resolveDownstreamRate(adSiteId, j.downstreamId, recordDate);

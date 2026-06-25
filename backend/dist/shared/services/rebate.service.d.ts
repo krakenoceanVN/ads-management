@@ -15,5 +15,5 @@ export interface RebateRateResult {
 /**
  * Resolve the effective rebate rate for an AdSite on a given recordDate.
  */
-export declare function resolveRebateRate(adSiteId: number, recordDate: Date): Promise<RebateRateResult>;
+export declare function resolveRebateRate(adSiteId: string, recordDate: Date): Promise<RebateRateResult>;
 //# sourceMappingURL=rebate.service.d.ts.map

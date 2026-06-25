@@ -1,5 +1,5 @@
 export declare function listRoles(): Promise<{
-    id: number;
+    id: string;
     code: string;
     name: string;
     description: string | null;
@@ -9,15 +9,15 @@ export declare function listRoles(): Promise<{
     permissions: string[];
 }[]>;
 export declare function getPermissions(): Promise<{
-    id: number;
+    id: string;
     key: string;
     module: string;
     action: string;
     name: string;
     description: string | null;
 }[]>;
-export declare function updateRolePermissions(roleId: number, permissionKeys: string[]): Promise<{
-    id: number;
+export declare function updateRolePermissions(roleId: string, permissionKeys: string[]): Promise<{
+    id: string;
     code: string;
     name: string;
     description: string | null;

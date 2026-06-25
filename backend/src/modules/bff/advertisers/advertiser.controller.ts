@@ -12,8 +12,8 @@ export async function getAll(_req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid advertiser id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid advertiser id');
   const advertiser = await getAdvertiser(id);
   if (!advertiser) throw new NotFoundError('Advertiser not found');
   res.json(bffData(advertiser));
@@ -22,9 +22,8 @@ export async function getById(req: Request, res: Response) {
 export async function create(req: Request, res: Response) {
   const body = req.body as CreateAdvertiserInput;
   if (!body || !body.name?.trim()) throw new BadRequestError('name is required');
-  const adTypeCodes = body.adTypeCodes?.map(code => code.trim()).filter(Boolean) ?? [];
-  const legacyAdTypeCode = body.adTypeCode?.trim();
-  if (!adTypeCodes.length && !legacyAdTypeCode) throw new BadRequestError('adTypeCode is required');
+  const adTypeIds = body.adTypeIds?.map(id => id.trim()).filter(Boolean) ?? [];
+  const legacyAdTypeId = body.adTypeId?.trim();
   const advertiser = await createAdvertiser({
     name: body.name.trim(),
     contact: body.contact ?? null,
@@ -32,16 +31,16 @@ export async function create(req: Request, res: Response) {
     email: body.email ?? null,
     notes: body.notes ?? null,
     status: body.status ?? 'active',
-    adTypeCode: legacyAdTypeCode,
-    adTypeCodes: adTypeCodes.length ? adTypeCodes : undefined,
+    adTypeId: legacyAdTypeId,
+    adTypeIds: adTypeIds.length ? adTypeIds : undefined,
   });
   await recordMasterDataOperation(req, 'CREATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.status(201).json(bffData(advertiser));
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid advertiser id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid advertiser id');
   const body = req.body as UpdateAdvertiserInput;
   const advertiser = await updateAdvertiser(id, {
     name: body.name?.trim(),
@@ -50,16 +49,16 @@ export async function update(req: Request, res: Response) {
     email: body.email !== undefined ? body.email : undefined,
     notes: body.notes !== undefined ? body.notes : undefined,
     status: body.status,
-    adTypeCode: body.adTypeCode?.trim(),
-    adTypeCodes: body.adTypeCodes?.map(code => code.trim()).filter(Boolean),
+    adTypeId: body.adTypeId?.trim(),
+    adTypeIds: body.adTypeIds?.map(id => id.trim()).filter(Boolean),
   });
   await recordMasterDataOperation(req, 'UPDATE_ADVERTISER', 'advertiser', advertiser.id, advertiser.name);
   res.json(bffData(advertiser));
 }
 
 export async function remove(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid advertiser id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid advertiser id');
   const advertiser = await deleteAdvertiser(id);
   await recordMasterDataOperation(req, 'DELETE_ADVERTISER', 'advertiser', id, advertiser.name);
   res.json(bffData({ deleted: true }));

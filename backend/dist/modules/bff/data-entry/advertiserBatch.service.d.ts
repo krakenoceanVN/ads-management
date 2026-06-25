@@ -14,7 +14,7 @@
  *   3. No rebate
  */
 export interface AdvertiserBatchItem {
-    adSiteId: number;
+    adSiteId: string;
     recordDate: string;
     qty?: number;
     unitPrice?: string | number;
@@ -32,15 +32,15 @@ export interface AdvertiserBatchResult {
 }
 export interface UnconfirmResult {
     success: boolean;
-    id: number;
+    id: string;
     previousStatus: string;
     newStatus: string;
 }
-export declare function saveAdvertiserBatch(items: AdvertiserBatchItem[], userId: number): Promise<AdvertiserBatchResult>;
-export declare function confirmAdvertiserBatch(recordDate: string, adSiteIds: number[], userId: number): Promise<{
+export declare function saveAdvertiserBatch(items: AdvertiserBatchItem[], userId: string): Promise<AdvertiserBatchResult>;
+export declare function confirmAdvertiserBatch(recordDate: string, adSiteIds: string[], userId: string): Promise<{
     success: boolean;
     confirmed: number;
     errors: string[];
 }>;
-export declare function unconfirmAdvertiser(id: number, userId: number): Promise<UnconfirmResult>;
+export declare function unconfirmAdvertiser(id: string, userId: string): Promise<UnconfirmResult>;
 //# sourceMappingURL=advertiserBatch.service.d.ts.map

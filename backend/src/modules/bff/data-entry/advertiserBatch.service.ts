@@ -21,8 +21,8 @@ import { resolveRebateRate } from '../../../shared/services/rebate.service';
 import type { EntryType } from '../bff.types';
 
 export interface AdvertiserBatchItem {
-  adSiteId: number;
-  recordDate: string; // YYYY-MM-DD
+  adSiteId: string;
+  recordDate: string;
   qty?: number;
   unitPrice?: string | number;
   amount1?: string | number;
@@ -65,21 +65,21 @@ export interface AdvertiserBatchResult {
 
 export interface UnconfirmResult {
   success: boolean;
-  id: number;
+  id: string;
   previousStatus: string;
   newStatus: string;
 }
 
 export async function saveAdvertiserBatch(
   items: AdvertiserBatchItem[],
-  userId: number
+  userId: string
 ): Promise<AdvertiserBatchResult> {
   const result: AdvertiserBatchResult = { success: true, saved: 0, updated: 0, skipped: 0, errors: [] };
 
-  const siteIds = [...new Set(items.map(i => i.adSiteId))];
+  const siteIds = [...new Set(items.map(i => String(i.adSiteId)))];
   const sites = await prisma.adSite.findMany({
     where: { id: { in: siteIds } },
-    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+    include: { upstream: { include: { defaultAdType: true } } },
   });
   const siteById = new Map(sites.map(s => [s.id, s]));
 
@@ -157,6 +157,7 @@ export async function saveAdvertiserBatch(
       } else {
         await prisma.dailyInput.create({
           data: {
+            id: `di_${item.adSiteId}_${item.recordDate.replace(/-/g, '')}`,
             recordDate,
             adSiteId: item.adSiteId,
             qty: item.qty ?? 0,
@@ -183,8 +184,8 @@ export async function saveAdvertiserBatch(
 
 export async function confirmAdvertiserBatch(
   recordDate: string,
-  adSiteIds: number[],
-  userId: number
+  adSiteIds: string[],
+  userId: string
 ): Promise<{ success: boolean; confirmed: number; errors: string[] }> {
   const date = new Date(recordDate + 'T00:00:00.000Z');
   const result = { success: true, confirmed: 0, errors: [] as string[] };
@@ -210,6 +211,7 @@ export async function confirmAdvertiserBatch(
 
     await tx.operationLog.create({
       data: {
+        id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
         action: 'CONFIRM_ADVERTISER',
@@ -225,7 +227,7 @@ export async function confirmAdvertiserBatch(
   });
 }
 
-export async function unconfirmAdvertiser(id: number, userId: number): Promise<UnconfirmResult> {
+export async function unconfirmAdvertiser(id: string, userId: string): Promise<UnconfirmResult> {
   return prisma.$transaction(async (tx) => {
     const record = await tx.dailyInput.findUnique({ where: { id } });
     if (!record) {
@@ -243,6 +245,7 @@ export async function unconfirmAdvertiser(id: number, userId: number): Promise<U
 
     await tx.operationLog.create({
       data: {
+        id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
         action: 'UNCONFIRM_ADVERTISER',

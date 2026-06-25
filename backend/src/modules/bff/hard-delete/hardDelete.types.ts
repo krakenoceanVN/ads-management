@@ -11,7 +11,7 @@ export type HardDeleteSuccess = {
   data: {
     deleted: true;
     entityType: EntityType;
-    entityId: number;
+    entityId: string | number;
   };
   message: string;
 };
@@ -28,7 +28,7 @@ export type HardDeleteFinancialBlock = {
   message: string;
   data: {
     entityType: EntityType;
-    entityId: number;
+    entityId: string | number;
     dailyInputCount: number;
     confirmedCount: number;
     unconfirmedCount: number;
@@ -36,8 +36,8 @@ export type HardDeleteFinancialBlock = {
     suggestedAction: 'quarantine';
     quarantineTarget?: {
       scope: 'advertiser' | 'media';
-      advertiserId?: number;
-      adSiteId?: number;
+      advertiserId?: string;
+      adSiteId?: string;
     };
   };
 };
@@ -48,7 +48,7 @@ export type HardDeleteDependencyBlock = {
   message: string;
   data: {
     entityType: EntityType;
-    entityId: number;
+    entityId: string | number;
     dependencies: Record<string, number>;
     suggestedAction: 'delete_children_first_or_archive';
   };
@@ -69,12 +69,12 @@ export type HardDeleteResult =
 
 export interface DependencyCounts {
   adSiteCount: number;
-  adOrderCount: number;
   upstreamCount: number;
   downstreamCount: number;
   adSiteDownstreamCount: number;
   rebateRateCount: number;
   adSiteEventCount: number;
+  mediaAdOrderCount: number;
   dailyInputCount: number;
   confirmedCount: number;
   unconfirmedCount: number;

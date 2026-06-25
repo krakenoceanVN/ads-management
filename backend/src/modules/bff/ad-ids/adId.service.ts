@@ -4,9 +4,8 @@ import type { Prisma } from '@prisma/client';
 import type { EntryType } from '../bff.types';
 
 export interface ListAdIdsFilters {
-  advertiserId?: number;
-  adOrderId?: number;
-  adTypeCode?: string;
+  advertiserId?: string | number;
+  adTypeId?: string;
   type?: EntryType;
   archived?: boolean;
 }
@@ -15,18 +14,11 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
   const where: Prisma.AdSiteWhereInput = {};
 
   if (filters?.advertiserId != null) {
-    where.upstreamId = filters.advertiserId;
+    where.upstreamId = String(filters.advertiserId);
   }
 
-  if (filters?.adOrderId != null) {
-    where.adOrderId = filters.adOrderId;
-  }
-
-  if (filters?.adTypeCode) {
-    where.OR = [
-      { adOrder: { adType: { code: filters.adTypeCode } } },
-      { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
-    ];
+  if (filters?.adTypeId) {
+    where.upstream = { adTypeId: filters.adTypeId };
   }
 
   if (filters?.type) {
@@ -40,8 +32,7 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
   const rows = await prisma.adSite.findMany({
     where,
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
     orderBy: { id: 'asc' },
   });
@@ -49,12 +40,11 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
   return rows.map(r => mapAdId(r));
 }
 
-export async function getAdId(id: number) {
+export async function getAdId(id: string) {
   const row = await prisma.adSite.findUnique({
     where: { id },
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
   });
   if (!row) return null;

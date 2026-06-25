@@ -19,18 +19,12 @@ exports.listQuarantineBatches = listQuarantineBatches;
 exports.getBatchRecords = getBatchRecords;
 const client_1 = require("@prisma/client");
 const client_2 = require("../../../shared/prisma/client");
-/**
- * Quarantine confirmed DailyInput records for an advertiser (upstream) within a date range.
- * Only quarantines records with status = 'confirmed'.
- * Creates a DailyInputQuarantineBatch and DailyInputQuarantineRecord snapshots for each record.
- * OperationLog is written inside the transaction.
- */
+const ids_1 = require("../../../shared/ids");
 async function quarantineAdvertiser(input) {
     const { advertiserId, startDate, endDate, reason, userId } = input;
     const start = new Date(startDate + 'T00:00:00.000Z');
     const end = new Date(endDate + 'T23:59:59.999Z');
     return client_2.prisma.$transaction(async (tx) => {
-        // Find all confirmed DailyInputs for this advertiser within date range
         const confirmedRecords = await tx.dailyInput.findMany({
             where: {
                 recordDate: { gte: start, lte: end },
@@ -49,9 +43,9 @@ async function quarantineAdvertiser(input) {
             throw new Error('No confirmed records found for quarantine');
         }
         const totalRevenue = confirmedRecords.reduce((sum, r) => sum + (parseFloat(r.revenue.toString()) || 0), 0);
-        // Create quarantine batch
         const batch = await tx.dailyInputQuarantineBatch.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 scopeType: 'advertiser',
                 advertiserId,
                 startDate: start,
@@ -62,10 +56,10 @@ async function quarantineAdvertiser(input) {
                 createdBy: userId,
             },
         });
-        // Create snapshot records and update DailyInput status
-        const snapshotPromises = confirmedRecords.map(async (record) => {
+        for (const record of confirmedRecords) {
             await tx.dailyInputQuarantineRecord.create({
                 data: {
+                    id: (0, ids_1.generateShortId)(),
                     batchId: batch.id,
                     dailyInputId: record.id,
                     statusBefore: record.status,
@@ -82,13 +76,12 @@ async function quarantineAdvertiser(input) {
                     quarantineReason: reason ?? null,
                 },
             });
-        });
-        await Promise.all(snapshotPromises);
-        // Write OperationLog inside the transaction
+        }
         await tx.operationLog.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 userId,
-                username: null, // resolved by caller if needed
+                username: null,
                 action: 'QUARANTINE_ADVERTISER',
                 module: 'quarantine',
                 targetType: 'DailyInputQuarantineBatch',
@@ -103,10 +96,6 @@ async function quarantineAdvertiser(input) {
         };
     });
 }
-/**
- * Quarantine confirmed DailyInput records for a media (adSite) within a date range.
- * Same structure as advertiser quarantine.
- */
 async function quarantineMedia(input) {
     const { adSiteId, startDate, endDate, reason, userId } = input;
     const start = new Date(startDate + 'T00:00:00.000Z');
@@ -130,6 +119,7 @@ async function quarantineMedia(input) {
         const totalRevenue = confirmedRecords.reduce((sum, r) => sum + (parseFloat(r.revenue.toString()) || 0), 0);
         const batch = await tx.dailyInputQuarantineBatch.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 scopeType: 'media',
                 adSiteId,
                 startDate: start,
@@ -140,9 +130,10 @@ async function quarantineMedia(input) {
                 createdBy: userId,
             },
         });
-        const snapshotPromises = confirmedRecords.map(async (record) => {
+        for (const record of confirmedRecords) {
             await tx.dailyInputQuarantineRecord.create({
                 data: {
+                    id: (0, ids_1.generateShortId)(),
                     batchId: batch.id,
                     dailyInputId: record.id,
                     statusBefore: record.status,
@@ -159,10 +150,10 @@ async function quarantineMedia(input) {
                     quarantineReason: reason ?? null,
                 },
             });
-        });
-        await Promise.all(snapshotPromises);
+        }
         await tx.operationLog.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 userId,
                 username: null,
                 action: 'QUARANTINE_MEDIA',
@@ -179,14 +170,8 @@ async function quarantineMedia(input) {
         };
     });
 }
-/**
- * Restore all records in a quarantine batch to their statusBefore.
- * Rejects if batch was already restored (restoredAt IS NOT NULL).
- * OperationLog is written inside the transaction.
- */
 async function restoreBatch(batchId, userId) {
     return client_2.prisma.$transaction(async (tx) => {
-        // Check batch exists and not already restored
         const batch = await tx.dailyInputQuarantineBatch.findUnique({
             where: { id: batchId },
             include: { records: true },
@@ -200,10 +185,6 @@ async function restoreBatch(batchId, userId) {
         if (batch.records.length === 0) {
             throw new Error('Batch has no records to restore');
         }
-        // Restore each record to its statusBefore — but ONLY if it is still
-        // quarantined AND still belongs to THIS batch. A record that was
-        // re-quarantined into a newer batch must not be touched here, otherwise
-        // we would clear the newer batch's link and resurrect a stale status.
         const restoreCounts = await Promise.all(batch.records.map((snapshot) => tx.dailyInput.updateMany({
             where: {
                 id: snapshot.dailyInputId,
@@ -219,7 +200,6 @@ async function restoreBatch(batchId, userId) {
             },
         })));
         const restoredCount = restoreCounts.reduce((sum, r) => sum + r.count, 0);
-        // Mark batch as restored
         await tx.dailyInputQuarantineBatch.update({
             where: { id: batchId },
             data: {
@@ -227,9 +207,9 @@ async function restoreBatch(batchId, userId) {
                 restoredBy: userId,
             },
         });
-        // Write OperationLog inside the transaction
         await tx.operationLog.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 userId,
                 username: null,
                 action: 'RESTORE_QUARANTINE_BATCH',
@@ -245,9 +225,6 @@ async function restoreBatch(batchId, userId) {
         };
     });
 }
-/**
- * List all quarantine batches (active and restored).
- */
 async function listQuarantineBatches() {
     const batches = await client_2.prisma.dailyInputQuarantineBatch.findMany({
         orderBy: { createdAt: 'desc' },
@@ -272,9 +249,6 @@ async function listQuarantineBatches() {
         recordCount_: b._count.records,
     }));
 }
-/**
- * Get records for a specific quarantine batch.
- */
 async function getBatchRecords(batchId) {
     const records = await client_2.prisma.dailyInputQuarantineRecord.findMany({
         where: { batchId },

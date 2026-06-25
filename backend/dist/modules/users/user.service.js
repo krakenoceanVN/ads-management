@@ -9,16 +9,17 @@ exports.updateUser = updateUser;
 exports.resetPassword = resetPassword;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const client_1 = require("../../shared/prisma/client");
+const ids_1 = require("../../shared/ids");
 function toUserResponse(user) {
     return {
-        id: user.id,
+        id: String(user.id),
         username: user.username,
         role: user.role,
         permDataInput: user.permDataInput,
         permDataConfirm: user.permDataConfirm,
         permAdmin: user.permAdmin,
         status: user.status,
-        roleId: user.roleId,
+        roleId: user.roleId ? String(user.roleId) : null,
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
     };
@@ -43,6 +44,7 @@ async function createUser(input) {
     const passwordHash = await bcrypt_1.default.hash(password, 10);
     const user = await client_1.prisma.user.create({
         data: {
+            id: (0, ids_1.generateShortId)(),
             username: username.trim(),
             passwordHash,
             role: rest.role ?? 'EDITOR',

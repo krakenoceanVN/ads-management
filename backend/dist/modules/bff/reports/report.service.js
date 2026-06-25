@@ -17,7 +17,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAdvertiserReport = getAdvertiserReport;
 exports.getMediaReport = getMediaReport;
 const client_1 = require("../../../shared/prisma/client");
-// ─── Advertiser Report (entry-level rows) ────────────────────────────────────
 function toNum(d) {
     if (d == null)
         return undefined;
@@ -32,29 +31,23 @@ function formatDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function actualAdType(site) {
-    return site.adOrder?.adType ?? site.upstream.adType ?? null;
+    return site.upstream?.defaultAdType ?? null;
 }
-function actualAdTypeWhere(adTypeCode) {
+function actualAdTypeWhere(adTypeId) {
     return {
-        OR: [
-            { adOrder: { adType: { code: adTypeCode } } },
-            { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
-        ],
+        upstream: { defaultAdType: { id: adTypeId } },
     };
 }
 function makeReportAdvertiserRow(di) {
     const site = di.adSite;
     const upstream = site.upstream;
-    const adOrder = site.adOrder;
     const adType = actualAdType(site);
-    // Rate: CPM/CPA use unitPriceSnapshot; RATIO/CPS use ratioSnapshot
     const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
         ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
         : toStr(di.ratioSnapshot ?? site.currentRatio);
-    // Traffic and settlement
     let traffic = '';
     let settlement = '';
-    if (site.billingMethod === 'CPM') {
+    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
         traffic = String(di.qty);
     }
     else {
@@ -67,10 +60,8 @@ function makeReportAdvertiserRow(di) {
         date: formatDate(di.recordDate),
         advertiser: upstream.name,
         advertiserId: upstream.id,
-        adOrder: adOrder?.name ?? '',
-        adOrderId: site.adOrderId ?? null,
-        adOrderCode: adType?.code ?? null,
-        adOrderName: adType?.name ?? null,
+        adTypeName: adType?.name ?? '',
+        adTypeCode: adType?.name ?? null,
         type: site.billingMethod,
         adId: site.name,
         adIdNum: site.id,
@@ -79,11 +70,11 @@ function makeReportAdvertiserRow(di) {
         settlement,
         receivable: receivable || '',
         status: di.status,
+        uiKey: `${di.id}-${site.id}`,
     };
 }
 async function getAdvertiserReport(params) {
     const { advertiserId, adTypeCode, status } = params;
-    // Build date filter
     let dateFilter = {};
     if (params.date) {
         const d = new Date(params.date + 'T00:00:00.000Z');
@@ -94,19 +85,16 @@ async function getAdvertiserReport(params) {
         const end = new Date(params.endDate + 'T00:00:00.000Z');
         dateFilter = { recordDate: { gte: start, lte: end } };
     }
-    // Build status filter — exclude quarantined always
     const statusFilter = {};
     if (status && status !== 'all') {
         statusFilter.status = status;
     }
     else {
-        // Default: confirmed only (exclude quarantined and pending)
         statusFilter.status = 'confirmed';
     }
     const upstreamWhere = {
         ...(advertiserId != null && { id: advertiserId }),
     };
-    // Get all DailyInputs matching filters — return entry-level rows (not grouped)
     const dailyInputs = await client_1.prisma.dailyInput.findMany({
         where: {
             ...dateFilter,
@@ -122,8 +110,7 @@ async function getAdvertiserReport(params) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                 },
             },
         },
@@ -131,17 +118,15 @@ async function getAdvertiserReport(params) {
     });
     return dailyInputs.map(di => makeReportAdvertiserRow(di));
 }
-// ─── Media Report (entry-level rows) ────────────────────────────────────────
 function makeReportMediaRow(di, site, upstream, junction, payoutRate) {
-    const adTypeCode = actualAdType(site)?.code ?? null;
+    const adTypeCode = actualAdType(site)?.name ?? null;
     const adTypeName = actualAdType(site)?.name ?? null;
-    // Rate: CPM uses unitPriceSnapshot or currentUnitPrice, RATIO uses currentRatio
-    const rate = site.billingMethod === 'CPM'
+    const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
         ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
         : toStr(di.ratioSnapshot ?? site.currentRatio);
     let traffic = '';
     let settlement = '';
-    if (site.billingMethod === 'CPM') {
+    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
         traffic = String(di.qty);
     }
     else {
@@ -159,10 +144,8 @@ function makeReportMediaRow(di, site, upstream, junction, payoutRate) {
         date: formatDate(di.recordDate),
         media: upstream.name,
         mediaId: upstream.id,
-        mediaAdOrder: adTypeCode ?? '',
-        mediaAdOrderId: null,
-        mediaAdOrderCode: adTypeCode,
-        mediaAdOrderName: adTypeName,
+        mediaAdTypeName: adTypeName ?? '',
+        mediaAdTypeCode: adTypeCode,
         type: site.billingMethod,
         mediaIdStr: site.name,
         upstreamAdId: site.name,
@@ -176,11 +159,11 @@ function makeReportMediaRow(di, site, upstream, junction, payoutRate) {
         shareRatioNum,
         actualReceived,
         status: di.status,
+        uiKey: `${di.id}-${junction.id}`,
     };
 }
 async function getMediaReport(params) {
     const { mediaId, adTypeCode, status } = params;
-    // Build date filter
     let dateFilter = {};
     if (params.date) {
         const d = new Date(params.date + 'T00:00:00.000Z');
@@ -191,7 +174,6 @@ async function getMediaReport(params) {
         const end = new Date(params.endDate + 'T00:00:00.000Z');
         dateFilter = { recordDate: { gte: start, lte: end } };
     }
-    // Build status filter — exclude quarantined always, default confirmed
     const statusFilter = {};
     if (status && status !== 'all') {
         statusFilter.status = status;
@@ -199,7 +181,6 @@ async function getMediaReport(params) {
     else {
         statusFilter.status = 'confirmed';
     }
-    // Get all confirmed DailyInputs (excluding quarantined) for media-side
     const dailyInputs = await client_1.prisma.dailyInput.findMany({
         where: {
             ...dateFilter,
@@ -214,8 +195,7 @@ async function getMediaReport(params) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                     downstreams: {
                         include: { downstream: true },
                     },
@@ -224,14 +204,13 @@ async function getMediaReport(params) {
         },
         orderBy: { recordDate: 'asc' },
     });
-    // Return entry-level rows — one row per DailyInput per downstream junction
     const rows = [];
     for (const di of dailyInputs) {
         const site = di.adSite;
         if (!site.downstreams || site.downstreams.length === 0)
             continue;
         for (const junction of site.downstreams) {
-            const payoutRate = junction.downstream?.payoutRate ? Number(junction.downstream.payoutRate) : 0.8;
+            const payoutRate = 0.8; // payoutRate moved to DownstreamPeriod; fixed default for now
             rows.push(makeReportMediaRow(di, site, site.upstream, junction, payoutRate));
         }
     }

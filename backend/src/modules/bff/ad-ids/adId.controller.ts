@@ -8,12 +8,11 @@ import { normalizeBillingMethodForStorage } from '../bff.types';
 import type { CreateAdIdInput, UpdateAdIdInput } from './adId.write.service';
 
 export async function getAll(req: Request, res: Response) {
-  const { advertiserId, adOrderId, adTypeCode, type, archived } = req.query;
+  const { advertiserId, adTypeId, type, archived } = req.query;
 
   const filters = {
     advertiserId: advertiserId ? parseInt(String(advertiserId), 10) : undefined,
-    adOrderId: adOrderId ? parseInt(String(adOrderId), 10) : undefined,
-    adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
+    adTypeId: adTypeId ? String(adTypeId) : undefined,
     type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
   };
@@ -23,8 +22,8 @@ export async function getAll(req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid ad id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid ad id');
   const adId = await getAdId(id);
   if (!adId) throw new NotFoundError('Ad id not found');
   res.json(bffData(adId));
@@ -33,11 +32,9 @@ export async function getById(req: Request, res: Response) {
 export async function create(req: Request, res: Response) {
   const body = req.body as CreateAdIdInput;
   if (!body || !body.advertiserId) throw new BadRequestError('advertiserId is required');
-  if (!body.adOrderId && !body.adTypeCode) throw new BadRequestError('adOrderId or adTypeCode is required');
+  if (!body.adTypeId) throw new BadRequestError('adTypeId is required');
   if (!body.slot?.trim()) throw new BadRequestError('slot is required');
   if (!body.type) throw new BadRequestError('type is required');
-  // Normalize legacy 'RATIO' → 'CPS' before validation so the field-rate
-  // checks below only need to handle canonical values.
   const canonicalType = normalizeBillingMethodForStorage(body.type);
   if (!canonicalType) throw new BadRequestError('Invalid billing method: ' + body.type);
   if ((canonicalType === 'CPM' || canonicalType === 'CPA') && (body.unitPrice === undefined || body.unitPrice === null || isNaN(Number(body.unitPrice)) || Number(body.unitPrice) <= 0)) {
@@ -49,8 +46,7 @@ export async function create(req: Request, res: Response) {
 
   const adId = await createAdId({
     advertiserId: body.advertiserId,
-    adOrderId: body.adOrderId,
-    adTypeCode: body.adTypeCode,
+    adTypeId: body.adTypeId,
     slot: body.slot.trim(),
     type: body.type,
     unitPrice: body.unitPrice ?? null,
@@ -63,14 +59,13 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid ad id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid ad id');
   const body = req.body as UpdateAdIdInput;
 
   const adId = await updateAdId(id, {
     advertiserId: body.advertiserId,
-    adOrderId: body.adOrderId,
-    adTypeCode: body.adTypeCode,
+    adTypeId: body.adTypeId,
     slot: body.slot?.trim(),
     type: body.type,
     unitPrice: body.unitPrice,
@@ -83,8 +78,8 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function remove(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid ad id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid ad id');
   const adId = await deleteAdId(id);
   await recordMasterDataOperation(req, 'DELETE_AD_ID', 'adId', id, adId.slot);
   res.json(bffData({ deleted: true }));

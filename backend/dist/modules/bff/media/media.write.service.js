@@ -6,6 +6,7 @@ exports.deleteMedia = deleteMedia;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 const bff_types_1 = require("../bff.types");
+const ids_1 = require("../../../shared/ids");
 async function createMedia(input) {
     const upstream = await client_1.prisma.upstream.findUnique({ where: { id: input.upstreamId } });
     if (!upstream)
@@ -15,6 +16,7 @@ async function createMedia(input) {
         throw new Error('Invalid billingMethod: ' + input.billingMethod);
     const row = await client_1.prisma.adSite.create({
         data: {
+            id: (0, ids_1.generateShortId)(),
             name: input.name,
             upstreamId: input.upstreamId,
             billingMethod,
@@ -22,12 +24,12 @@ async function createMedia(input) {
             currentRatio: input.currentRatio ?? null,
             status: input.status ?? 'active',
         },
-        include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+        include: { upstream: { include: { defaultAdType: true } } },
     });
     return (0, mappers_1.mapMedia)(row);
 }
 async function updateMedia(id, input) {
-    if (input.upstreamId !== undefined) {
+    if (input.upstreamId) {
         const upstream = await client_1.prisma.upstream.findUnique({ where: { id: input.upstreamId } });
         if (!upstream)
             throw new Error('Invalid upstreamId: ' + input.upstreamId);
@@ -46,16 +48,15 @@ async function updateMedia(id, input) {
             ...(input.currentRatio !== undefined && { currentRatio: input.currentRatio }),
             ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
         },
-        include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+        include: { upstream: { include: { defaultAdType: true } } },
     });
     return (0, mappers_1.mapMedia)(row);
 }
 async function deleteMedia(id) {
-    // Soft archive: set isArchived=true, do not hard-delete AdSite
     const row = await client_1.prisma.adSite.update({
         where: { id },
         data: { isArchived: true },
-        include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+        include: { upstream: { include: { defaultAdType: true } } },
     });
     return (0, mappers_1.mapMedia)(row);
 }

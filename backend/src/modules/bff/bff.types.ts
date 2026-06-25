@@ -6,24 +6,15 @@ export type EntryType = 'CPM' | 'CPS' | 'CPA';
 export type StoredEntryType = 'CPM' | 'CPS' | 'CPA';
 export type DataEntryStatus = 'pending' | 'confirmed';
 
-/**
- * Canonicalizes an incoming billing-method value before persisting.
- *
- * The DB now stores a single canonical value per method. The legacy
- * 'RATIO' literal is still accepted here (for old imports / partner systems
- * that may still send it) and mapped to 'CPS' — never persisted as RATIO.
- *
- * Anything not in {CPM, CPS, CPA, RATIO} is rejected with `undefined`.
- */
 export function normalizeBillingMethodForStorage(type: EntryType | string | undefined): StoredEntryType | undefined {
   if (type === undefined) return undefined;
   if (type === 'CPM' || type === 'CPS' || type === 'CPA') return type;
-  if (type === 'RATIO') return 'CPS'; // legacy alias from old data
+  if (type === 'RATIO') return 'CPS';
   return undefined;
 }
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
 export type ReportStatusParam = 'confirmed' | 'unconfirmed' | 'pending' | 'all';
-export type AdTypeCode = string;
+export type AdTypeCode = string; // Display label (now sourced from AdType.name)
 
 export interface BffDataResponse<T> {
   success: true;
@@ -34,7 +25,7 @@ export interface BffDataResponse<T> {
 
 // Advertiser → Upstream
 export interface Advertiser {
-  id: number;
+  id: string;
   name: string;
   contact: string | null;
   phone: string | null;
@@ -43,20 +34,19 @@ export interface Advertiser {
   status: EntityStatus;
   adTypeCode?: string;
   adTypeCodes?: string[];
-  adTypes?: Array<{ id: number; code: string; name: string }>;
+  adTypes?: Array<{ id: string; name: string }>;
 }
 
 // Media → AdSite
 export interface Media {
-  id: number;
+  id: string;
   name: string;
   contact: string | null;
   phone: string | null;
   email: string | null;
   notes: string | null;
   status: EntityStatus;
-  upstreamId?: number;
-  adOrderId?: number | null;
+  upstreamId?: string;
   adTypeCode?: string;
   adTypeName?: string | null;
   billingMethod?: EntryType;
@@ -64,36 +54,19 @@ export interface Media {
   currentRatio?: number;
 }
 
-// AdOrder → AdOrder
-export interface AdOrder {
-  id: number;
-  advId: number;
-  name: string;
-  adTypeCode: string;
-  adTypeName?: string | null;
-  notes: string | null;
-  status: EntityStatus;
-  isVirtual?: boolean;
-  advertiserName?: string;
-  adSiteCount: number;
-  billingMethods: string[];
-  createdAt?: string;
-}
-
-// AdId → AdSite (demand side, CPM)
+// AdId → AdSite (demand side)
 export interface AdId {
-  id: number;
+  id: string;
   slot: string;
   type: EntryType;
   rate: number | null;
   notes: string | null;
   status: EntityStatus;
-  advertiserId: number;
+  advertiserId: string;
   advertiserName: string;
   adTypeCode: string;
   adTypeName?: string | null;
-  adOrderId: number | null;
-  upstreamId: number;
+  upstreamId: string;
   billingMethod: EntryType;
   isActive: boolean;
   isArchived: boolean;
@@ -101,34 +74,63 @@ export interface AdId {
 
 // MediaId → AdSiteDownstream junction
 export interface MediaId {
-  id: number;
-  junctionId: number;
+  id: string;
+  junctionId: string;
   slot: string;
   type: EntryType;
   rate: number | null;
   shareRatio: number | null;
   status: EntityStatus;
-  mediaId: number;
+  mediaId: string;
   mediaName: string;
   adTypeCode: string;
   adTypeName?: string | null;
-  upstreamId: number;
+  upstreamId: string;
+  upstreamName?: string | null;
+  downstreamId: string;
+  downstreamName?: string | null;
+  adSiteId: string;
+  adSiteName?: string | null;
+  notes: string | null;
   billingMethod: EntryType;
   isActive: boolean;
   isArchived: boolean;
-  adSiteId: number;
-  downstreamId: number;
+  // Extended fields for "Tạo ID media" form (docx §2.3)
+  mediaAdTypeCode?: string | null;
+  mediaIdName?: string | null;
+  pctHal?: number | null;
 }
 
 // Downstream → Downstream
 export interface DownstreamDto {
-  id: number;
+  id: string;
   downstreamType: string;
-  adTypeIds: number[];
+  name: string | null;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  adTypeIds: string[];
   adTypeCodes: string[];
-  adTypes: Array<{ id: number; code: string; name: string }>;
+  adTypes: Array<{ id: string; name: string }>;
   adTypeCode: string;
   adTypeName: string | null;
   payoutRate: number | null;
   status: EntityStatus;
+}
+
+// MediaAdOrder → MediaAdOrder (per-AdSite ad order)
+export interface MediaAdOrderDto {
+  id: string;
+  downstreamId: string;
+  adTypeId: string;
+  adTypeCode: string;
+  adTypeName: string | null;
+  seq: number;
+  name: string;
+  notes: string | null;
+  status: EntityStatus;
+  linkCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }

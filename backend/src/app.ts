@@ -11,7 +11,6 @@ import { userRouter } from './modules/users/user.router';
 import { roleRouter } from './modules/roles/role.router';
 import { advertiserRouter } from './modules/bff/advertisers/advertiser.router';
 import { mediaRouter } from './modules/bff/media/media.router';
-import { adOrderRouter } from './modules/bff/ad-orders/adOrder.router';
 import { adIdRouter } from './modules/bff/ad-ids/adId.router';
 import { mediaIdRouter } from './modules/bff/media-ids/mediaId.router';
 import { downstreamRouter } from './modules/bff/downstreams/downstream.router';
@@ -22,6 +21,7 @@ import { quarantineRouter } from './modules/bff/quarantine/quarantine.router';
 import { oplogRouter } from './modules/bff/operation-logs/oplog.router';
 import { dashboardRouter } from './modules/bff/dashboard/dashboard.router';
 import { adTypeRouter } from './modules/bff/ad-types/adType.router';
+import { mediaAdOrderRouter } from './modules/bff/media-ad-orders/mediaAdOrder.router';
 import { yiyiRouter } from './modules/yiyi/yiyi.router';
 import { hardDeleteRouter } from './modules/bff/hard-delete/hardDelete.router';
 
@@ -50,7 +50,6 @@ export function createApp(): Express {
   const bff = express.Router();
   advertiserRouter(bff);
   mediaRouter(bff);
-  adOrderRouter(bff);
   adIdRouter(bff);
   mediaIdRouter(bff);
   downstreamRouter(bff);
@@ -61,6 +60,7 @@ export function createApp(): Express {
   oplogRouter(bff);
   dashboardRouter(bff);
   adTypeRouter(bff);
+  mediaAdOrderRouter(bff);
   hardDeleteRouter(bff);
   app.use('/api/bff', bff);
 

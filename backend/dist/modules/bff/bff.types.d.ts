@@ -1,6 +1,6 @@
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'RATIO' | 'CPA' | 'CPS';
-export type StoredEntryType = 'CPM' | 'RATIO' | 'CPA';
+export type EntryType = 'CPM' | 'CPS' | 'CPA';
+export type StoredEntryType = 'CPM' | 'CPS' | 'CPA';
 export type DataEntryStatus = 'pending' | 'confirmed';
 export declare function normalizeBillingMethodForStorage(type: EntryType | string | undefined): StoredEntryType | undefined;
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
@@ -13,7 +13,7 @@ export interface BffDataResponse<T> {
     message?: string;
 }
 export interface Advertiser {
-    id: number;
+    id: string;
     name: string;
     contact: string | null;
     phone: string | null;
@@ -23,89 +23,98 @@ export interface Advertiser {
     adTypeCode?: string;
     adTypeCodes?: string[];
     adTypes?: Array<{
-        id: number;
-        code: string;
+        id: string;
         name: string;
     }>;
 }
 export interface Media {
-    id: number;
+    id: string;
     name: string;
     contact: string | null;
     phone: string | null;
     email: string | null;
     notes: string | null;
     status: EntityStatus;
-    upstreamId?: number;
+    upstreamId?: string;
     adTypeCode?: string;
     adTypeName?: string | null;
     billingMethod?: EntryType;
     currentUnitPrice?: number;
     currentRatio?: number;
 }
-export interface AdOrder {
-    id: number;
-    advId: number;
-    name: string;
-    adTypeCode: string;
-    adTypeName?: string | null;
-    notes: string | null;
-    status: EntityStatus;
-    isVirtual?: boolean;
-    advertiserName?: string;
-    adSiteCount: number;
-    billingMethods: string[];
-    createdAt?: string;
-}
 export interface AdId {
-    id: number;
+    id: string;
     slot: string;
     type: EntryType;
     rate: number | null;
     notes: string | null;
     status: EntityStatus;
-    advertiserId: number;
+    advertiserId: string;
     advertiserName: string;
     adTypeCode: string;
     adTypeName?: string | null;
-    adOrderId: number | null;
-    upstreamId: number;
+    upstreamId: string;
     billingMethod: EntryType;
     isActive: boolean;
     isArchived: boolean;
 }
 export interface MediaId {
-    id: number;
-    junctionId: number;
+    id: string;
+    junctionId: string;
     slot: string;
     type: EntryType;
     rate: number | null;
     shareRatio: number | null;
     status: EntityStatus;
-    mediaId: number;
+    mediaId: string;
     mediaName: string;
     adTypeCode: string;
     adTypeName?: string | null;
-    upstreamId: number;
+    upstreamId: string;
+    upstreamName?: string | null;
+    downstreamId: string;
+    downstreamName?: string | null;
+    adSiteId: string;
+    adSiteName?: string | null;
+    notes: string | null;
     billingMethod: EntryType;
     isActive: boolean;
     isArchived: boolean;
-    adSiteId: number;
-    downstreamId: number;
+    mediaAdTypeCode?: string | null;
+    mediaIdName?: string | null;
+    pctHal?: number | null;
 }
 export interface DownstreamDto {
-    id: number;
+    id: string;
     downstreamType: string;
-    adTypeIds: number[];
+    name: string | null;
+    contact: string | null;
+    phone: string | null;
+    email: string | null;
+    notes: string | null;
+    adTypeIds: string[];
     adTypeCodes: string[];
     adTypes: Array<{
-        id: number;
-        code: string;
+        id: string;
         name: string;
     }>;
     adTypeCode: string;
     adTypeName: string | null;
     payoutRate: number | null;
     status: EntityStatus;
+}
+export interface MediaAdOrderDto {
+    id: string;
+    downstreamId: string;
+    adTypeId: string;
+    adTypeCode: string;
+    adTypeName: string | null;
+    seq: number;
+    name: string;
+    notes: string | null;
+    status: EntityStatus;
+    linkCount?: number;
+    createdAt: string;
+    updatedAt: string;
 }
 //# sourceMappingURL=bff.types.d.ts.map

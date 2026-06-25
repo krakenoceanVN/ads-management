@@ -6,8 +6,11 @@ exports.deleteAdOrder = deleteAdOrder;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 const seq_1 = require("./seq");
+const ids_1 = require("../../../shared/ids");
 async function createAdOrder(input) {
     const { advertiserId, adTypeCode, ...rest } = input;
+    if (!(0, ids_1.isValidId)(advertiserId))
+        throw new Error('Invalid advertiserId');
     const adType = await client_1.prisma.adType.findUnique({ where: { code: adTypeCode } });
     if (!adType)
         throw new Error('Invalid adTypeCode');
@@ -29,6 +32,8 @@ async function createAdOrder(input) {
     return (0, mappers_1.mapAdOrder)(reloaded);
 }
 async function updateAdOrder(id, input) {
+    if (!(0, ids_1.isValidId)(id))
+        throw new Error('Invalid id');
     const { advertiserId, adTypeCode, ...rest } = input;
     const updateData = {};
     if (rest.name !== undefined)
@@ -37,8 +42,11 @@ async function updateAdOrder(id, input) {
         updateData['notes'] = rest.notes;
     if (rest.status !== undefined)
         updateData['status'] = rest.status;
-    if (advertiserId !== undefined)
+    if (advertiserId !== undefined) {
+        if (!(0, ids_1.isValidId)(advertiserId))
+            throw new Error('Invalid advertiserId');
         updateData['upstreamId'] = advertiserId;
+    }
     if (adTypeCode !== undefined) {
         const adType = await client_1.prisma.adType.findUnique({ where: { code: adTypeCode } });
         if (!adType)
@@ -53,6 +61,8 @@ async function updateAdOrder(id, input) {
     return (0, mappers_1.mapAdOrder)(row);
 }
 async function deleteAdOrder(id) {
+    if (!(0, ids_1.isValidId)(id))
+        throw new Error('Invalid id');
     // Soft delete: set status to inactive. seq is NOT freed — gaps are allowed
     // and intentional (we never want a future row to claim a stale seq).
     const row = await client_1.prisma.adOrder.update({

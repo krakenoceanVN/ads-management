@@ -45,7 +45,7 @@ export interface ResolvedRate {
  *   4. Downstream.payoutRate  (this downstreamId / active only)
  * Throws if no rate is found.
  */
-export declare function resolveDownstreamRate(adSiteId: number, downstreamId: number, recordDate: Date): Promise<ResolvedRate>;
+export declare function resolveDownstreamRate(adSiteId: string, downstreamId: string, recordDate: Date): Promise<ResolvedRate>;
 /**
  * Calculate downstream cost for a single DailyInput record.
  * billingMethod comes from the AdSite (already queried).

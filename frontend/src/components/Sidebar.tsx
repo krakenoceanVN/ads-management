@@ -4,7 +4,6 @@ import { visibleMenu } from '../lib/featureFlags';
 
 const PAGE_PERMISSION_MAP: Record<string, string> = {
   pAdvertiserList: 'advertiser.read',
-  pAdOrderMgmt: 'role.update',
   pAdIdMgmt: 'adId.read',
   pMediaMgmt: 'media.read',
   pMediaAdOrderMgmt: 'media.read',

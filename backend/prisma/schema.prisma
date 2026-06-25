@@ -12,25 +12,32 @@ datasource db {
 // TABLE 1: ad_type
 // ============================================================
 model AdType {
-  id        Int       @id
-  code      String    @unique // SM | 360 | BAIDU_JS
+  id        String   @id  // 6-char alphanumeric, generated app-side (also used as FK identifier)
   name      String
+  upstreamId String?  // Nhà QC sở hữu đơn này (mục 1.2)
+  notes     String?
+  status    String    @default("active") // active | inactive
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  upstreams       Upstream[]
-  upstreamAdTypes UpstreamAdType[]
-  downstreamAdTypes DownstreamAdType[]
-  orders          AdOrder[]
+  owner      Upstream? @relation("AdTypeOwner", fields: [upstreamId], references: [id])
+  upstreamAdTypes    UpstreamAdType[]
+  downstreamAdTypes  DownstreamAdType[]
+  mediaOrders        MediaAdOrder[]
+  adSiteDownstreams  AdSiteDownstream[]   // relation via mediaAdTypeId
+  defaultForUpstreams Upstream[] @relation("UpstreamDefaultAdType")
+
+  @@index([upstreamId])
+  @@index([status])
 }
 
 // ============================================================
 // TABLE 5b: downstream_ad_type (junction, mirrors UpstreamAdType)
 // ============================================================
 model DownstreamAdType {
-  id           Int      @id @default(autoincrement())
-  downstreamId Int
-  adTypeId     Int
+  id           String   @id
+  downstreamId String
+  adTypeId     String
   createdAt    DateTime @default(now())
 
   downstream Downstream @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
@@ -45,8 +52,8 @@ model DownstreamAdType {
 // TABLE 2: upstream
 // ============================================================
 model Upstream {
-  id        Int       @id @default(autoincrement())
-  adTypeId  Int
+  id        String   @id
+  adTypeId  String?
   name      String
   status    String    @default("active") // active | inactive
   contact   String?
@@ -56,20 +63,20 @@ model Upstream {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  adType      AdType           @relation(fields: [adTypeId], references: [id])
+  defaultAdType AdType?          @relation("UpstreamDefaultAdType", fields: [adTypeId], references: [id])
   adTypeLinks UpstreamAdType[]
   adSites     AdSite[]
-  adOrders    AdOrder[]
+  ownedAdTypes AdType[]         @relation("AdTypeOwner")
 
   @@index([adTypeId])
   @@index([adTypeId, status])
 }
 
 model UpstreamAdType {
-  id         Int      @id @default(autoincrement())
-  upstreamId Int
-  adTypeId   Int
-  createdAt  DateTime @default(now())
+  id         String   @id
+  upstreamId String
+  adTypeId   String
+  createdAt  DateTime  @default(now())
 
   upstream   Upstream @relation(fields: [upstreamId], references: [id], onDelete: Cascade)
   adType     AdType   @relation(fields: [adTypeId], references: [id])
@@ -80,32 +87,32 @@ model UpstreamAdType {
 }
 
 // ============================================================
-// TABLE 2b: ad_order (per-advertiser order/campaign)
+// TABLE 2c: media_ad_order (per-Downstream ad order)
+// Scoped to Downstream (a.k.a. "Hạ nguồn / Media" in UI).
 // ============================================================
-model AdOrder {
-  id         Int       @id @default(autoincrement())
-  upstreamId Int
-  adTypeId   Int
-  seq        Int
-  name       String
-  notes      String?
-  status     String    @default("active") // active | inactive
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+model MediaAdOrder {
+  id           String   @id
+  downstreamId String
+  adTypeId     String
+  seq          Int
+  name         String
+  notes        String?
+  status       String    @default("active") // active | inactive
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  upstream Upstream @relation(fields: [upstreamId], references: [id])
-  adType   AdType   @relation(fields: [adTypeId], references: [id])
-  adSites  AdSite[]
+  downstream Downstream @relation(fields: [downstreamId], references: [id])
+  adType     AdType     @relation(fields: [adTypeId], references: [id])
 
-  @@unique([upstreamId, adTypeId, seq])
-  @@index([upstreamId])
+  @@unique([downstreamId, adTypeId, seq])
+  @@index([downstreamId])
   @@index([adTypeId])
   @@index([status])
 }
 
 model AdSiteRebateRate {
   id        String   @id @default(uuid())
-  adSiteId  Int
+  adSiteId  String
   rate      Decimal
   startDate DateTime
   endDate   DateTime?
@@ -122,9 +129,8 @@ model AdSiteRebateRate {
 // TABLE 3: ad_site
 // ============================================================
 model AdSite {
-  id               Int       @id @default(autoincrement())
-  upstreamId       Int
-  adOrderId        Int?
+  id               String   @id
+  upstreamId       String
   name             String
   notes            String?
   billingMethod    String    // CPM | CPS | CPA
@@ -138,7 +144,6 @@ model AdSite {
   updatedAt        DateTime  @updatedAt
 
   upstream Upstream        @relation(fields: [upstreamId], references: [id])
-  adOrder  AdOrder?        @relation(fields: [adOrderId], references: [id])
   dailyInputs DailyInput[]
   downstreams AdSiteDownstream[]
   events         AdSiteEvent[]
@@ -152,7 +157,7 @@ model AdSite {
 
 model AdSiteEvent {
   id        String   @id @default(uuid())
-  adSiteId  Int
+  adSiteId  String
   eventType String
   note      String?
   eventDate DateTime @default(now())
@@ -167,26 +172,33 @@ model AdSiteEvent {
 // TABLE 3b: ad_site_downstream (junction)
 // ============================================================
 model AdSiteDownstream {
-  id           Int     @id @default(autoincrement())
-  adSiteId     Int
-  downstreamId Int
-  customPrice  Decimal?  // giá tự điền cho hạ nguồn
+  id                String   @id
+  adSiteId          String
+  downstreamId      String
+  customPrice       Decimal?  // giá tự điền cho hạ nguồn
+  pctHal            Decimal?  // tỷ lệ chia riêng cho cặp (AdSite, Downstream); null = dùng DownstreamPeriod.pctHal
+  notes             String?   // ghi chú cho từng junction (mục 2.3)
+  mediaAdTypeId     String?   // FK tới AdType — đơn QC ở MEDIA side
+  mediaIdName       String?   // ID media (tên do người dùng tự đặt)
+  status            String    @default("active") // active | inactive
 
   adSite     AdSite     @relation(fields: [adSiteId], references: [id], onDelete: Cascade)
   downstream Downstream @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
+  mediaAdType AdType?   @relation(fields: [mediaAdTypeId], references: [id], onDelete: SetNull)
 
   @@unique([adSiteId, downstreamId])
   @@index([adSiteId])
   @@index([downstreamId])
+  @@index([mediaAdTypeId])
 }
 
 // ============================================================
 // TABLE 4: daily_input
 // ============================================================
 model DailyInput {
-  id                 Int       @id @default(autoincrement())
+  id                 String   @id
   recordDate         DateTime
-  adSiteId           Int
+  adSiteId           String
   qty                Int       @default(0)           // CPM quantity
   unitPriceSnapshot  Decimal?                       // CPM price snapshot
   amount1            Decimal   @default(0)          // CPS amount1
@@ -197,14 +209,14 @@ model DailyInput {
   revenue            Decimal   @default(0)
   status             String    @default("unconfirmed") // unconfirmed | confirmed | quarantined
   note               String?
-  createdBy          Int?
+  createdBy          String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   // quarantine fields
-  quarantineBatchId  Int?
+  quarantineBatchId  String?
   quarantinedAt      DateTime?
-  quarantinedBy      Int?
+  quarantinedBy      String?
   quarantineReason   String?
 
   adSite             AdSite                    @relation(fields: [adSiteId], references: [id])
@@ -224,19 +236,19 @@ model DailyInput {
 // TABLE 4b: daily_input_quarantine_batch
 // ============================================================
 model DailyInputQuarantineBatch {
-  id           Int       @id @default(autoincrement())
+  id           String   @id
   scopeType    String    // advertiser | media
-  advertiserId Int?
-  adSiteId     Int?
+  advertiserId String?
+  adSiteId     String?
   startDate    DateTime
   endDate      DateTime
   reason       String?
   recordCount  Int       @default(0)
   totalRevenue Decimal   @default(0)
-  createdBy    Int?
+  createdBy    String?
   createdAt    DateTime  @default(now())
   restoredAt   DateTime?
-  restoredBy   Int?
+  restoredBy   String?
 
   activeRecords DailyInput[]                 @relation("DailyInputActiveQuarantineBatch")
   records       DailyInputQuarantineRecord[]
@@ -250,9 +262,9 @@ model DailyInputQuarantineBatch {
 // TABLE 4c: daily_input_quarantine_record
 // ============================================================
 model DailyInputQuarantineRecord {
-  id              Int      @id @default(autoincrement())
-  batchId         Int
-  dailyInputId    Int
+  id              String   @id
+  batchId         String
+  dailyInputId    String
   statusBefore    String   // "confirmed" at time of quarantine
   revenueSnapshot Decimal
 
@@ -268,9 +280,13 @@ model DailyInputQuarantineRecord {
 // TABLE 5: downstream
 // ============================================================
 model Downstream {
-  id              Int       @id @default(autoincrement())
+  id              String   @id
   downstreamType  String    // ML | LE | YIYI
-  payoutRate      Decimal   @default(0.8)
+  name            String?
+  contact         String?
+  phone           String?
+  email           String?
+  notes           String?
   status          String    @default("active") // active | inactive
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -279,20 +295,21 @@ model Downstream {
   periods  DownstreamPeriod[]
   dailyRates DailyDownstreamRate[]
   adSites  AdSiteDownstream[]
+  mediaAdOrders MediaAdOrder[]
 }
 
 // ============================================================
 // TABLE 6: downstream_period
 // ============================================================
 model DownstreamPeriod {
-  id            Int        @id @default(autoincrement())
-  downstreamId  Int
+  id            String   @id
+  downstreamId  String
   pctHal        Decimal    @default(1.0)  // tỷ lệ UV tính ML
   unitPrice     Decimal?               // đơn giá payout
   startDate     DateTime
   endDate       DateTime?             // NULL = đang hiệu lực
   note          String?
-  createdBy     Int?
+  createdBy     String?
   createdAt     DateTime  @default(now())
 
   downstream  Downstream  @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
@@ -304,8 +321,8 @@ model DownstreamPeriod {
 // TABLE 6b: daily_downstream_rate
 // ============================================================
 model DailyDownstreamRate {
-  id            Int      @id @default(autoincrement())
-  downstreamId  Int
+  id            String   @id
+  downstreamId  String
   date          DateTime
   effectiveRate Decimal
 
@@ -320,7 +337,7 @@ model DailyDownstreamRate {
 // TABLE 7: user
 // ============================================================
 model User {
-  id               Int       @id @default(autoincrement())
+  id               String   @id
   username         String    @unique
   passwordHash     String
   role             String    @default("EDITOR") // ADMIN | EDITOR | VIEWER | MANAGER | SUPER_ADMIN
@@ -330,7 +347,7 @@ model User {
   status           String    @default("active") // active | inactive
   lastLoginAt      DateTime?
   createdAt        DateTime  @default(now())
-  roleId           Int?
+  roleId           String?
   roleRef         Role?     @relation("UserRoleRef", fields: [roleId], references: [id])
 }
 
@@ -338,7 +355,7 @@ model User {
 // TABLE 7b: role
 // ============================================================
 model Role {
-  id          Int       @id @default(autoincrement())
+  id          String   @id
   code        String    @unique
   name        String
   description String?
@@ -353,7 +370,7 @@ model Role {
 // TABLE 7c: permission
 // ============================================================
 model Permission {
-  id          Int       @id @default(autoincrement())
+  id          String   @id
   key         String    @unique
   module      String
   action      String
@@ -367,8 +384,8 @@ model Permission {
 // TABLE 7d: role_permission
 // ============================================================
 model RolePermission {
-  roleId       Int
-  permissionId Int
+  roleId       String
+  permissionId String
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
@@ -379,7 +396,7 @@ model RolePermission {
 // TABLE 8: yiyi_daily_data
 // ============================================================
 model YiyiDailyData {
-  id         Int      @id @default(autoincrement())
+  id         String   @id
   recordDate DateTime
   channel    String   // yy-02-01 | yy-02-02 | yy-02-03 | yy-02-04
   qty        Int
@@ -389,7 +406,7 @@ model YiyiDailyData {
 }
 
 model YiyiDailyPricing {
-  id              Int      @id @default(autoincrement())
+  id              String   @id
   recordDate      DateTime @unique
   unitPrice       Decimal  @default(2)
   profitUnitPrice Decimal  @default(1)
@@ -400,7 +417,7 @@ model YiyiDailyPricing {
 // TABLE 9: le_daily_cost
 // ============================================================
 model LEDailyCost {
-  id         Int      @id @default(autoincrement())
+  id         String   @id
   recordDate DateTime @unique
   vendorCost Decimal  @default(0)
   mlCost     Decimal  @default(0)
@@ -412,8 +429,8 @@ model LEDailyCost {
 // TABLE 10: operation_log
 // ============================================================
 model OperationLog {
-  id         Int      @id @default(autoincrement())
-  userId     Int?
+  id         String   @id
+  userId     String?
   username   String?
   action     String
   module     String

@@ -24,7 +24,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     return;
   }
 
-  if (!payload.sub || typeof payload.sub !== 'number') {
+  if (!payload.sub || typeof payload.sub !== 'string') {
     res.status(401).json({ success: false, error: 'Invalid token payload', code: 'UNAUTHORIZED' });
     return;
   }

@@ -11,9 +11,9 @@ const success_1 = require("../../../shared/response/success");
 const AppError_1 = require("../../../shared/errors/AppError");
 const oplog_write_service_1 = require("../operation-logs/oplog.write.service");
 async function getAll(req, res) {
-    const { adTypeCode, status, keyword } = req.query;
+    const { adTypeId, status, keyword } = req.query;
     const filters = {
-        adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
+        adTypeId: adTypeId ? String(adTypeId) : undefined,
         status: status ? String(status) : undefined,
         keyword: keyword ? String(keyword) : undefined,
     };
@@ -21,8 +21,8 @@ async function getAll(req, res) {
     res.json((0, success_1.bffData)(data));
 }
 async function getById(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid downstream id');
     const row = await (0, downstream_service_1.getDownstreamById)(id);
     if (!row)
@@ -33,13 +33,15 @@ async function create(req, res) {
     const body = req.body;
     if (!body.downstreamType)
         throw new AppError_1.BadRequestError('downstreamType is required');
-    const adTypeCodes = body.adTypeCodes?.map(c => c.trim()).filter(Boolean) ?? [];
-    if (!adTypeCodes.length) {
-        throw new AppError_1.BadRequestError('adTypeCodes is required (at least one)');
-    }
+    const adTypeIds = body.adTypeIds?.map(c => c.trim()).filter(Boolean) ?? [];
     const result = await (0, downstream_write_service_1.createDownstream)({
-        adTypeCodes,
+        adTypeIds,
         downstreamType: body.downstreamType,
+        name: body.name ?? null,
+        contact: body.contact ?? null,
+        phone: body.phone ?? null,
+        email: body.email ?? null,
+        notes: body.notes ?? null,
         payoutRate: body.payoutRate,
         status: body.status,
     });
@@ -47,22 +49,27 @@ async function create(req, res) {
     res.status(201).json((0, success_1.bffData)(result));
 }
 async function update(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid downstream id');
     const body = req.body;
     const result = await (0, downstream_write_service_1.updateDownstream)(id, {
         downstreamType: body.downstreamType,
+        name: body.name ?? null,
+        contact: body.contact ?? null,
+        phone: body.phone ?? null,
+        email: body.email ?? null,
+        notes: body.notes ?? null,
         payoutRate: body.payoutRate,
         status: body.status,
-        adTypeCodes: body.adTypeCodes,
+        adTypeIds: body.adTypeIds,
     });
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'UPDATE_DOWNSTREAM', 'downstream', result.id, result.downstreamType);
     res.json((0, success_1.bffData)(result));
 }
 async function remove(req, res) {
-    const id = parseInt(req.params['id'], 10);
-    if (isNaN(id))
+    const id = req.params['id'];
+    if (!id)
         throw new AppError_1.NotFoundError('Invalid downstream id');
     const result = await (0, downstream_write_service_1.deleteDownstream)(id);
     await (0, oplog_write_service_1.recordMasterDataOperation)(req, 'DELETE_DOWNSTREAM', 'downstream', id, result.mode);

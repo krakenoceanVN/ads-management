@@ -1,48 +1,40 @@
-import type { Advertiser, Media, AdOrder, AdId, MediaId, DownstreamDto } from './bff.types';
-import type { Upstream, AdSite, AdOrder as PrismaAdOrder, AdSiteDownstream, Downstream, DownstreamAdType, AdType, UpstreamAdType } from '../../shared/prisma/client';
+import type { Advertiser, Media, AdId, MediaId, DownstreamDto, MediaAdOrderDto } from './bff.types';
+import type { Upstream, AdSite, AdSiteDownstream, Downstream, DownstreamAdType, AdType, UpstreamAdType, MediaAdOrder } from '../../shared/prisma/client';
 export declare function mapAdvertiser(upstream: Upstream & {
-    adType: AdType;
+    defaultAdType: AdType | null;
     adTypeLinks?: Array<UpstreamAdType & {
         adType: AdType;
     }>;
 }): Advertiser;
 export declare function mapMedia(site: AdSite & {
     upstream: Upstream & {
-        adType: AdType;
+        defaultAdType: AdType | null;
     };
-    adOrder?: (PrismaAdOrder & {
-        adType: AdType;
-    }) | null;
 }): Media;
-export declare function mapAdOrder(order: PrismaAdOrder & {
-    upstream: Upstream;
-    adType: AdType;
-    _count?: {
-        adSites: number;
-    };
-}, billingMethods?: string[]): AdOrder;
 export declare function mapAdId(site: AdSite & {
     upstream: Upstream & {
-        adType: AdType;
+        defaultAdType: AdType | null;
     };
-    adOrder: (PrismaAdOrder & {
-        adType?: AdType;
-    }) | null;
 }): AdId;
 export declare function mapMediaId(j: AdSiteDownstream & {
     adSite: AdSite & {
         upstream: Upstream & {
-            adType: AdType;
+            defaultAdType: AdType | null;
         };
-        adOrder?: (PrismaAdOrder & {
-            adType?: AdType;
-        }) | null;
     };
     downstream: Downstream;
+    mediaAdType?: AdType | null;
 }): MediaId;
 export declare function mapDownstream(d: Downstream & {
     adTypeLinks: Array<DownstreamAdType & {
         adType: AdType;
     }>;
 }): DownstreamDto;
+export declare function mapMediaAdOrder(row: MediaAdOrder & {
+    adType?: AdType | null;
+    downstream?: {
+        name: string | null;
+        downstreamType: string;
+    } | null;
+}, linkCount?: number): MediaAdOrderDto;
 //# sourceMappingURL=mappers.d.ts.map

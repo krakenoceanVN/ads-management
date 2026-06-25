@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../shared/prisma/client';
+import { generateShortId } from '../../shared/ids';
 import type { User } from '../../shared/prisma/client';
 
 export interface CreateUserInput {
@@ -10,7 +11,7 @@ export interface CreateUserInput {
   permDataConfirm?: boolean;
   permAdmin?: boolean;
   status?: string;
-  roleId?: number | null;
+  roleId?: string | null;
 }
 
 export interface UpdateUserInput {
@@ -20,8 +21,7 @@ export interface UpdateUserInput {
   permDataConfirm?: boolean;
   permAdmin?: boolean;
   status?: string;
-  roleId?: number | null;
-  // Explicit password change — must be explicitly provided
+  roleId?: string | null;
   password?: string;
 }
 
@@ -30,28 +30,28 @@ export interface ResetPasswordInput {
 }
 
 export interface UserResponse {
-  id: number;
+  id: string;
   username: string;
   role: string;
   permDataInput: boolean;
   permDataConfirm: boolean;
   permAdmin: boolean;
   status: string;
-  roleId: number | null;
+  roleId: string | null;
   createdAt: Date;
   lastLoginAt: Date | null;
 }
 
 function toUserResponse(user: User): UserResponse {
   return {
-    id: user.id,
+    id: String(user.id),
     username: user.username,
     role: user.role,
     permDataInput: user.permDataInput,
     permDataConfirm: user.permDataConfirm,
     permAdmin: user.permAdmin,
     status: user.status,
-    roleId: user.roleId,
+    roleId: user.roleId ? String(user.roleId) : null,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
   };
@@ -77,6 +77,7 @@ export async function createUser(input: CreateUserInput) {
 
   const user = await prisma.user.create({
     data: {
+      id: generateShortId(),
       username: username.trim(),
       passwordHash,
       role: rest.role ?? 'EDITOR',
@@ -91,7 +92,7 @@ export async function createUser(input: CreateUserInput) {
   return toUserResponse(user);
 }
 
-export async function updateUser(id: number, input: UpdateUserInput) {
+export async function updateUser(id: string, input: UpdateUserInput) {
   const { password, ...rest } = input;
 
   const updateData: Record<string, unknown> = {};
@@ -118,7 +119,7 @@ export async function updateUser(id: number, input: UpdateUserInput) {
   return toUserResponse(user);
 }
 
-export async function resetPassword(id: number, input: ResetPasswordInput) {
+export async function resetPassword(id: string, input: ResetPasswordInput) {
   if (!input.password?.trim()) throw new Error('password is required');
   if (input.password.length < 6) throw new Error('password must be at least 6 characters');
 

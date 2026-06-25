@@ -16,34 +16,42 @@ export async function getAll(_req: Request, res: Response) {
 }
 
 export async function getById(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid adType id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid adType id');
   const adType = await getAdType(id);
   if (!adType) throw new NotFoundError('AdType not found');
   res.json(bffData(adType));
 }
 
 export async function create(req: Request, res: Response) {
-  const { code, name } = req.body as { code?: string; name?: string };
-  if (!code) throw new BadRequestError('code is required');
+  const { name, upstreamId, notes, status } = req.body as {
+    name?: string; upstreamId?: string; notes?: string; status?: string;
+  };
   if (!name) throw new BadRequestError('name is required');
-  const result = await createAdType({ code, name });
+  const result = await createAdType({ name, upstreamId, notes, status: status as 'active' | 'inactive' | undefined });
   await recordMasterDataOperation(req, 'CREATE_AD_TYPE', 'adType', result.id, result.name);
   res.status(201).json(bffData(result));
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid adType id');
-  const { code, name } = req.body as { code?: string; name?: string };
-  const result = await updateAdType(id, { code, name });
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid adType id');
+  const { name, upstreamId, notes, status } = req.body as {
+    name?: string; upstreamId?: string | null; notes?: string | null; status?: string;
+  };
+  const result = await updateAdType(id, {
+    name,
+    upstreamId: upstreamId ?? undefined,
+    notes: notes ?? undefined,
+    status: status as 'active' | 'inactive' | undefined,
+  });
   await recordMasterDataOperation(req, 'UPDATE_AD_TYPE', 'adType', result.id, result.name);
   res.json(bffData(result));
 }
 
 export async function remove(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid adType id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid adType id');
   await deleteAdType(id);
   await recordMasterDataOperation(req, 'DELETE_AD_TYPE', 'adType', id, null);
   res.json(bffData({ deleted: true }));

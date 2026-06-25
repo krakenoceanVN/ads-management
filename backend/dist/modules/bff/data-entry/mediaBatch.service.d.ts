@@ -14,7 +14,7 @@
  *   3. No rebate
  */
 export interface MediaBatchItem {
-    adSiteId: number;
+    adSiteId: string;
     recordDate: string;
     qty?: number;
     unitPrice?: string | number;
@@ -30,15 +30,15 @@ export interface MediaBatchResult {
     skipped: number;
     errors: string[];
 }
-export declare function saveMediaBatch(items: MediaBatchItem[], userId: number): Promise<MediaBatchResult>;
-export declare function confirmMediaBatch(recordDate: string, adSiteIds: number[], userId: number): Promise<{
+export declare function saveMediaBatch(items: MediaBatchItem[], userId: string): Promise<MediaBatchResult>;
+export declare function confirmMediaBatch(recordDate: string, adSiteIds: string[], userId: string): Promise<{
     success: boolean;
     confirmed: number;
     errors: string[];
 }>;
-export declare function unconfirmMedia(id: number, userId: number): Promise<{
+export declare function unconfirmMedia(id: string, userId: string): Promise<{
     success: boolean;
-    id: number;
+    id: string;
     previousStatus: string;
     newStatus: string;
 }>;

@@ -1,14 +1,13 @@
 import { prisma } from '../../../shared/prisma/client';
 import { BadRequestError } from '../../../shared/errors/AppError';
 import { mapAdId } from '../mappers';
-import type { Prisma } from '@prisma/client';
-import type { AdSite, Upstream, AdType, AdOrder } from '../../../shared/prisma/client';
+import { generateShortId, isValidId } from '../../../shared/ids';
+import type { AdSite, Upstream, AdType } from '../../../shared/prisma/client';
 import { normalizeBillingMethodForStorage, type EntityStatus, type EntryType } from '../bff.types';
 
 export interface CreateAdIdInput {
-  advertiserId: number;
-  adOrderId?: number;
-  adTypeCode?: string;
+  advertiserId: string | number;
+  adTypeId?: string;
   slot: string;
   type: EntryType;
   unitPrice?: number | null;
@@ -18,9 +17,8 @@ export interface CreateAdIdInput {
 }
 
 export interface UpdateAdIdInput {
-  advertiserId?: number;
-  adOrderId?: number;
-  adTypeCode?: string;
+  advertiserId?: string | number;
+  adTypeId?: string;
   slot?: string;
   type?: EntryType;
   unitPrice?: number | null;
@@ -29,132 +27,69 @@ export interface UpdateAdIdInput {
   status?: EntityStatus;
 }
 
-async function getAdvertiserLinkedAdTypes(advertiserId: number) {
+async function getAdvertiserLinkedAdTypes(advertiserId: string) {
   const advertiser = await prisma.upstream.findUnique({
     where: { id: advertiserId },
-    include: { adType: true, adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } } },
+    include: {
+      defaultAdType: true,
+      adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } },
+    },
   });
   if (!advertiser) throw new BadRequestError('Invalid advertiserId: ' + advertiserId);
   const linkedAdTypes = advertiser.adTypeLinks.map(link => link.adType);
-  return linkedAdTypes.length ? linkedAdTypes : advertiser.adType ? [advertiser.adType] : [];
-}
-
-export async function resolveAdOrderId(advertiserId: number, adTypeCode?: string, existingAdOrderId?: number): Promise<number> {
-  const linkedAdTypes = await getAdvertiserLinkedAdTypes(advertiserId);
-  const linkedCodes = linkedAdTypes.map(adType => adType.code);
-  const requestedAdTypeCode = adTypeCode ?? linkedCodes[0];
-
-  if (!requestedAdTypeCode) throw new BadRequestError('Either adOrderId or adTypeCode must be provided');
-  if (!linkedCodes.includes(requestedAdTypeCode)) {
-    throw new BadRequestError(`adTypeCode ${requestedAdTypeCode} is not linked to advertiserId ${advertiserId}`);
-  }
-
-  if (existingAdOrderId) {
-    const adOrder = await prisma.adOrder.findUnique({
-      where: { id: existingAdOrderId },
-      include: { adType: true },
-    });
-    if (!adOrder) throw new BadRequestError('Invalid adOrderId: ' + existingAdOrderId);
-    if (adOrder.upstreamId !== advertiserId) {
-      throw new BadRequestError('adOrderId does not belong to advertiserId ' + advertiserId);
-    }
-    if (adOrder.adType?.code !== requestedAdTypeCode) {
-      throw new BadRequestError(`adOrderId adTypeCode ${adOrder.adType?.code ?? ''} does not match advertiser adTypeCode ${requestedAdTypeCode}`);
-    }
-    return existingAdOrderId;
-  }
-
-  const adType = linkedAdTypes.find(item => item.code === requestedAdTypeCode);
-  if (!adType) throw new BadRequestError('Invalid adTypeCode: ' + requestedAdTypeCode);
-
-  // Auto-create path. Retry semantics differ from the form path
-  // (modules/bff/ad-orders/seq.ts):
-  //   * On P2002, ANOTHER concurrent caller just inserted seq=1 for the same
-  //     pair. We must NOT increment to seq=2 — we re-findFirst and reuse.
-  //   * We only ever create a row when the pair has no AdOrder yet; this
-  //     preserves the existing "one AdOrder per (advertiser, adType) pair
-  //     via auto-create" behavior. The form path can create additional
-  //     rows for the same pair.
-  const SEQ_UNIQUE_COLUMNS = ['upstreamId', 'adTypeId', 'seq'];
-  const MAX_ATTEMPTS = 5;
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const existing = await prisma.adOrder.findFirst({
-      where: { upstreamId: advertiserId, adTypeId: adType.id },
-    });
-    if (existing) return existing.id;
-
-    try {
-      const created = await prisma.adOrder.create({
-        data: {
-          upstreamId: advertiserId,
-          adTypeId: adType.id,
-          seq: 1,
-          name: `${adType.code}-001`,
-          status: 'active',
-        },
-      });
-      return created.id;
-    } catch (e: unknown) {
-      const err = e as { code?: string; meta?: { target?: string | string[] } };
-      if (err?.code === 'P2002') {
-        const target = err.meta?.target;
-        const targetArr = Array.isArray(target) ? target : typeof target === 'string' ? [target] : [];
-        const onSeq = SEQ_UNIQUE_COLUMNS.every(col => targetArr.includes(col));
-        if (onSeq && attempt < MAX_ATTEMPTS - 1) {
-          // Pair was just created by a concurrent request — re-loop and reuse.
-          continue;
-        }
-      }
-      throw e;
-    }
-  }
-  throw new Error('resolveAdOrderId: exhausted retries');
+  return linkedAdTypes.length ? linkedAdTypes : advertiser.defaultAdType ? [advertiser.defaultAdType] : [];
 }
 
 export async function createAdId(input: CreateAdIdInput) {
-  const { advertiserId, adOrderId, adTypeCode, slot, type, ...rest } = input;
+  const { advertiserId, adTypeId, slot, type, ...rest } = input;
   const billingMethod = normalizeBillingMethodForStorage(type);
   if (!billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
-  const resolvedAdOrderId = await resolveAdOrderId(advertiserId, adTypeCode, adOrderId);
+
+  const advId = String(advertiserId);
+  if (!isValidId(advId)) throw new BadRequestError('Invalid advertiserId');
+
+  if (adTypeId) {
+    const linkedAdTypes = await getAdvertiserLinkedAdTypes(advId);
+    if (!linkedAdTypes.some(at => at.id === adTypeId)) {
+      throw new BadRequestError(`adTypeId ${adTypeId} is not linked to advertiserId ${advId}`);
+    }
+  }
 
   const row = await prisma.adSite.create({
     data: {
-      upstreamId: advertiserId,
-      adOrderId: resolvedAdOrderId,
+      id: generateShortId(),
+      upstreamId: advId,
       name: slot.trim(),
       notes: rest.notes ?? null,
       billingMethod,
       currentUnitPrice: (billingMethod === 'CPM' || billingMethod === 'CPA') ? (rest.unitPrice ?? null) : null,
       currentRatio: billingMethod === 'CPS' ? (rest.ratio ?? null) : null,
       status: rest.status ?? 'active',
-    } as Prisma.AdSiteUncheckedCreateInput,
+    },
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
 }
 
-export async function updateAdId(id: number, input: UpdateAdIdInput) {
+export async function updateAdId(id: string | number, input: UpdateAdIdInput) {
+  if (!isValidId(String(id))) throw new BadRequestError('Invalid id');
   const { type, unitPrice, ratio, ...rest } = input;
   const billingMethod = normalizeBillingMethodForStorage(type);
   if (type !== undefined && !billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
 
-  let resolvedAdOrderId = rest.adOrderId;
-  if (rest.adTypeCode || rest.adOrderId || rest.advertiserId) {
-    const current = await prisma.adSite.findUnique({ where: { id } });
-    if (!current) throw new BadRequestError('Invalid ad id: ' + id);
-    const advertiserId = rest.advertiserId ?? current.upstreamId;
-    resolvedAdOrderId = await resolveAdOrderId(advertiserId, rest.adTypeCode, rest.adOrderId ?? undefined);
+  if (rest.advertiserId && rest.adTypeId) {
+    const linkedAdTypes = await getAdvertiserLinkedAdTypes(String(rest.advertiserId));
+    if (!linkedAdTypes.some(at => at.id === rest.adTypeId)) {
+      throw new BadRequestError(`adTypeId ${rest.adTypeId} is not linked to advertiserId ${rest.advertiserId}`);
+    }
   }
 
   const row = await prisma.adSite.update({
-    where: { id },
+    where: { id: String(id) },
     data: {
-      ...(rest.advertiserId !== undefined && { upstreamId: rest.advertiserId }),
-      ...(resolvedAdOrderId !== undefined && { adOrderId: resolvedAdOrderId }),
+      ...(rest.advertiserId !== undefined && { upstreamId: String(rest.advertiserId) }),
       ...(rest.slot !== undefined && { name: rest.slot.trim() }),
       ...(rest.notes !== undefined && { notes: rest.notes }),
       ...(billingMethod !== undefined && { billingMethod }),
@@ -165,22 +100,21 @@ export async function updateAdId(id: number, input: UpdateAdIdInput) {
       ...(rest.status !== undefined && { status: rest.status }),
     },
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
 }
 
-export async function deleteAdId(id: number) {
+export async function deleteAdId(id: string | number) {
+  if (!isValidId(String(id))) throw new BadRequestError('Invalid id');
   // Soft deactivate: set status to inactive
   const row = await prisma.adSite.update({
-    where: { id },
+    where: { id: String(id) },
     data: { status: 'inactive' },
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { adType: AdType }; adOrder: AdOrder });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
 }

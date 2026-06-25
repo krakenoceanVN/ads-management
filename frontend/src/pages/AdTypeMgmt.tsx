@@ -1,51 +1,66 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
 import { Table, type SortDirection } from '../components/Table';
+import { StatusToggle } from './Advertiser';
 import { HardDeleteModal } from '../components/HardDeleteModal';
-import { listAdTypes, createAdType, updateAdType, hardDeleteAdType } from '../lib/bffApi';
-import type { AdType } from '../lib/bffTypes';
+import {
+  listAdTypes,
+  createAdType,
+  updateAdType,
+  hardDeleteAdType,
+  listAdvertisers,
+} from '../lib/bffApi';
+import type { AdType, Advertiser, EntityStatus } from '../lib/bffTypes';
 import type { HardDeleteResult } from '../lib/bffApi';
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
 }
 
-function isValidCode(code: string): boolean {
-  return /^[A-Z0-9_]+$/.test(code);
-}
-
 interface EditState {
-  id?: number;
-  code: string;
+  id?: string;
+  upstreamId: string;
   name: string;
+  notes: string;
+  status: EntityStatus;
 }
 
 export function AdTypeMgmt() {
-  const { t, can } = useAppContext();
+  const { t, displayName, can } = useAppContext();
   const [rows, setRows] = useState<AdType[]>([]);
+  const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [hardDeleteOpen, setHardDeleteOpen] = useState(false);
+  const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
   const [hardDeleteTarget, setHardDeleteTarget] = useState<AdType | null>(null);
   const [hardDeleteResult, setHardDeleteResult] = useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
   const [hardDeleteError, setHardDeleteError] = useState('');
-  const [codeSort, setCodeSort] = useState<SortDirection>('asc');
   const [nameSort, setNameSort] = useState<SortDirection>('asc');
+  const [linkCountSort, setLinkCountSort] = useState<SortDirection>('desc');
+  const [upstreamSort, setUpstreamSort] = useState<SortDirection>('asc');
+  const [notesSort, setNotesSort] = useState<SortDirection>('asc');
+  const [statusSort, setStatusSort] = useState<SortDirection>('asc');
 
   const canWrite = can('role.update');
   const canHardDelete = can('masterData.hardDelete');
+
+  const advertisersById = useMemo(
+    () => new Map(advertisers.map(a => [a.id, a])),
+    [advertisers]
+  );
 
   const loadRows = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await listAdTypes();
-      setRows(data ?? []);
+      const [adTypeRows, advertiserRows] = await Promise.all([listAdTypes(), listAdvertisers()]);
+      setRows(adTypeRows ?? []);
+      setAdvertisers(advertiserRows ?? []);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -60,35 +75,58 @@ export function AdTypeMgmt() {
   const sortedRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     const filtered = keyword
-      ? rows.filter(r => (r.code ?? '').toLowerCase().includes(keyword) || (r.name ?? '').toLowerCase().includes(keyword))
+      ? rows.filter(r => {
+          const owner = r.upstreamId ? advertisersById.get(Number(r.upstreamId))?.name : '';
+          return (r.name ?? '').toLowerCase().includes(keyword)
+            || (owner ?? '').toLowerCase().includes(keyword);
+        })
       : rows;
     const out = [...filtered];
     out.sort((a, b) => {
-      const codeA = a.code ?? '';
-      const codeB = b.code ?? '';
-      const codeDelta = codeA.localeCompare(codeB, undefined, { sensitivity: 'base' });
-      const codeOrder = codeSort === 'asc' ? codeDelta : -codeDelta;
-      if (codeOrder !== 0) return codeOrder;
       const nameA = a.name ?? '';
       const nameB = b.name ?? '';
       const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
       const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
       if (nameOrder !== 0) return nameOrder;
-      return a.id - b.id;
+      const countA = a.adSiteCount ?? 0;
+      const countB = b.adSiteCount ?? 0;
+      const countDelta = countA - countB;
+      const countOrder = linkCountSort === 'asc' ? countDelta : -countDelta;
+      if (countOrder !== 0) return countOrder;
+      const ownerA = displayName(advertisersById.get(Number(a.upstreamId))?.name ?? '');
+      const ownerB = displayName(advertisersById.get(Number(b.upstreamId))?.name ?? '');
+      const ownerDelta = ownerA.localeCompare(ownerB, undefined, { sensitivity: 'base' });
+      const ownerOrder = upstreamSort === 'asc' ? ownerDelta : -ownerDelta;
+      if (ownerOrder !== 0) return ownerOrder;
+      const notesA = a.notes ?? '';
+      const notesB = b.notes ?? '';
+      const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
+      const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
+      if (notesOrder !== 0) return notesOrder;
+      return (a.id ?? '').localeCompare(b.id ?? '');
     });
     return out;
-  }, [rows, codeSort, nameSort, search]);
+  }, [rows, search, nameSort, linkCountSort, upstreamSort, notesSort, advertisersById, displayName]);
 
-  const toggleCodeSort = () => setCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
   const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleLinkCountSort = () => setLinkCountSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleUpstreamSort = () => setUpstreamSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const openCreate = () => {
-    setEditModal({ code: '', name: '' });
+    setEditModal({ upstreamId: '', name: '', notes: '', status: 'active' });
     setEditError('');
   };
 
   const openEdit = (row: AdType) => {
-    setEditModal({ id: row.id, code: row.code, name: row.name });
+    setEditModal({
+      id: row.id,
+      upstreamId: row.upstreamId ?? '',
+      name: row.name,
+      notes: row.notes ?? '',
+      status: (row.status as EntityStatus) ?? 'active',
+    });
     setEditError('');
   };
 
@@ -99,22 +137,27 @@ export function AdTypeMgmt() {
 
   const handleSave = async () => {
     if (!editModal) return;
-    const { code, name } = editModal;
-
-    if (!code.trim()) { setEditError(t('requiredFields')); return; }
-    if (!name.trim()) { setEditError(t('requiredFields')); return; }
-    if (!isValidCode(code.trim().toUpperCase())) {
-      setEditError(t('requiredFields'));
-      return;
-    }
+    const { name, notes, upstreamId, status } = editModal;
+    if (!upstreamId) { setEditError(t('selectUpstreamRequired')); return; }
+    if (!name.trim()) { setEditError(t('adTypeNameRequired')); return; }
 
     setSaving(true);
     setEditError('');
     try {
       if (editModal.id !== undefined) {
-        await updateAdType(editModal.id, { code: code.trim().toUpperCase(), name: name.trim() });
+        await updateAdType(editModal.id, {
+          name: name.trim(),
+          upstreamId: upstreamId || null,
+          notes: notes.trim() || null,
+          status,
+        });
       } else {
-        await createAdType({ code: code.trim().toUpperCase(), name: name.trim() });
+        await createAdType({
+          name: name.trim(),
+          upstreamId: upstreamId || undefined,
+          notes: notes.trim() || undefined,
+          status,
+        });
       }
       setEditModal(null);
       await loadRows();
@@ -130,6 +173,16 @@ export function AdTypeMgmt() {
     setHardDeleteResult(null);
     setHardDeleteError('');
     setHardDeleteOpen(true);
+  };
+
+  const updateStatus = async (record: AdType, active: boolean) => {
+    const nextStatus: EntityStatus = active ? 'active' : 'inactive';
+    try {
+      await updateAdType(record.id, { status: nextStatus });
+      setRows(prev => prev.map(r => r.id === record.id ? { ...r, status: nextStatus } : r));
+    } catch (err) {
+      setError(errorMessage(err));
+    }
   };
 
   const handleHardDeleteConfirm = async () => {
@@ -170,23 +223,19 @@ export function AdTypeMgmt() {
             <div className="modal-body">
               {editError && <div className="form-error" style={{ marginBottom: '8px' }}>{editError}</div>}
               <div className="form-group">
-                <label>{t('adOrderCode')} <span style={{ color: 'red' }}>*</span></label>
-                <input
+                <label>{t('advertiser')} <span style={{ color: 'red' }}>*</span></label>
+                <select
                   className="input"
-                  type="text"
-                  value={editModal.code}
-                  placeholder="e.g. GOOGLE"
-                  maxLength={20}
-                  style={{ textTransform: 'uppercase' }}
-                  onChange={e => setEditModal(prev => prev ? { ...prev, code: e.target.value.toUpperCase() } : prev)}
-                  disabled={saving || editModal.id !== undefined}
-                />
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                  {t('type')}: A-Z, 0-9, _
-                </div>
+                  value={editModal.upstreamId}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, upstreamId: e.target.value } : prev)}
+                  disabled={saving}
+                >
+                  <option value="">-</option>
+                  {advertisers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
               </div>
               <div className="form-group">
-                <label>{t('adOrderName')} <span style={{ color: 'red' }}>*</span></label>
+                <label>{t('adType')} <span style={{ color: 'red' }}>*</span></label>
                 <input
                   className="input"
                   type="text"
@@ -196,6 +245,29 @@ export function AdTypeMgmt() {
                   onChange={e => setEditModal(prev => prev ? { ...prev, name: e.target.value } : prev)}
                   disabled={saving}
                 />
+              </div>
+              <div className="form-group">
+                <label>{t('notes')}</label>
+                <textarea
+                  className="input"
+                  value={editModal.notes}
+                  maxLength={200}
+                  rows={3}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, notes: e.target.value } : prev)}
+                  disabled={saving}
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('status')}</label>
+                <select
+                  className="input"
+                  value={editModal.status}
+                  onChange={e => setEditModal(prev => prev ? { ...prev, status: e.target.value as EntityStatus } : prev)}
+                  disabled={saving}
+                >
+                  <option value="active">{t('online')}</option>
+                  <option value="inactive">{t('offline')}</option>
+                </select>
               </div>
             </div>
             <div className="modal-footer">
@@ -226,29 +298,24 @@ export function AdTypeMgmt() {
           {error && <div className="form-error" style={{ margin: '8px 0' }}>{error}</div>}
           <Table
             columns={[
-              { key: 'id', label: 'ID' },
-              { key: 'code', label: t('adOrderCode'), render: (r: AdType) => <code style={{ fontWeight: 600 }}>{r.code}</code>, sortDirection: codeSort, onSortClick: toggleCodeSort },
-              { key: 'name', label: t('adOrderName'), sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'createdAt', label: t('createdAt'), render: (r: AdType) => new Date(r.createdAt).toLocaleDateString() },
-              {
-                key: '__actions__',
-                label: t('actions'),
-                render: (r: AdType) => (canWrite || canHardDelete) ? (
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    {canWrite && <button className="btn-outline btn-xs" onClick={() => openEdit(r)}>{t('edit')}</button>}
-                    {canHardDelete && <button className="btn-outline btn-xs" style={{ color: 'var(--error)' }} onClick={() => openHardDelete(r)}>{t('hardDelete')}</button>}
-                  </div>
-                ) : <span style={{ color: 'var(--text-sub)', fontSize: '12px' }}>—</span>,
-              },
+              { key: '__no__', label: t('no') },
+              { key: 'upstreamName', label: t('advertiser'), render: r => r.upstreamName ?? '-', sortDirection: upstreamSort, onSortClick: toggleUpstreamSort },
+              { key: 'name', label: t('adTypeNameLabel'), sortDirection: nameSort, onSortClick: toggleNameSort },
+              { key: 'adSiteCount', label: t('linkCount'), render: r => r.adSiteCount ?? 0, sortDirection: linkCountSort, onSortClick: toggleLinkCountSort },
+              { key: 'notes', label: t('notes'), render: r => r.notes ?? '-', sortDirection: notesSort, onSortClick: toggleNotesSort },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={active => updateStatus(r, active)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: '__actions__', label: t('actions') },
             ]}
             data={sortedRows}
             emptyText={rows.length === 0 && !loading ? (t('noData') || '—') : undefined}
+            onEdit={canWrite ? openEdit : undefined}
+            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         </div>
       </div>
       <HardDeleteModal
         open={hardDeleteOpen}
-        entityName={hardDeleteTarget?.code ?? ''}
+        entityName={hardDeleteTarget?.name ?? ''}
         loading={hardDeleteLoading}
         error={hardDeleteError}
         result={hardDeleteResult}

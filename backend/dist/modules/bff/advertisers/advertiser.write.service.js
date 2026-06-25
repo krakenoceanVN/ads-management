@@ -6,46 +6,48 @@ exports.deleteAdvertiser = deleteAdvertiser;
 const client_1 = require("../../../shared/prisma/client");
 const AppError_1 = require("../../../shared/errors/AppError");
 const mappers_1 = require("../mappers");
+const ids_1 = require("../../../shared/ids");
 const advertiserInclude = {
-    adType: true,
+    defaultAdType: true,
     adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } },
 };
-function normalizeAdTypeCodes(input) {
-    const rawCodes = input.adTypeCodes !== undefined ? input.adTypeCodes : input.adTypeCode ? [input.adTypeCode] : [];
-    return Array.from(new Set(rawCodes.map(code => code.trim()).filter(Boolean)));
+function normalizeAdTypeIds(input) {
+    const rawIds = input.adTypeIds !== undefined ? input.adTypeIds : input.adTypeId ? [input.adTypeId] : [];
+    return Array.from(new Set(rawIds.map(id => id.trim()).filter(Boolean)));
 }
-async function resolveAdTypesByCodes(codes, tx) {
-    if (!codes.length)
-        throw new AppError_1.BadRequestError('at least one adTypeCode is required');
-    const adTypes = await tx.adType.findMany({ where: { code: { in: codes } }, orderBy: { id: 'asc' } });
-    const foundCodes = new Set(adTypes.map(adType => adType.code));
-    const missing = codes.filter(code => !foundCodes.has(code));
+async function resolveAdTypesByIds(ids, tx) {
+    if (!ids.length)
+        return [];
+    const adTypes = await tx.adType.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+    const foundIds = new Set(adTypes.map(adType => adType.id));
+    const missing = ids.filter(id => !foundIds.has(id));
     if (missing.length)
-        throw new AppError_1.BadRequestError(`Invalid adTypeCode: ${missing.join(', ')}`);
-    return codes.map(code => adTypes.find(adType => adType.code === code));
+        throw new AppError_1.BadRequestError(`Invalid adTypeId: ${missing.join(', ')}`);
+    return ids.map(id => adTypes.find(adType => adType.id === id));
 }
 async function syncUpstreamAdTypes(upstreamId, adTypeIds, tx) {
     await tx.upstreamAdType.deleteMany({ where: { upstreamId, adTypeId: { notIn: adTypeIds } } });
     await Promise.all(adTypeIds.map(adTypeId => tx.upstreamAdType.upsert({
         where: { upstreamId_adTypeId: { upstreamId, adTypeId } },
         update: {},
-        create: { upstreamId, adTypeId },
+        create: { id: `uat_${upstreamId}_${adTypeId}`, upstreamId, adTypeId },
     })));
 }
 async function createAdvertiser(input) {
-    const adTypeCodes = normalizeAdTypeCodes(input);
+    const adTypeIds = normalizeAdTypeIds(input);
     const row = await client_1.prisma.$transaction(async (tx) => {
-        const adTypes = await resolveAdTypesByCodes(adTypeCodes, tx);
+        const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
         const primaryAdType = adTypes[0];
         const created = await tx.upstream.create({
             data: {
+                id: (0, ids_1.generateShortId)(),
                 name: input.name,
                 contact: input.contact ?? null,
                 phone: input.phone ?? null,
                 email: input.email ?? null,
                 notes: input.notes ?? null,
                 status: input.status ?? 'active',
-                adTypeId: primaryAdType.id,
+                adTypeId: primaryAdType?.id ?? null,
             },
         });
         await syncUpstreamAdTypes(created.id, adTypes.map(adType => adType.id), tx);
@@ -54,10 +56,10 @@ async function createAdvertiser(input) {
     return (0, mappers_1.mapAdvertiser)(row);
 }
 async function updateAdvertiser(id, input) {
-    const shouldSyncAdTypes = input.adTypeCodes !== undefined || input.adTypeCode !== undefined;
-    const adTypeCodes = shouldSyncAdTypes ? normalizeAdTypeCodes(input) : [];
+    const shouldSyncAdTypes = input.adTypeIds !== undefined || input.adTypeId !== undefined;
+    const adTypeIds = shouldSyncAdTypes ? normalizeAdTypeIds(input) : [];
     const row = await client_1.prisma.$transaction(async (tx) => {
-        const adTypes = shouldSyncAdTypes ? await resolveAdTypesByCodes(adTypeCodes, tx) : [];
+        const adTypes = shouldSyncAdTypes ? await resolveAdTypesByIds(adTypeIds, tx) : [];
         await tx.upstream.update({
             where: { id },
             data: {
@@ -67,7 +69,7 @@ async function updateAdvertiser(id, input) {
                 ...(input.email !== undefined && { email: input.email }),
                 ...(input.notes !== undefined && { notes: input.notes }),
                 ...(input.status !== undefined && { status: input.status }),
-                ...(shouldSyncAdTypes && { adTypeId: adTypes[0].id }),
+                ...(shouldSyncAdTypes && { adTypeId: adTypes[0]?.id ?? null }),
             },
         });
         if (shouldSyncAdTypes) {

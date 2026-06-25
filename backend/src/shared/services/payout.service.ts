@@ -65,8 +65,8 @@ export interface ResolvedRate {
  * Throws if no rate is found.
  */
 export async function resolveDownstreamRate(
-  adSiteId: number,
-  downstreamId: number,
+  adSiteId: string,
+  downstreamId: string,
   recordDate: Date
 ): Promise<ResolvedRate> {
   // 1. AdSiteDownstream.customPrice — scoped to this adSiteId + downstreamId
@@ -74,6 +74,7 @@ export async function resolveDownstreamRate(
     where: {
       adSiteId,
       downstreamId,
+      status: 'active',
       downstream: { status: 'active' },
     },
     include: { downstream: true },
@@ -115,14 +116,17 @@ export async function resolveDownstreamRate(
     }
   }
 
-  // 4. Downstream.payoutRate — must still be active
+  // 4. Downstream.payoutRate — kept for backward compat (column may not exist on schema)
   const downstream = await prisma.downstream.findFirst({
     where: { id: downstreamId, status: 'active' },
   });
   if (downstream) {
-    const payoutRate = parseFloat(downstream.payoutRate.toString());
-    if (payoutRate > 0) {
-      return { rate: round(payoutRate), source: 'Downstream.payoutRate' };
+    const payoutRate = (downstream as unknown as { payoutRate?: { toString(): string } }).payoutRate;
+    if (payoutRate) {
+      const val = parseFloat(payoutRate.toString());
+      if (val > 0) {
+        return { rate: round(val), source: 'Downstream.payoutRate' };
+      }
     }
   }
 

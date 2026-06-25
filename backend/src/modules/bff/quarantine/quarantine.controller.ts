@@ -9,13 +9,11 @@ import type { Request, Response } from 'express';
 import { quarantineAdvertiser, quarantineMedia, restoreBatch, listQuarantineBatches, getBatchRecords } from './quarantine.service';
 import { bffData } from '../../../shared/response/success';
 
-// ─── POST /daily-input/quarantine ─────────────────────────────────────────
-
 export async function postQuarantine(req: Request, res: Response) {
   const { scope, advertiserId, adSiteId, startDate, endDate, reason } = req.body as {
     scope?: string;
-    advertiserId?: number;
-    adSiteId?: number;
+    advertiserId?: string;
+    adSiteId?: string;
     startDate?: string;
     endDate?: string;
     reason?: string;
@@ -26,7 +24,7 @@ export async function postQuarantine(req: Request, res: Response) {
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
 
   try {
     let result;
@@ -57,16 +55,14 @@ export async function postQuarantine(req: Request, res: Response) {
   }
 }
 
-// ─── POST /daily-input/quarantine/:batchId/restore ─────────────────────────
-
 export async function postRestore(req: Request, res: Response) {
-  const batchId = parseInt(req.params['batchId'] as string, 10);
+  const batchId = req.params['batchId'] as string;
   if (!batchId) {
     res.status(400).json({ success: false, error: 'invalid batchId', code: 'BAD_REQUEST' });
     return;
   }
 
-  const userId = (req as any).authUser?.id ?? 0;
+  const userId = String((req as any).authUser?.id ?? '');
 
   try {
     const result = await restoreBatch(batchId, userId);
@@ -84,17 +80,13 @@ export async function postRestore(req: Request, res: Response) {
   }
 }
 
-// ─── GET /daily-input/quarantine ────────────────────────────────────────────
-
 export async function getQuarantineBatches(req: Request, res: Response) {
   const batches = await listQuarantineBatches();
   res.json(bffData(batches));
 }
 
-// ─── GET /daily-input/quarantine/:batchId/records ──────────────────────────
-
 export async function getQuarantineBatchRecords(req: Request, res: Response) {
-  const batchId = parseInt(req.params['batchId'] as string, 10);
+  const batchId = req.params['batchId'] as string;
   if (!batchId) {
     res.status(400).json({ success: false, error: 'invalid batchId', code: 'BAD_REQUEST' });
     return;

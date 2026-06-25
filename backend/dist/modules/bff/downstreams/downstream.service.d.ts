@@ -1,6 +1,6 @@
 import type { EntityStatus } from '../bff.types';
 export interface ListDownstreamsFilters {
-    adTypeCode?: string;
+    adTypeId?: string;
     status?: EntityStatus;
     keyword?: string;
 }
@@ -15,5 +15,5 @@ export declare const downstreamInclude: {
     };
 };
 export declare function listDownstreams(filters?: ListDownstreamsFilters): Promise<import("../bff.types").DownstreamDto[]>;
-export declare function getDownstreamById(id: number): Promise<import("../bff.types").DownstreamDto | null>;
+export declare function getDownstreamById(id: string): Promise<import("../bff.types").DownstreamDto | null>;
 //# sourceMappingURL=downstream.service.d.ts.map

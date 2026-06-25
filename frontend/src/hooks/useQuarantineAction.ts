@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
-import { quarantineRecords, type QuarantineResult } from '../lib/bffApi';
+import { type QuarantineResult } from '../lib/bffApi';
+import { quarantineRecords } from '../lib/bffApi';
 import type { QuarantineScope, QuarantineParams } from '../lib/bffTypes';
 
 export { type QuarantineScope };
 
 export interface UseQuarantineActionOptions {
   scope: QuarantineScope;
-  targetId: number;
+  targetId: string;
   targetName: string;
 }
 

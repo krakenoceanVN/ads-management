@@ -176,7 +176,7 @@ export async function saveYiyiBatch(
         recordDate_channel: { recordDate, channel: item.channel },
       },
       update: { qty: item.qty },
-      create: { recordDate, channel: item.channel, qty: item.qty },
+      create: { id: `yy_${recordDate.toISOString().slice(0,10)}_${item.channel}`, recordDate, channel: item.channel, qty: item.qty },
     });
     result.savedData++;
   }
@@ -190,6 +190,7 @@ export async function saveYiyiBatch(
         profitUnitPrice: pricing.profitUnitPrice !== undefined ? new Prisma.Decimal(pricing.profitUnitPrice) : undefined,
       },
       create: {
+        id: `yyp_${recordDate.toISOString().slice(0,10)}`,
         recordDate,
         unitPrice: new Prisma.Decimal(pricing.unitPrice ?? 2),
         profitUnitPrice: new Prisma.Decimal(pricing.profitUnitPrice ?? 1),

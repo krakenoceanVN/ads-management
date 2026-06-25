@@ -102,7 +102,7 @@ export function RoleManagement() {
     setSaving(true);
     setSaveMsg('');
     try {
-      await updateRolePermissions(editRole.id, Array.from(selectedPermKeys));
+      await updateRolePermissions(editRole.id, Array.from(selectedPermKeys).map(k => Number(k)));
       setSaveMsg(t('saved'));
       void loadData();
     } catch (err) {

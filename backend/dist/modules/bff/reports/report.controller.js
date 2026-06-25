@@ -14,7 +14,7 @@ async function getAdvertisersReport(req, res) {
         ...(date !== undefined && { date: String(date) }),
         ...(startDate !== undefined && { startDate: String(startDate) }),
         ...(endDate !== undefined && { endDate: String(endDate) }),
-        ...(advertiserId !== undefined && { advertiserId: parseInt(String(advertiserId), 10) }),
+        ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
         ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
         ...(status !== undefined && { status: String(status) }),
     };
@@ -27,7 +27,7 @@ async function getMediaReportHandler(req, res) {
         ...(date !== undefined && { date: String(date) }),
         ...(startDate !== undefined && { startDate: String(startDate) }),
         ...(endDate !== undefined && { endDate: String(endDate) }),
-        ...(mediaId !== undefined && { mediaId: parseInt(String(mediaId), 10) }),
+        ...(mediaId !== undefined && { mediaId: String(mediaId) }),
         ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
         ...(status !== undefined && { status: String(status) }),
     };

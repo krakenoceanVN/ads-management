@@ -29,8 +29,8 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid user id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid user id');
   const body = req.body as UpdateUserInput;
   const user = await updateUser(id, {
     username: body.username?.trim(),
@@ -46,8 +46,8 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function doResetPassword(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid user id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid user id');
   const body = req.body as ResetPasswordInput;
   if (!body?.password?.trim()) throw new BadRequestError('password is required');
   await resetPassword(id, { password: body.password });

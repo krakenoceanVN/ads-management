@@ -22,7 +22,7 @@ function requireAuth(req, res, next) {
         res.status(401).json({ success: false, error: 'Invalid or expired token', code: 'UNAUTHORIZED' });
         return;
     }
-    if (!payload.sub || typeof payload.sub !== 'number') {
+    if (!payload.sub || typeof payload.sub !== 'string') {
         res.status(401).json({ success: false, error: 'Invalid token payload', code: 'UNAUTHORIZED' });
         return;
     }

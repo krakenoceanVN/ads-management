@@ -21,8 +21,8 @@ import { resolveRebateRate } from '../../../shared/services/rebate.service';
 import type { EntryType } from '../bff.types';
 
 export interface MediaBatchItem {
-  adSiteId: number;
-  recordDate: string; // YYYY-MM-DD
+  adSiteId: string;
+  recordDate: string;
   qty?: number;
   unitPrice?: string | number;
   amount1?: string | number;
@@ -65,14 +65,14 @@ export interface MediaBatchResult {
 
 export async function saveMediaBatch(
   items: MediaBatchItem[],
-  userId: number
+  userId: string
 ): Promise<MediaBatchResult> {
   const result: MediaBatchResult = { success: true, saved: 0, updated: 0, skipped: 0, errors: [] };
 
-  const siteIds = [...new Set(items.map(i => i.adSiteId))];
+  const siteIds = [...new Set(items.map(i => String(i.adSiteId)))];
   const sites = await prisma.adSite.findMany({
     where: { id: { in: siteIds } },
-    include: { upstream: { include: { adType: true } } },
+    include: { upstream: { include: { defaultAdType: true } } },
   });
   const siteById = new Map(sites.map(s => [s.id, s]));
 
@@ -140,6 +140,7 @@ export async function saveMediaBatch(
       } else {
         await prisma.dailyInput.create({
           data: {
+            id: `di_${item.adSiteId}_${item.recordDate.replace(/-/g, '')}`,
             recordDate,
             adSiteId: item.adSiteId,
             qty: item.qty ?? 0,
@@ -166,8 +167,8 @@ export async function saveMediaBatch(
 
 export async function confirmMediaBatch(
   recordDate: string,
-  adSiteIds: number[],
-  userId: number
+  adSiteIds: string[],
+  userId: string
 ): Promise<{ success: boolean; confirmed: number; errors: string[] }> {
   const date = new Date(recordDate + 'T00:00:00.000Z');
 
@@ -192,6 +193,7 @@ export async function confirmMediaBatch(
 
     await tx.operationLog.create({
       data: {
+        id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
         action: 'CONFIRM_MEDIA',
@@ -206,7 +208,7 @@ export async function confirmMediaBatch(
   });
 }
 
-export async function unconfirmMedia(id: number, userId: number) {
+export async function unconfirmMedia(id: string, userId: string) {
   return prisma.$transaction(async (tx) => {
     const record = await tx.dailyInput.findUnique({ where: { id } });
     if (!record) {
@@ -222,6 +224,7 @@ export async function unconfirmMedia(id: number, userId: number) {
 
     await tx.operationLog.create({
       data: {
+        id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
         action: 'UNCONFIRM_MEDIA',

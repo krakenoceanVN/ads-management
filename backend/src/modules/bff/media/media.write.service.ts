@@ -1,6 +1,7 @@
 import { prisma } from '../../../shared/prisma/client';
 import { mapMedia } from '../mappers';
 import { normalizeBillingMethodForStorage, type EntityStatus } from '../bff.types';
+import { generateShortId } from '../../../shared/ids';
 
 export interface CreateMediaInput {
   name: string;
@@ -9,7 +10,7 @@ export interface CreateMediaInput {
   email?: string | null;
   notes?: string | null;
   status?: EntityStatus;
-  upstreamId: number; // required, validated > 0 in controller
+  upstreamId: string;
   billingMethod?: string;
   currentUnitPrice?: number | null;
   currentRatio?: number | null;
@@ -22,7 +23,7 @@ export interface UpdateMediaInput {
   email?: string | null;
   notes?: string | null;
   status?: EntityStatus;
-  upstreamId?: number;
+  upstreamId?: string;
   adTypeCode?: string;
   billingMethod?: string;
   currentUnitPrice?: number | null;
@@ -37,6 +38,7 @@ export async function createMedia(input: CreateMediaInput) {
   if (!billingMethod) throw new Error('Invalid billingMethod: ' + input.billingMethod);
   const row = await prisma.adSite.create({
     data: {
+      id: generateShortId(),
       name: input.name,
       upstreamId: input.upstreamId,
       billingMethod,
@@ -44,13 +46,13 @@ export async function createMedia(input: CreateMediaInput) {
       currentRatio: input.currentRatio ?? null,
       status: input.status ?? 'active',
     },
-    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+    include: { upstream: { include: { defaultAdType: true } } },
   });
   return mapMedia(row);
 }
 
-export async function updateMedia(id: number, input: UpdateMediaInput) {
-  if (input.upstreamId !== undefined) {
+export async function updateMedia(id: string, input: UpdateMediaInput) {
+  if (input.upstreamId) {
     const upstream = await prisma.upstream.findUnique({ where: { id: input.upstreamId } });
     if (!upstream) throw new Error('Invalid upstreamId: ' + input.upstreamId);
   }
@@ -67,17 +69,16 @@ export async function updateMedia(id: number, input: UpdateMediaInput) {
       ...(input.currentRatio !== undefined && { currentRatio: input.currentRatio }),
       ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
     },
-    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+    include: { upstream: { include: { defaultAdType: true } } },
   });
   return mapMedia(row);
 }
 
-export async function deleteMedia(id: number) {
-  // Soft archive: set isArchived=true, do not hard-delete AdSite
+export async function deleteMedia(id: string) {
   const row = await prisma.adSite.update({
     where: { id },
     data: { isArchived: true },
-    include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } },
+    include: { upstream: { include: { defaultAdType: true } } },
   });
   return mapMedia(row);
 }

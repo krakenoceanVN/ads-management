@@ -4,11 +4,18 @@ exports.listMedia = listMedia;
 exports.getMedia = getMedia;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
-async function listMedia() {
+async function listMedia(filters) {
+    const where = {};
+    if (filters?.upstreamId) {
+        where.upstreamId = filters.upstreamId;
+    }
+    if (filters?.adTypeId) {
+        where.upstream = { defaultAdType: { id: filters.adTypeId } };
+    }
     const rows = await client_1.prisma.adSite.findMany({
+        where,
         include: {
-            upstream: { include: { adType: true } },
-            adOrder: { include: { adType: true } },
+            upstream: { include: { defaultAdType: true } },
         },
         orderBy: { id: 'asc' },
     });
@@ -18,8 +25,7 @@ async function getMedia(id) {
     const row = await client_1.prisma.adSite.findUnique({
         where: { id },
         include: {
-            upstream: { include: { adType: true } },
-            adOrder: { include: { adType: true } },
+            upstream: { include: { defaultAdType: true } },
         },
     });
     if (!row)

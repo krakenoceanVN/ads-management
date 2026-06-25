@@ -106,14 +106,14 @@ function downloadCsv<T>(filename: string, columns: CsvColumn<T>[], rows: T[]) {
   URL.revokeObjectURL(url);
 }
 
-function uniqueById<T>(rows: T[], getId: (row: T) => number, getName: (row: T) => string) {
-  const map = new Map<number, string>();
+function uniqueById<T>(rows: T[], getId: (row: T) => string | number, getName: (row: T) => string) {
+  const map = new Map<string, string>();
   rows.forEach(row => {
     const id = getId(row);
     const name = getName(row);
-    if (Number.isFinite(id) && name) map.set(id, name);
+    if (id != null && name) map.set(String(id), name);
   });
-  return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  return Array.from(map.entries()).map(([id, name]) => ({ id: Number(id), name }));
 }
 
 export function AdvSettlement() {
@@ -133,7 +133,7 @@ export function AdvSettlement() {
     setError('');
     getAdvertiserSettlement({
       period,
-      advertiserId: advertiserId ? Number(advertiserId) : undefined,
+      advertiserId: advertiserId ? String(advertiserId) : undefined,
     })
       .then(setRows)
       .catch(err => setError(errorMessage(err)))
@@ -145,7 +145,7 @@ export function AdvSettlement() {
   }, [loadRows]);
 
   const visibleRows = advertiserId
-    ? rows.filter(row => row.advertiserId === Number(advertiserId))
+    ? rows.filter(row => String(row.advertiserId) === String(advertiserId))
     : rows;
   const advertisers = uniqueById(rows, row => row.advertiserId, row => row.advertiser);
 

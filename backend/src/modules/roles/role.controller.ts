@@ -15,8 +15,8 @@ export async function getAllPermissions(_req: Request, res: Response) {
 }
 
 export async function updatePermissions(req: Request, res: Response) {
-  const id = parseInt(req.params['id'] as string, 10);
-  if (isNaN(id)) throw new NotFoundError('Invalid role id');
+  const id = req.params['id'] as string;
+  if (!id) throw new NotFoundError('Invalid role id');
   const body = req.body as { permissionKeys?: string[] };
   if (!Array.isArray(body.permissionKeys)) {
     throw new BadRequestError('permissionKeys must be an array of permission key strings');

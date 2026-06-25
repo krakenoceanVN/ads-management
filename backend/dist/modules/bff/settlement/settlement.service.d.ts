@@ -22,11 +22,12 @@
  */
 export interface AdvertiserSettlementParams {
     period?: string;
-    advertiserId?: number;
-    adTypeCode?: string;
+    advertiserId?: string;
+    adTypeId?: string;
 }
 export interface AdvertiserSettlementRow {
-    advertiserId: number;
+    period: string;
+    advertiserId: string;
     advertiser: string;
     adTypeCode: string | null;
     adTypeName: string | null;
@@ -36,11 +37,12 @@ export interface AdvertiserSettlementRow {
 export declare function getAdvertiserSettlement(params: AdvertiserSettlementParams): Promise<AdvertiserSettlementRow[]>;
 export interface MediaSettlementParams {
     period?: string;
-    mediaId?: number;
-    adTypeCode?: string;
+    mediaId?: string;
+    adTypeId?: string;
 }
 export interface MediaSettlementRow {
-    mediaId: number;
+    period: string;
+    mediaId: string;
     media: string;
     adTypeCode: string | null;
     adTypeName: string | null;

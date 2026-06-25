@@ -3,9 +3,8 @@
  * Downstream BFF Write Service
  * Handles create and update for Downstream (下游).
  * A downstream is a payout channel (ML | LE | YIYI) that owns a set of AdTypes
- * via the DownstreamAdType junction (mirrors UpstreamAdType). Phase-2 dropped
- * the legacy scalar Downstream.adTypeId — the junction is the single source of
- * truth.
+ * via the DownstreamAdType junction. payoutRate is now stored on
+ * DownstreamPeriod (per-period), not on Downstream itself.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDownstream = createDownstream;
@@ -13,8 +12,9 @@ exports.updateDownstream = updateDownstream;
 exports.deleteDownstream = deleteDownstream;
 const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
-const AppError_1 = require("../../../shared/errors/AppError");
 const downstream_service_1 = require("./downstream.service");
+const AppError_1 = require("../../../shared/errors/AppError");
+const ids_1 = require("../../../shared/ids");
 const ALLOWED_STATUSES = ['active', 'inactive'];
 function normalizeType(raw) {
     const value = raw?.trim().toUpperCase();
@@ -39,27 +39,27 @@ function validateStatus(status) {
     }
     return status;
 }
-function normalizeAdTypeCodes(input) {
-    if (input.adTypeCodes === undefined)
+function normalizeAdTypeIds(input) {
+    if (input.adTypeIds === undefined)
         return [];
-    return Array.from(new Set(input.adTypeCodes.map(c => c.trim()).filter(Boolean)));
+    return Array.from(new Set(input.adTypeIds.map(id => id.trim()).filter(Boolean)));
 }
-async function resolveAdTypesByCodes(codes, tx) {
-    if (!codes.length)
-        throw new AppError_1.BadRequestError('at least one adTypeCode is required');
-    const adTypes = await tx.adType.findMany({ where: { code: { in: codes } }, orderBy: { id: 'asc' } });
-    const found = new Set(adTypes.map(t => t.code));
-    const missing = codes.filter(c => !found.has(c));
+async function resolveAdTypesByIds(ids, tx) {
+    if (!ids.length)
+        return [];
+    const adTypes = await tx.adType.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+    const found = new Set(adTypes.map(t => t.id));
+    const missing = ids.filter(id => !found.has(id));
     if (missing.length)
-        throw new AppError_1.BadRequestError(`Invalid adTypeCode: ${missing.join(', ')}`);
-    return codes.map(code => adTypes.find(t => t.code === code));
+        throw new AppError_1.BadRequestError(`Invalid adTypeId: ${missing.join(', ')}`);
+    return ids.map(id => adTypes.find(t => t.id === id));
 }
 async function syncDownstreamAdTypes(downstreamId, adTypeIds, tx) {
     await tx.downstreamAdType.deleteMany({ where: { downstreamId, adTypeId: { notIn: adTypeIds } } });
     await Promise.all(adTypeIds.map(adTypeId => tx.downstreamAdType.upsert({
         where: { downstreamId_adTypeId: { downstreamId, adTypeId } },
         update: {},
-        create: { downstreamId, adTypeId },
+        create: { id: `dat_${downstreamId}_${adTypeId}`, downstreamId, adTypeId },
     })));
 }
 async function createDownstream(input) {
@@ -67,15 +67,22 @@ async function createDownstream(input) {
     const payoutRate = input.payoutRate ?? 0.8;
     validatePayoutRate(payoutRate);
     const status = validateStatus(input.status ?? 'active');
-    const adTypeCodes = normalizeAdTypeCodes(input);
+    const adTypeIds = normalizeAdTypeIds(input);
     const row = await client_1.prisma.$transaction(async (tx) => {
-        await resolveAdTypesByCodes(adTypeCodes, tx);
-        // DB-level partial unique on (downstreamType) where status='active' will also
-        // throw P2002 — catch that here for a clean 409.
+        const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
         let created;
         try {
             created = await tx.downstream.create({
-                data: { downstreamType, payoutRate, status },
+                data: {
+                    id: (0, ids_1.generateShortId)(),
+                    downstreamType,
+                    status,
+                    name: input.name ?? null,
+                    contact: input.contact ?? null,
+                    phone: input.phone ?? null,
+                    email: input.email ?? null,
+                    notes: input.notes ?? null,
+                },
             });
         }
         catch (err) {
@@ -84,14 +91,13 @@ async function createDownstream(input) {
             }
             throw err;
         }
-        const adTypes = await resolveAdTypesByCodes(adTypeCodes, tx);
         await syncDownstreamAdTypes(created.id, adTypes.map(t => t.id), tx);
         return tx.downstream.findUniqueOrThrow({ where: { id: created.id }, include: downstream_service_1.downstreamInclude });
     });
     return (0, mappers_1.mapDownstream)(row);
 }
 async function updateDownstream(id, input) {
-    if (!id || Number.isNaN(id))
+    if (!id)
         throw new AppError_1.BadRequestError('Invalid id');
     const existing = await client_1.prisma.downstream.findUnique({ where: { id } });
     if (!existing)
@@ -110,16 +116,27 @@ async function updateDownstream(id, input) {
     }
     if (input.payoutRate !== undefined) {
         validatePayoutRate(input.payoutRate);
-        data.payoutRate = input.payoutRate;
+        // payoutRate is no longer stored on Downstream; it lives on DownstreamPeriod.
+        // No-op here (kept for API compatibility).
     }
     if (input.status !== undefined) {
         data.status = validateStatus(input.status);
     }
-    const shouldSyncAdTypes = input.adTypeCodes !== undefined;
+    if (input.name !== undefined)
+        data.name = input.name ?? null;
+    if (input.contact !== undefined)
+        data.contact = input.contact ?? null;
+    if (input.phone !== undefined)
+        data.phone = input.phone ?? null;
+    if (input.email !== undefined)
+        data.email = input.email ?? null;
+    if (input.notes !== undefined)
+        data.notes = input.notes ?? null;
+    const shouldSyncAdTypes = input.adTypeIds !== undefined;
     const row = await client_1.prisma.$transaction(async (tx) => {
         if (shouldSyncAdTypes) {
-            const codes = normalizeAdTypeCodes(input);
-            const adTypes = await resolveAdTypesByCodes(codes, tx);
+            const ids = normalizeAdTypeIds(input);
+            const adTypes = await resolveAdTypesByIds(ids, tx);
             await syncDownstreamAdTypes(id, adTypes.map(t => t.id), tx);
         }
         if (Object.keys(data).length) {
@@ -138,7 +155,7 @@ async function updateDownstream(id, input) {
     return (0, mappers_1.mapDownstream)(row);
 }
 async function deleteDownstream(id) {
-    if (!id || Number.isNaN(id))
+    if (!id)
         throw new AppError_1.BadRequestError('Invalid id');
     const existing = await client_1.prisma.downstream.findUnique({ where: { id } });
     if (!existing)

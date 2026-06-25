@@ -2,7 +2,7 @@ import { prisma } from '../../../shared/prisma/client';
 import { mapAdvertiser } from '../mappers';
 
 const advertiserInclude = {
-  adType: true,
+  defaultAdType: true,
   adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' as const } },
 };
 
@@ -14,9 +14,9 @@ export async function listAdvertisers() {
   return rows.map(r => mapAdvertiser(r));
 }
 
-export async function getAdvertiser(id: number) {
+export async function getAdvertiser(id: string | number) {
   const row = await prisma.upstream.findUnique({
-    where: { id },
+    where: { id: String(id) },
     include: advertiserInclude,
   });
   if (!row) return null;

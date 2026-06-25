@@ -3,31 +3,33 @@ import { mapMedia } from '../mappers';
 import type { Prisma } from '@prisma/client';
 
 export interface ListMediaFilters {
-  adOrderId?: number;
+  upstreamId?: string;
+  adTypeId?: string;
 }
 
 export async function listMedia(filters?: ListMediaFilters) {
   const where: Prisma.AdSiteWhereInput = {};
-  if (filters?.adOrderId != null) {
-    where.adOrderId = filters.adOrderId;
+  if (filters?.upstreamId) {
+    where.upstreamId = filters.upstreamId;
+  }
+  if (filters?.adTypeId) {
+    where.upstream = { defaultAdType: { id: filters.adTypeId } };
   }
   const rows = await prisma.adSite.findMany({
     where,
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
     orderBy: { id: 'asc' },
   });
   return rows.map(r => mapMedia(r));
 }
 
-export async function getMedia(id: number) {
+export async function getMedia(id: string) {
   const row = await prisma.adSite.findUnique({
     where: { id },
     include: {
-      upstream: { include: { adType: true } },
-      adOrder: { include: { adType: true } },
+      upstream: { include: { defaultAdType: true } },
     },
   });
   if (!row) return null;

@@ -3,6 +3,9 @@
  * AdType BFF Write Service
  * Handles create, update, and delete for AdType.
  * Delete is soft-blocked if referenced by business records.
+ *
+ * Per docx mục 1.2: AdType giữ vai trò "đơn quảng cáo của nhà QC".
+ * Không còn field `code` — `id` (6-char alphanumeric) là identifier duy nhất.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createAdType = createAdType;
@@ -10,95 +13,83 @@ exports.updateAdType = updateAdType;
 exports.deleteAdType = deleteAdType;
 const client_1 = require("../../../shared/prisma/client");
 const AppError_1 = require("../../../shared/errors/AppError");
-// Check if adType code is referenced by any business table
-async function isCodeReferenced(code) {
-    const [upstream, upstreamAdType, adOrder, adSite, downstreamAdType] = await Promise.all([
-        client_1.prisma.upstream.count({ where: { adType: { code } } }),
-        client_1.prisma.upstreamAdType.count({ where: { adType: { code } } }),
-        client_1.prisma.adOrder.count({ where: { adType: { code } } }),
-        client_1.prisma.adSite.count({ where: { OR: [{ adOrder: { adType: { code } } }, { adOrderId: null, upstream: { adType: { code } } }] } }),
-        client_1.prisma.downstreamAdType.count({ where: { adType: { code } } }),
+const ids_1 = require("../../../shared/ids");
+// Check if adType is referenced by any business table (by id)
+async function isIdReferenced(id) {
+    const [upstream, upstreamAdType, adSite, downstreamAdType, mediaAdOrder] = await Promise.all([
+        client_1.prisma.upstream.count({ where: { defaultAdType: { id } } }),
+        client_1.prisma.upstreamAdType.count({ where: { adTypeId: id } }),
+        client_1.prisma.adSite.count({ where: { upstream: { defaultAdType: { id } } } }),
+        client_1.prisma.downstreamAdType.count({ where: { adTypeId: id } }),
+        client_1.prisma.mediaAdOrder.count({ where: { adTypeId: id } }),
     ]);
-    return upstream > 0 || upstreamAdType > 0 || adOrder > 0 || adSite > 0 || downstreamAdType > 0;
+    return upstream > 0 || upstreamAdType > 0 || adSite > 0 || downstreamAdType > 0 || mediaAdOrder > 0;
+}
+function toDto(row) {
+    return {
+        id: row.id,
+        name: row.name,
+        upstreamId: row.upstreamId,
+        notes: row.notes,
+        status: row.status,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+    };
 }
 async function createAdType(input) {
-    const code = input.code?.trim().toUpperCase();
     const name = input.name?.trim();
-    if (!code)
-        throw new AppError_1.BadRequestError('code is required');
     if (!name)
         throw new AppError_1.BadRequestError('name is required');
-    if (!/^[A-Z0-9_]+$/.test(code)) {
-        throw new AppError_1.BadRequestError('code must contain only uppercase letters, numbers, and underscores (pattern: ^[A-Z0-9_]+)');
+    if (input.upstreamId) {
+        const upstream = await client_1.prisma.upstream.findUnique({ where: { id: input.upstreamId } });
+        if (!upstream)
+            throw new AppError_1.BadRequestError('Invalid upstreamId');
     }
-    const existing = await client_1.prisma.adType.findUnique({ where: { code } });
-    if (existing)
-        throw new AppError_1.ConflictError(`AdType with code '${code}' already exists`);
-    // AdType.id has no auto-increment — must provide explicit id.
-    // Find next available id to avoid conflicts.
-    const maxRow = await client_1.prisma.adType.findFirst({ orderBy: { id: 'desc' }, select: { id: true } });
-    const nextId = (maxRow?.id ?? 0) + 1;
-    let row;
-    try {
-        row = await client_1.prisma.adType.create({
-            data: { id: nextId, code, name },
-            select: { id: true, code: true, name: true },
-        });
-    }
-    catch (err) {
-        // Handle race condition where id is taken between our check and insert
-        if (err.code === '2002' || err.message?.includes('duplicate key')) {
-            throw new AppError_1.ConflictError(`AdType with code '${code}' already exists`);
-        }
-        throw err;
-    }
-    return { id: row.id, code: row.code, name: row.name };
+    const row = await client_1.prisma.adType.create({
+        data: {
+            id: (0, ids_1.generateShortId)(),
+            name,
+            upstreamId: input.upstreamId ?? null,
+            notes: input.notes ?? null,
+            status: input.status ?? 'active',
+        },
+    });
+    return toDto(row);
 }
 async function updateAdType(id, input) {
-    if (!id || isNaN(id))
+    if (!id)
         throw new AppError_1.BadRequestError('Invalid id');
     const existing = await client_1.prisma.adType.findUnique({ where: { id } });
     if (!existing)
         throw new AppError_1.BadRequestError('AdType not found');
-    let code = input.code?.trim().toUpperCase();
     const name = input.name?.trim();
-    if (input.code !== undefined && !code)
-        throw new AppError_1.BadRequestError('code cannot be empty');
     if (input.name !== undefined && !name)
         throw new AppError_1.BadRequestError('name cannot be empty');
-    if (code && !/^[A-Z0-9_]+$/.test(code)) {
-        throw new AppError_1.BadRequestError('code must contain only uppercase letters, numbers, and underscores (pattern: ^[A-Z0-9_]+)');
-    }
-    // If code is changing, check it's not referenced
-    if (code && code !== existing.code) {
-        const referenced = await isCodeReferenced(existing.code);
-        if (referenced) {
-            throw new AppError_1.ConflictError(`Cannot change code: AdType '${existing.code}' is referenced by existing business records`);
-        }
-        const duplicate = await client_1.prisma.adType.findUnique({ where: { code } });
-        if (duplicate)
-            throw new AppError_1.ConflictError(`AdType with code '${code}' already exists`);
+    if (input.upstreamId) {
+        const upstream = await client_1.prisma.upstream.findUnique({ where: { id: input.upstreamId } });
+        if (!upstream)
+            throw new AppError_1.BadRequestError('Invalid upstreamId');
     }
     const updated = await client_1.prisma.adType.update({
         where: { id },
         data: {
-            ...(code && { code }),
             ...(name && { name }),
+            ...(input.upstreamId !== undefined && { upstreamId: input.upstreamId }),
+            ...(input.notes !== undefined && { notes: input.notes }),
+            ...(input.status !== undefined && { status: input.status }),
         },
-        select: { id: true, code: true, name: true },
     });
-    return { id: updated.id, code: updated.code, name: updated.name };
+    return toDto(updated);
 }
 async function deleteAdType(id) {
-    if (!id || isNaN(id))
+    if (!id)
         throw new AppError_1.BadRequestError('Invalid id');
     const existing = await client_1.prisma.adType.findUnique({ where: { id } });
     if (!existing)
         throw new AppError_1.BadRequestError('AdType not found');
-    // Check if referenced before blocking delete
-    const referenced = await isCodeReferenced(existing.code);
+    const referenced = await isIdReferenced(id);
     if (referenced) {
-        throw new AppError_1.ConflictError(`Cannot delete AdType '${existing.code}': it is referenced by existing business records`);
+        throw new AppError_1.BadRequestError(`Cannot delete AdType '${existing.name}': it is referenced by existing business records`);
     }
     await client_1.prisma.adType.delete({ where: { id } });
     return { deleted: true };

@@ -1,30 +1,36 @@
 import { prisma } from '../../../shared/prisma/client';
 import { mapMediaId } from '../mappers';
-import type { AdSiteDownstream, AdSite, Upstream, AdType, Downstream, AdOrder } from '../../../shared/prisma/client';
+import type { AdSiteDownstream, AdSite, Upstream, AdType, Downstream } from '../../../shared/prisma/client';
 import type { EntityStatus } from '../bff.types';
 import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
 
 export interface CreateMediaIdInput {
-  adSiteId: number;
-  downstreamId: number;
+  adSiteId: string;
+  downstreamId: string;
   customPrice?: number | null;
+  pctHal?: number | null;
+  mediaAdTypeId?: string | null;
+  mediaIdName?: string | null;
+  status?: EntityStatus;
 }
 
 export interface UpdateMediaIdInput {
   customPrice?: number | null;
+  pctHal?: number | null;
+  mediaAdTypeId?: string | null;
+  mediaIdName?: string | null;
   status?: EntityStatus;
 }
 
 export async function createMediaId(input: CreateMediaIdInput) {
-  const { adSiteId, downstreamId, customPrice } = input;
+  const { adSiteId, downstreamId, customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
 
-  if (!adSiteId || Number.isNaN(adSiteId)) throw new BadRequestError('adSiteId is required');
-  if (!downstreamId || Number.isNaN(downstreamId)) throw new BadRequestError('downstreamId is required');
+  if (!adSiteId) throw new BadRequestError('adSiteId is required');
+  if (!downstreamId) throw new BadRequestError('downstreamId is required');
 
-  // Both foreign keys must point to existing rows — return a clean 400 instead of a raw FK crash.
   const adSite = await prisma.adSite.findUnique({
     where: { id: adSiteId },
-    include: { upstream: true, adOrder: true },
+    include: { upstream: true },
   });
   if (!adSite) throw new BadRequestError(`AdSite (ID quảng cáo) with id '${adSiteId}' does not exist`);
 
@@ -34,20 +40,19 @@ export async function createMediaId(input: CreateMediaIdInput) {
   });
   if (!downstream) throw new BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
 
-  // The adSite's adType must be one of the downstream's adTypes.
-  const adSiteAdTypeId = adSite.adOrder?.adTypeId ?? adSite.upstream.adTypeId;
-  const allowedAdTypeIds = new Set<number>(downstream.adTypeLinks.map(link => link.adTypeId));
-  if (!allowedAdTypeIds.has(adSiteAdTypeId)) {
-    throw new BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
+  const adSiteAdTypeId = adSite.upstream.adTypeId;
+  // Only enforce adType match when both sides have an adType set
+  if (adSiteAdTypeId && downstream.adTypeLinks.length > 0) {
+    const allowedAdTypeIds = new Set<string>(downstream.adTypeLinks.map(link => link.adTypeId));
+    if (!allowedAdTypeIds.has(adSiteAdTypeId)) {
+      throw new BadRequestError('Media (ID quảng cáo) and downstream must use the same ad type');
+    }
   }
 
-  // Do not allow creating NEW links to an inactive downstream.
-  // (Existing historical links are untouched — this only guards new creates.)
   if (downstream.status !== 'active') {
     throw new BadRequestError('Cannot link to an inactive downstream');
   }
 
-  // Uniqueness enforced by schema (@@unique([adSiteId, downstreamId])); pre-check for a clean error.
   const existing = await prisma.adSiteDownstream.findUnique({
     where: { adSiteId_downstreamId: { adSiteId, downstreamId } },
   });
@@ -55,40 +60,71 @@ export async function createMediaId(input: CreateMediaIdInput) {
     throw new ConflictError('This ID media (AdSite + downstream) already exists');
   }
 
+  // Validate mediaAdTypeId if provided — must exist in AdType
+  if (mediaAdTypeId) {
+    const at = await prisma.adType.findUnique({ where: { id: mediaAdTypeId } });
+    if (!at) throw new BadRequestError(`AdType with id '${mediaAdTypeId}' does not exist`);
+  }
+
+  const { Prisma } = await import('@prisma/client');
+
   const row = await prisma.adSiteDownstream.create({
     data: {
+      id: `asd_${adSiteId}_${downstreamId}`,
       adSiteId,
       downstreamId,
-      customPrice: customPrice ?? null,
+      customPrice: customPrice != null ? new Prisma.Decimal(customPrice) : null,
+      pctHal: pctHal != null ? new Prisma.Decimal(pctHal) : null,
+      mediaAdTypeId: mediaAdTypeId ?? null,
+      mediaIdName: mediaIdName ?? null,
+      status: status ?? 'active',
     },
     include: {
-      adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
+      adSite: { include: { upstream: { include: { defaultAdType: true } } } },
       downstream: true,
+      mediaAdType: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (AdOrder & { adType: AdType }) | null }; downstream: Downstream });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }; downstream: Downstream; mediaAdType: AdType | null });
 }
 
-export async function updateMediaId(junctionId: number, input: UpdateMediaIdInput) {
-  const { customPrice, status } = input;
+export async function updateMediaId(junctionId: string, input: UpdateMediaIdInput) {
+  const { customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
+  const { Prisma } = await import('@prisma/client');
 
-  // Note: status validation is done in the controller before calling this service.
-  // status is read-only per compatibility decision; only customPrice can be updated.
+  // Validate mediaAdTypeId if provided — must exist in AdType
+  if (mediaAdTypeId) {
+    const at = await prisma.adType.findUnique({ where: { id: mediaAdTypeId } });
+    if (!at) throw new BadRequestError(`AdType with id '${mediaAdTypeId}' does not exist`);
+  }
 
   const row = await prisma.adSiteDownstream.update({
     where: { id: junctionId },
     data: {
-      ...(customPrice !== undefined && { customPrice: customPrice }),
+      ...(customPrice !== undefined
+        ? (customPrice === null
+          ? { customPrice: null }
+          : { customPrice: new Prisma.Decimal(customPrice) })
+        : {}),
+      ...(pctHal !== undefined
+        ? (pctHal === null
+          ? { pctHal: null }
+          : { pctHal: new Prisma.Decimal(pctHal) })
+        : {}),
+      ...(mediaAdTypeId !== undefined ? { mediaAdTypeId: mediaAdTypeId ?? null } : {}),
+      ...(mediaIdName !== undefined ? { mediaIdName: mediaIdName ?? null } : {}),
+      ...(status !== undefined ? { status } : {}),
     },
     include: {
-      adSite: { include: { upstream: { include: { adType: true } }, adOrder: { include: { adType: true } } } },
+      adSite: { include: { upstream: { include: { defaultAdType: true } } } },
       downstream: true,
+      mediaAdType: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { adType: AdType }; adOrder: (AdOrder & { adType: AdType }) | null }; downstream: Downstream });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }; downstream: Downstream; mediaAdType: AdType | null });
 }
 
-export async function deleteMediaId(_junctionId: number) {
+export async function deleteMediaId(_junctionId: string) {
   throw new ConflictError(
     'Cannot delete MediaId: deleting media/downstream mapping is disabled to preserve historical reporting and settlement integrity.'
   );

@@ -6,7 +6,7 @@
  * CPM:  baseRevenue = qty * unitPrice / 1000
  *       if rebateRate present: revenue = baseRevenue - (qty * rebateRate)
  *       else: revenue = baseRevenue
- * CPS:  revenue = (amount1 + amount2) * ratio   (RATIO is legacy alias)
+ * CPS:  revenue = (amount1 + amount2) * ratio
  * CPA:  revenue = qty * unitPrice
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -15,7 +15,7 @@ exports.calculateRevenue = calculateRevenue;
 exports.buildRevenuePayload = buildRevenuePayload;
 function normalizeBillingMethod(m) {
     if (m === 'RATIO')
-        return 'CPS';
+        return 'CPS'; // legacy alias (DB now canonical on CPS)
     return m;
 }
 function toNum(v) {

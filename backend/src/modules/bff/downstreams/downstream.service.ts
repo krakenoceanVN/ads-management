@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import type { EntityStatus } from '../bff.types';
 
 export interface ListDownstreamsFilters {
-  adTypeCode?: string;
+  adTypeId?: string;
   status?: EntityStatus;
   keyword?: string;
 }
@@ -16,8 +16,8 @@ export const downstreamInclude = {
 export async function listDownstreams(filters?: ListDownstreamsFilters) {
   const where: Prisma.DownstreamWhereInput = {};
 
-  if (filters?.adTypeCode) {
-    where.adTypeLinks = { some: { adType: { code: filters.adTypeCode } } };
+  if (filters?.adTypeId) {
+    where.adTypeLinks = { some: { adTypeId: filters.adTypeId } };
   }
 
   if (filters?.status) {
@@ -37,7 +37,7 @@ export async function listDownstreams(filters?: ListDownstreamsFilters) {
   return rows.map(r => mapDownstream(r));
 }
 
-export async function getDownstreamById(id: number) {
+export async function getDownstreamById(id: string) {
   const row = await prisma.downstream.findUnique({
     where: { id },
     include: downstreamInclude,

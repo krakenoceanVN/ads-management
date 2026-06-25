@@ -7,16 +7,10 @@ const mappers_1 = require("../mappers");
 async function listAdIds(filters) {
     const where = {};
     if (filters?.advertiserId != null) {
-        where.upstreamId = filters.advertiserId;
+        where.upstreamId = String(filters.advertiserId);
     }
-    if (filters?.adOrderId != null) {
-        where.adOrderId = filters.adOrderId;
-    }
-    if (filters?.adTypeCode) {
-        where.OR = [
-            { adOrder: { adType: { code: filters.adTypeCode } } },
-            { adOrderId: null, upstream: { adType: { code: filters.adTypeCode } } },
-        ];
+    if (filters?.adTypeId) {
+        where.upstream = { adTypeId: filters.adTypeId };
     }
     if (filters?.type) {
         where.billingMethod = filters.type;
@@ -27,8 +21,7 @@ async function listAdIds(filters) {
     const rows = await client_1.prisma.adSite.findMany({
         where,
         include: {
-            upstream: { include: { adType: true } },
-            adOrder: { include: { adType: true } },
+            upstream: { include: { defaultAdType: true } },
         },
         orderBy: { id: 'asc' },
     });
@@ -38,8 +31,7 @@ async function getAdId(id) {
     const row = await client_1.prisma.adSite.findUnique({
         where: { id },
         include: {
-            upstream: { include: { adType: true } },
-            adOrder: { include: { adType: true } },
+            upstream: { include: { defaultAdType: true } },
         },
     });
     if (!row)

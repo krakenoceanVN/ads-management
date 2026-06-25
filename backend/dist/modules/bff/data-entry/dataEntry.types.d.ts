@@ -1,36 +1,33 @@
 import type { DataEntryStatus, EntryType } from '../bff.types';
 export type { DataEntryStatus, EntryType };
 export interface AdvertiserEntryRow {
-    id: number;
+    id: string;
     date: string;
     advertiser: string;
-    advertiserId: number;
-    adOrder: string;
-    adOrderId: number | null;
-    adOrderCode: string | null;
-    adOrderName?: string | null;
+    advertiserId: string;
+    adTypeName: string;
+    adTypeCode: string | null;
     type: EntryType;
     adId: string;
-    adIdNum: number;
+    adIdNum: string;
     rate: string;
     traffic: string;
     settlement: string;
     receivable: number | '';
     status: DataEntryStatus;
+    uiKey: string;
 }
 export interface MediaEntryRow {
-    id: number;
+    id: string;
     date: string;
     media: string;
-    mediaId: number;
-    mediaAdOrder: string;
-    mediaAdOrderId: number | null;
-    mediaAdOrderCode: string | null;
-    mediaAdOrderName?: string | null;
+    mediaId: string;
+    mediaAdTypeName: string;
+    mediaAdTypeCode: string | null;
     type: EntryType;
     mediaIdStr: string;
     upstreamAdId: string;
-    upstreamAdIdNum: number;
+    upstreamAdIdNum: string;
     rate: string;
     traffic: string;
     settlement: string;
@@ -40,5 +37,6 @@ export interface MediaEntryRow {
     shareRatioNum: number | null;
     actualReceived: number | null;
     status: DataEntryStatus;
+    uiKey: string;
 }
 //# sourceMappingURL=dataEntry.types.d.ts.map

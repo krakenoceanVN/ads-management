@@ -5,10 +5,10 @@
  * CPM:  baseRevenue = qty * unitPrice / 1000
  *       if rebateRate present: revenue = baseRevenue - (qty * rebateRate)
  *       else: revenue = baseRevenue
- * CPS:  revenue = (amount1 + amount2) * ratio   (RATIO is legacy alias)
+ * CPS:  revenue = (amount1 + amount2) * ratio
  * CPA:  revenue = qty * unitPrice
  */
-export type BillingMethod = 'CPM' | 'CPS' | 'CPA' | 'RATIO';
+export type BillingMethod = 'CPM' | 'CPS' | 'CPA';
 export interface RevenueInput {
     billingMethod: string;
     qty?: number | null;

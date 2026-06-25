@@ -1,13 +1,13 @@
 import type { User } from '../../shared/prisma/client';
 export interface AuthUser {
-    id: number;
+    id: string;
     username: string;
     role: string;
     permDataInput: boolean;
     permDataConfirm: boolean;
     permAdmin: boolean;
     status: string;
-    roleId: number | null;
+    roleId: string | null;
     permissions: string[];
 }
 export interface LoginInput {

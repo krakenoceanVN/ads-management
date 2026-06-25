@@ -26,20 +26,13 @@ exports.getAdvertiserSettlement = getAdvertiserSettlement;
 exports.getMediaSettlement = getMediaSettlement;
 const client_1 = require("../../../shared/prisma/client");
 const payout_service_1 = require("../../../shared/services/payout.service");
-function actualAdType(site) {
-    return site.adOrder?.adType ?? site.upstream.adType ?? null;
-}
-function actualAdTypeWhere(adTypeCode) {
+function actualAdTypeWhere(adTypeId) {
     return {
-        OR: [
-            { adOrder: { adType: { code: adTypeCode } } },
-            { adOrderId: null, upstream: { adType: { code: adTypeCode } } },
-        ],
+        upstream: { defaultAdType: { id: adTypeId } },
     };
 }
 async function getAdvertiserSettlement(params) {
-    const { advertiserId, adTypeCode } = params;
-    // Build period date filter (UTC, consistent with how recordDate is stored)
+    const { advertiserId, adTypeId } = params;
     let dateFilter = {};
     if (params.period) {
         const [year, month] = params.period.split('-').map(Number);
@@ -55,15 +48,14 @@ async function getAdvertiserSettlement(params) {
             ...dateFilter,
             status: 'confirmed',
             adSite: {
-                ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
+                ...(adTypeId && actualAdTypeWhere(adTypeId)),
                 upstream: { ...upstreamWhere },
             },
         },
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                 },
             },
         },
@@ -72,13 +64,14 @@ async function getAdvertiserSettlement(params) {
     const byAdvertiser = new Map();
     for (const di of dailyInputs) {
         const upstream = di.adSite.upstream;
-        const adType = actualAdType(di.adSite);
-        const code = adType?.code ?? null;
+        const adType = upstream?.defaultAdType ?? null;
+        const code = adType?.name ?? null;
         const name = adType?.name ?? null;
         const key = `${upstream.id}|${code ?? ''}`;
         if (!byAdvertiser.has(key)) {
             byAdvertiser.set(key, {
-                advertiserId: upstream.id,
+                period: params.period ?? '',
+                advertiserId: String(upstream.id),
                 advertiser: upstream.name,
                 adTypeCode: code,
                 adTypeName: name,
@@ -91,11 +84,10 @@ async function getAdvertiserSettlement(params) {
         row.totalAmount = Math.round((row.totalAmount + rev) * 100) / 100;
         row.recordCount += 1;
     }
-    return Array.from(byAdvertiser.values()).sort((a, b) => a.advertiserId - b.advertiserId);
+    return Array.from(byAdvertiser.values()).sort((a, b) => String(a.advertiserId).localeCompare(String(b.advertiserId)));
 }
 async function getMediaSettlement(params) {
-    const { mediaId, adTypeCode } = params;
-    // Build period date filter (UTC, consistent with how recordDate is stored)
+    const { mediaId, adTypeId } = params;
     let dateFilter = {};
     if (params.period) {
         const [year, month] = params.period.split('-').map(Number);
@@ -106,13 +98,12 @@ async function getMediaSettlement(params) {
     const upstreamWhere = {
         ...(mediaId != null && { id: mediaId }),
     };
-    // Only adSites that have at least one downstream junction
     const dailyInputs = await client_1.prisma.dailyInput.findMany({
         where: {
             ...dateFilter,
             status: 'confirmed',
             adSite: {
-                ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
+                ...(adTypeId && actualAdTypeWhere(adTypeId)),
                 upstream: { ...upstreamWhere },
                 downstreams: { some: {} },
             },
@@ -120,8 +111,7 @@ async function getMediaSettlement(params) {
         include: {
             adSite: {
                 include: {
-                    upstream: { include: { adType: true } },
-                    adOrder: { include: { adType: true } },
+                    upstream: { include: { defaultAdType: true } },
                     downstreams: {
                         include: {
                             downstream: true,
@@ -135,15 +125,16 @@ async function getMediaSettlement(params) {
     const groups = new Map();
     for (const di of dailyInputs) {
         const upstream = di.adSite.upstream;
-        const adType = actualAdType(di.adSite);
-        const adTypeCode = adType?.code ?? null;
+        const adType = upstream?.defaultAdType ?? null;
+        const adTypeCodeResolved = adType?.name ?? null;
         const adTypeName = adType?.name ?? null;
-        const key = `${upstream.id}|${adTypeCode ?? ''}`;
+        const key = `${upstream.id}|${adTypeCodeResolved ?? ''}`;
         if (!groups.has(key)) {
             groups.set(key, {
-                mediaId: upstream.id,
+                period: params.period ?? '',
+                mediaId: String(upstream.id),
                 media: upstream.name,
-                adTypeCode,
+                adTypeCode: adTypeCodeResolved,
                 adTypeName,
                 downstreamNames: new Set(),
                 revenueSum: 0,
@@ -155,7 +146,6 @@ async function getMediaSettlement(params) {
         g.revenueSum += parseFloat(di.revenue.toString()) || 0;
         g.recordCount += 1;
         g.inputs.push(di);
-        // Collect distinct downstream names for display
         for (const j of di.adSite.downstreams) {
             if (j.downstream?.downstreamType)
                 g.downstreamNames.add(j.downstream.downstreamType);
@@ -172,6 +162,7 @@ async function getMediaSettlement(params) {
             ? Array.from(g.downstreamNames).sort().join(', ')
             : null;
         rows.push({
+            period: g.period,
             mediaId: g.mediaId,
             media: g.media,
             adTypeCode: g.adTypeCode,
@@ -188,7 +179,7 @@ async function getMediaSettlement(params) {
     }
     return rows.sort((a, b) => {
         if (a.mediaId !== b.mediaId)
-            return a.mediaId - b.mediaId;
+            return String(a.mediaId).localeCompare(String(b.mediaId));
         return (a.downstreamName ?? '').localeCompare(b.downstreamName ?? '');
     });
 }

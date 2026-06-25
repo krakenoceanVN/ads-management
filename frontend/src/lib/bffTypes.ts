@@ -53,15 +53,15 @@ export interface Advertiser {
   email: string | null;
   notes: string | null;
   status: EntityStatus;
-  adTypeCode?: string;
+  adTypeCode?: string; // display label sourced from AdType.name
   adTypeCodes?: string[];
-  adTypes?: Array<{ id: number; code: string; name: string }>;
+  adTypes?: Array<{ id: string; name: string }>;
 }
 
 export interface CreateAdvertiserInput {
   name: string;
-  adTypeCode?: AdTypeCode;
-  adTypeCodes?: AdTypeCode[];
+  adTypeId?: string;
+  adTypeIds?: string[];
   status?: EntityStatus;
   contact?: string | null;
   phone?: string | null;
@@ -71,8 +71,8 @@ export interface CreateAdvertiserInput {
 
 export interface UpdateAdvertiserInput {
   name?: string;
-  adTypeCode?: AdTypeCode;
-  adTypeCodes?: AdTypeCode[];
+  adTypeId?: string;
+  adTypeIds?: string[];
   status?: EntityStatus;
   contact?: string | null;
   phone?: string | null;
@@ -89,39 +89,47 @@ export interface Media {
   notes: string | null;
   status: EntityStatus;
   upstreamId?: number;
-  adOrderId?: number | null;
-  adTypeCode?: string;          // From upstream.adType.code
-  adTypeName?: string | null;   // Business display name
+  adTypeCode?: string;
+  adTypeName?: string | null;
   billingMethod?: EntryType;
   currentUnitPrice?: number;
   currentRatio?: number;
 }
 
 export interface ListMediaParams {
-  adOrderId?: number;
+  upstreamId?: number;
+  adTypeId?: string;
 }
 
 export interface AdType {
-  id: number;
-  code: string;
+  id: string;
   name: string;
+  upstreamId: string | null;
+  upstreamName?: string | null;
+  notes: string | null;
+  status: string;
+  adSiteCount?: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateAdTypeInput {
-  code: string;
   name: string;
+  upstreamId?: string | null;
+  notes?: string | null;
+  status?: EntityStatus;
 }
 
 export interface UpdateAdTypeInput {
-  code?: string;
   name?: string;
+  upstreamId?: string | null;
+  notes?: string | null;
+  status?: EntityStatus;
 }
 
 export interface CreateMediaInput {
   name: string;
-  upstreamId: number;
+  upstreamId: string | number;
   billingMethod: EntryType;
   status?: EntityStatus;
   currentUnitPrice?: number;
@@ -130,47 +138,11 @@ export interface CreateMediaInput {
 
 export interface UpdateMediaInput {
   name?: string;
-  upstreamId?: number;
+  upstreamId?: string | number;
   billingMethod?: EntryType;
   status?: EntityStatus;
   currentUnitPrice?: number;
   currentRatio?: number;
-}
-
-export interface AdOrder {
-  id: number;
-  advId: number;
-  name: string;
-  adTypeCode: string;
-  adTypeName?: string | null;
-  notes: string | null;
-  status: EntityStatus;
-  isVirtual?: boolean;
-  advertiserName?: string;
-  adSiteCount: number;
-  billingMethods: string[];
-  createdAt?: string;
-}
-
-export interface ListAdOrdersParams {
-  advertiserId?: number;
-  adTypeCode?: string;
-}
-
-export interface CreateAdOrderInput {
-  advertiserId: number;
-  adTypeCode: string;
-  /** Optional. Leave blank to let the backend auto-generate `{code}-{seq padded 3}`. */
-  name?: string | null;
-  notes?: string | null;
-  status?: EntityStatus;
-}
-
-export interface UpdateAdOrderInput {
-  name?: string;
-  adTypeCode?: string;
-  notes?: string | null;
-  status?: EntityStatus;
 }
 
 export interface AdId {
@@ -180,29 +152,26 @@ export interface AdId {
   rate: number | null;
   notes: string | null;
   status: EntityStatus;
-  advertiserId: number;
+  advertiserId: string;
   advertiserName: string;
   adTypeCode: string;
   adTypeName?: string | null;
-  adOrderId: number | null;
-  upstreamId: number;
+  upstreamId: string;
   billingMethod: EntryType;
   isActive: boolean;
   isArchived: boolean;
 }
 
 export interface ListAdIdsParams {
-  advertiserId?: number;
-  adOrderId?: number;
-  adTypeCode?: AdTypeCode;
+  advertiserId?: string;
+  adTypeId?: string;
   type?: EntryType;
   archived?: boolean;
 }
 
 export interface CreateAdIdInput {
-  advertiserId: number;
-  adOrderId?: number;
-  adTypeCode?: string;
+  advertiserId: string | number;
+  adTypeId?: string;
   slot: string;
   type: 'CPM' | 'CPS' | 'CPA';
   unitPrice?: number;
@@ -212,9 +181,8 @@ export interface CreateAdIdInput {
 }
 
 export interface UpdateAdIdInput {
-  advertiserId?: number;
-  adOrderId?: number | null;
-  adTypeCode?: string;
+  advertiserId?: string | number;
+  adTypeId?: string;
   slot?: string;
   type?: 'CPM' | 'CPS' | 'CPA';
   unitPrice?: number;
@@ -224,50 +192,100 @@ export interface UpdateAdIdInput {
 }
 
 export interface MediaId {
-  id: number;
-  junctionId: number; // AdSiteDownstream.id — used for edit/delete
+  id: string;
+  junctionId: string;
   slot: string;
   type: EntryType;
   rate: number | null;
   shareRatio: number | null;
   status: EntityStatus;
-  mediaId: number;
+  mediaId: string;
   mediaName: string;
   adTypeCode: string;
   adTypeName?: string | null;
-  upstreamId: number;
+  upstreamId: string;
+  upstreamName?: string | null;
+  downstreamId: string;
+  downstreamName?: string | null;
+  adSiteId: string;
+  adSiteName?: string | null;
+  notes: string | null;
   billingMethod: EntryType;
   isActive: boolean;
   isArchived: boolean;
-  adSiteId: number;
-  downstreamId: number;
+  // Extended fields for "Tạo ID media" form
+  mediaAdTypeCode?: string | null;
+  mediaIdName?: string | null;
+  pctHal?: number | null;
+}
+
+export interface MediaAdOrder {
+  id: string;
+  downstreamId: string;
+  adTypeId: string;
+  adTypeCode: string; // display label sourced from AdType.name
+  adTypeName?: string | null;
+  seq: number;
+  name: string;
+  notes: string | null;
+  status: EntityStatus;
+  linkCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMediaAdOrderInput {
+  downstreamId: string;
+  adTypeId: string;
+  name?: string | null;
+  notes?: string | null;
+  status?: EntityStatus;
+}
+
+export interface UpdateMediaAdOrderInput {
+  downstreamId?: string;
+  adTypeId?: string;
+  name?: string | null;
+  notes?: string | null;
+  status?: EntityStatus;
 }
 
 export interface ListMediaIdsParams {
   mediaId?: number;
-  adTypeCode?: AdTypeCode;
+  adTypeId?: string;
   type?: EntryType;
   archived?: boolean;
 }
 
 export interface CreateMediaIdInput {
-  adSiteId: number;
-  downstreamId: number;
+  adSiteId: string;
+  downstreamId: string;
   customPrice?: number | null;
+  pctHal?: number | null;
+  mediaAdTypeId?: string | null;
+  mediaIdName?: string | null;
   status?: EntityStatus;
 }
 
 export interface UpdateMediaIdInput {
   customPrice?: number | null;
+  pctHal?: number | null;
+  mediaAdTypeId?: string | null;
+  mediaIdName?: string | null;
   status?: EntityStatus;
 }
 
 export interface DownstreamDto {
   id: number;
   downstreamType: string;
-  adTypeIds: number[];
-  adTypeCodes: string[];
-  adTypes: Array<{ id: number; code: string; name: string }>;
+  name: string | null;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  adTypeIds: string[];
+  adTypeCodes: string[]; // display labels sourced from AdType.name
+  adTypes: Array<{ id: string; name: string }>;
   adTypeCode: string;
   adTypeName: string | null;
   payoutRate: number | null;
@@ -275,36 +293,46 @@ export interface DownstreamDto {
 }
 
 export interface CreateDownstreamInput {
-  adTypeCodes: AdTypeCode[];
+  adTypeIds: string[];
   downstreamType: string;
+  name?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
   payoutRate?: number;
   status?: EntityStatus;
 }
 
 export interface UpdateDownstreamInput {
   downstreamType?: string;
+  name?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
   payoutRate?: number;
   status?: EntityStatus;
-  adTypeCodes?: AdTypeCode[];
+  adTypeIds?: string[];
 }
 
 export interface ListDownstreamsParams {
-  adTypeCode?: AdTypeCode;
+  adTypeId?: string;
   status?: EntityStatus;
   keyword?: string;
 }
 
 export interface ListAdvertiserEntriesParams {
   date: string;
-  advertiserId?: number;
-  adTypeCode?: AdTypeCode;
+  advertiserId?: string;
+  adTypeId?: string;
   status?: DataEntryStatusParam;
 }
 
 export interface ListMediaEntriesParams {
   date: string;
   mediaId?: number;
-  adTypeCode?: AdTypeCode;
+  adTypeId?: string;
   status?: DataEntryStatusParam;
 }
 
@@ -312,11 +340,9 @@ export interface AdvertiserEntryRow {
   id: number;
   date: string;
   advertiser: string;
-  advertiserId: number;
-  adOrder: string;
-  adOrderId: number | null;
-  adOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
-  adOrderName?: string | null; // business display name
+  advertiserId: string;
+  adTypeName: string;
+  adTypeCode: string | null;
   type: EntryType;
   adId: string;
   adIdNum: number;
@@ -325,7 +351,6 @@ export interface AdvertiserEntryRow {
   settlement: string;
   receivable: number | '';
   status: DataEntryStatus;
-  // Frontend-only stable key for UI row identity — used even when id=0 (unsaved rows)
   uiKey: string;
 }
 
@@ -334,10 +359,8 @@ export interface MediaEntryRow {
   date: string;
   media: string;
   mediaId: number;
-  mediaAdOrder: string;
-  mediaAdOrderId: number | null;
-  mediaAdOrderCode: string | null; // business order code: SM | 360 | BAIDU_JS | OTHER | iqiyi | yolo
-  mediaAdOrderName?: string | null; // business display name
+  mediaAdTypeName: string;
+  mediaAdTypeCode: string | null;
   type: EntryType;
   mediaIdStr: string;
   upstreamAdId: string;
@@ -351,7 +374,6 @@ export interface MediaEntryRow {
   shareRatioNum: number | null;
   actualReceived: number | null;
   status: DataEntryStatus;
-  // Frontend-only stable key for UI row identity — used even when id=0 (unsaved rows)
   uiKey: string;
 }
 
@@ -412,7 +434,7 @@ export interface AdvertiserReportParams {
   date?: string;
   startDate?: string;
   endDate?: string;
-  advertiserId?: number;
+  advertiserId?: string;
   adTypeCode?: AdTypeCode;
   status?: ReportStatusParam;
 }
@@ -461,7 +483,7 @@ export interface OrderProfitReportRow {
   orderId: number | null;
   orderName: string | null;
   advertiser: string;
-  advertiserId: number;
+  advertiserId: string;
   billingMethod: string;
   adTypeCode: string;
   adTypeName: string;
@@ -477,7 +499,7 @@ export interface OrderProfitReportRow {
 
 export interface AdvertiserSettlementParams {
   period: string;
-  advertiserId?: number;
+  advertiserId?: string;
   adTypeCode?: AdTypeCode;
 }
 
@@ -490,7 +512,7 @@ export interface MediaSettlementParams {
 export interface AdvertiserSettlementRow {
   period: string;
   advertiser: string;
-  advertiserId: number;
+  advertiserId: string;
   adTypeCode: string | null;
   adTypeName?: string | null;
   totalAmount: number;
@@ -500,7 +522,7 @@ export interface AdvertiserSettlementRow {
 export interface MediaSettlementRow {
   period: string;
   downstreamName: string | null;
-  mediaId: number;
+  mediaId: string;
   media: string;
   adTypeCode: string | null;
   adTypeName?: string | null;
@@ -513,9 +535,6 @@ export interface MediaSettlementRow {
   recordCount: number;
 }
 
-// ============================================================
-// Operation Log types
-// ============================================================
 export interface OperationLogDto {
   id: number;
   userId: number | null;
@@ -549,9 +568,6 @@ export interface OperationLogResponse {
   total: number;
 }
 
-// ============================================================
-// RBAC types
-// ============================================================
 export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER' | 'SUPER_ADMIN' | 'MANAGER' | 'OPERATOR';
 
 export interface Permission {
@@ -605,16 +621,12 @@ export interface ResetPasswordInput {
   password: string;
 }
 
-// ---------------------------------------------------------------------------
-// Quarantine types
-// ---------------------------------------------------------------------------
-
 export type QuarantineScope = 'advertiser' | 'media';
 
 export interface QuarantineParams {
   scope: QuarantineScope;
-  advertiserId?: number;
-  adSiteId?: number;
+  advertiserId?: string;
+  adSiteId?: string;
   startDate: string;
   endDate: string;
   reason?: string;

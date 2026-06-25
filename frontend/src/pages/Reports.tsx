@@ -7,7 +7,6 @@ import {
   getOrderProfitReport,
   getTotalProfitReport,
   listAdvertisers,
-  listAdOrders,
 } from '../lib/bffApi';
 import type {
   AdvertiserEntryRow,
@@ -705,7 +704,7 @@ export function AdvQuery() {
     endDate: '',
     business: '',
     advertiserId: '' as string | number,
-    adOrder: '',
+    adTypeCode: '',
     adId: '',
     type: '',
     rate: '',
@@ -733,7 +732,7 @@ export function AdvQuery() {
     startDate: appliedFilters.startDate || undefined,
     endDate: appliedFilters.endDate || undefined,
     status: statusParam(appliedFilters.status),
-    advertiserId: appliedFilters.advertiserId ? Number(appliedFilters.advertiserId) : undefined,
+    advertiserId: appliedFilters.advertiserId ? String(appliedFilters.advertiserId) : undefined,
     adTypeCode: appliedFilters.business || undefined,
   }), [appliedFilters.startDate, appliedFilters.endDate, appliedFilters.status, appliedFilters.advertiserId, appliedFilters.business]);
 
@@ -770,8 +769,8 @@ export function AdvQuery() {
 
   function update(key: keyof typeof draftFilters, value: string) {
     setDraftFilters(prev => {
-      if (key === 'business') return { ...prev, business: value, advertiserId: '', adOrder: '', adId: '', type: '', rate: '' };
-      if (key === 'advertiserId') return { ...prev, advertiserId: value, adOrder: '', adId: '' };
+      if (key === 'business') return { ...prev, business: value, advertiserId: '', adTypeCode: '', adId: '', type: '', rate: '' };
+      if (key === 'advertiserId') return { ...prev, advertiserId: value, adTypeCode: '', adId: '' };
       if (key === 'startDate' || key === 'endDate') return { ...prev, [key]: value };
       return { ...prev, [key]: value };
     });
@@ -782,20 +781,19 @@ export function AdvQuery() {
   const handleClearDates = () => { setDraftFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setAppliedFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setIsDirty(false); setDateWarning(null); };
 
   const visibleRows = rows.filter(row =>
-    (!draftFilters.business || row.adOrderCode === draftFilters.business || row.adOrder === draftFilters.business)
-    && (!draftFilters.advertiserId || row.advertiserId === Number(draftFilters.advertiserId))
-    && (!draftFilters.adOrder || row.adOrder === draftFilters.adOrder)
+    (!draftFilters.business || row.adTypeCode === draftFilters.business || row.adTypeName === draftFilters.business)
+    && (!draftFilters.advertiserId || String(row.advertiserId) === String(draftFilters.advertiserId))
+    && (!draftFilters.adTypeCode || row.adTypeName === draftFilters.adTypeCode)
     && (!draftFilters.adId || row.adId === draftFilters.adId)
     && (!draftFilters.type || row.type === draftFilters.type)
     && (!draftFilters.rate || row.rate === draftFilters.rate)
     && matchesStatus(row.status, draftFilters.status)
-    && matchesLocalized(displayName, draftFilters.search, [row.advertiser, row.adOrder, row.adId, row.type])
+    && matchesLocalized(displayName, draftFilters.search, [row.advertiser, row.adTypeName, row.adId, row.type])
   );
 
-  const orderCodeForAdvRow = (row: AdvertiserEntryRow) => row.adOrderCode ?? row.adOrder;
+  const orderCodeForAdvRow = (row: AdvertiserEntryRow) => row.adTypeCode ?? '';
   const orderNameForAdvRow = (row: AdvertiserEntryRow) => {
-    const name = (row.adOrderName ?? '').trim();
-    return name || orderCodeForAdvRow(row);
+    return (row.adTypeName ?? '').trim() || orderCodeForAdvRow(row);
   };
 
   const columns: CsvColumn<AdvertiserEntryRow>[] = [
@@ -978,7 +976,7 @@ export function MediaQuery() {
     setLoading(true);
     setError('');
     loadMediaQueryRows()
-      .then(data => { if (!cancelled) setRows(data); })
+      .then(data => { if (!cancelled) setRows(data as unknown as MediaEntryRow[]); })
       .catch(err => { if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
   }, [draftFilters, dateValidation, loadMediaQueryRows]);
@@ -1004,22 +1002,22 @@ export function MediaQuery() {
 
   const handleClearDates = () => { setDraftFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setAppliedFilters(prev => ({ ...prev, startDate: '', endDate: '' })); setIsDirty(false); setDateWarning(null); };
 
-  const orderCodeForMediaRow = (row: MediaEntryRow) => row.mediaAdOrderCode ?? row.mediaAdOrder;
+  const orderCodeForMediaRow = (row: MediaEntryRow) => row.mediaAdTypeCode ?? '';
   const orderNameForMediaRow = (row: MediaEntryRow) => {
-    const name = (row.mediaAdOrderName ?? '').trim();
+    const name = (row.mediaAdTypeName ?? '').trim();
     return name || orderCodeForMediaRow(row);
   };
 
   const visibleRows = rows.filter(row =>
     (!draftFilters.business || orderCodeForMediaRow(row) === draftFilters.business)
-    && (!draftFilters.mediaId || row.mediaId === Number(draftFilters.mediaId))
-    && (!draftFilters.mediaAdOrder || row.mediaAdOrder === draftFilters.mediaAdOrder)
+    && (!draftFilters.mediaId || String(row.mediaId) === String(draftFilters.mediaId))
+    && (!draftFilters.mediaAdOrder || row.mediaAdTypeName === draftFilters.mediaAdOrder)
     && (!draftFilters.mediaIdStr || row.mediaIdStr === draftFilters.mediaIdStr)
     && (!draftFilters.type || row.type === draftFilters.type)
     && (!draftFilters.rate || row.rate === draftFilters.rate)
     && (!draftFilters.shareRatio || row.shareRatio === draftFilters.shareRatio)
     && matchesStatus(row.status, draftFilters.status)
-    && matchesLocalized(displayName, draftFilters.search, [row.media, row.mediaAdOrder, row.mediaIdStr, row.type])
+    && matchesLocalized(displayName, draftFilters.search, [row.media, row.mediaAdTypeName, row.mediaIdStr, row.type])
   );
 
   const columns: CsvColumn<MediaEntryRow>[] = [

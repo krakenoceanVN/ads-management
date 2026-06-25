@@ -10,8 +10,8 @@ exports.downstreamInclude = {
 };
 async function listDownstreams(filters) {
     const where = {};
-    if (filters?.adTypeCode) {
-        where.adTypeLinks = { some: { adType: { code: filters.adTypeCode } } };
+    if (filters?.adTypeId) {
+        where.adTypeLinks = { some: { adTypeId: filters.adTypeId } };
     }
     if (filters?.status) {
         where.status = filters.status;

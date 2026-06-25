@@ -6,10 +6,10 @@ exports.normalizeBillingMethodForStorage = normalizeBillingMethodForStorage;
 function normalizeBillingMethodForStorage(type) {
     if (type === undefined)
         return undefined;
-    if (type === 'CPS')
-        return 'RATIO';
-    if (type === 'CPM' || type === 'RATIO' || type === 'CPA')
+    if (type === 'CPM' || type === 'CPS' || type === 'CPA')
         return type;
+    if (type === 'RATIO')
+        return 'CPS';
     return undefined;
 }
 //# sourceMappingURL=bff.types.js.map

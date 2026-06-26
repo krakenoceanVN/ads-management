@@ -1,5 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.countAdvertiserDependencies = countAdvertiserDependencies;
+exports.countAdTypeDependencies = countAdTypeDependencies;
+exports.countAdSiteDependencies = countAdSiteDependencies;
 exports.hardDeleteAdvertiser = hardDeleteAdvertiser;
 exports.hardDeleteAdType = hardDeleteAdType;
 exports.hardDeleteAdSite = hardDeleteAdSite;

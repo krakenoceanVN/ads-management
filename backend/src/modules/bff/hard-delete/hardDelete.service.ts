@@ -160,7 +160,7 @@ function successResult(entityType: EntityType, entityId: string | number): HardD
   };
 }
 
-async function countAdvertiserDependencies(advertiserId: string): Promise<DependencyCounts> {
+export async function countAdvertiserDependencies(advertiserId: string): Promise<DependencyCounts> {
   const [adSiteCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] =
     await Promise.all([
       prisma.adSite.count({ where: { upstreamId: advertiserId } }),
@@ -188,7 +188,7 @@ function adTypeAdSiteWhere(adTypeId: string): Prisma.AdSiteWhereInput {
   };
 }
 
-async function countAdTypeDependencies(adTypeId: string): Promise<DependencyCounts> {
+export async function countAdTypeDependencies(adTypeId: string): Promise<DependencyCounts> {
   const adSiteWhere = adTypeAdSiteWhere(adTypeId);
   const [upstreamCount, adSiteCount, downstreamCount, adSiteDownstreamCount, rebateRateCount, adSiteEventCount, mediaAdOrderCount, financial] =
     await Promise.all([
@@ -214,7 +214,7 @@ async function countAdTypeDependencies(adTypeId: string): Promise<DependencyCoun
   };
 }
 
-async function countAdSiteDependencies(adSiteId: string): Promise<DependencyCounts> {
+export async function countAdSiteDependencies(adSiteId: string): Promise<DependencyCounts> {
   const [adSiteDownstreamCount, rebateRateCount, adSiteEventCount, financial] = await Promise.all([
     prisma.adSiteDownstream.count({ where: { adSiteId } }),
     prisma.adSiteRebateRate.count({ where: { adSiteId } }),

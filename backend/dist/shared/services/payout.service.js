@@ -69,6 +69,7 @@ async function resolveDownstreamRate(adSiteId, downstreamId, recordDate) {
         where: {
             adSiteId,
             downstreamId,
+            status: 'active',
             downstream: { status: 'active' },
         },
         include: { downstream: true },

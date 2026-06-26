@@ -11,4 +11,8 @@ export declare function deleteAdId(req: Request, res: Response): Promise<void>;
 export declare function deleteMedia(req: Request, res: Response): Promise<void>;
 export declare function deleteMediaAdOrder(req: Request, res: Response): Promise<void>;
 export declare function deleteMediaId(req: Request, res: Response): Promise<void>;
+export declare function getAdvertiserDependencies(req: Request, res: Response): Promise<void>;
+export declare function getAdTypeDependencies(req: Request, res: Response): Promise<void>;
+export declare function getAdIdDependencies(req: Request, res: Response): Promise<void>;
+export declare function getMediaDependencies(req: Request, res: Response): Promise<void>;
 //# sourceMappingURL=hardDelete.controller.d.ts.map

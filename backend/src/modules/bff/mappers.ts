@@ -18,10 +18,16 @@ function decimalToNull(d: Decimal | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | null; adTypeLinks?: Array<UpstreamAdType & { adType: AdType }> }): Advertiser {
+export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | null; adTypeLinks?: Array<UpstreamAdType & { adType: AdType }>; ownedAdTypes?: AdType[] }): Advertiser {
   const linkedAdTypes = (upstream.adTypeLinks ?? []).map(link => link.adType).filter(Boolean);
-  const adTypes = linkedAdTypes.length ? linkedAdTypes : upstream.defaultAdType ? [upstream.defaultAdType] : [];
-  const adTypeCodes = Array.from(new Set(adTypes.map(adType => adType.name)));
+  const ownedAdTypes = (upstream.ownedAdTypes ?? []).filter(Boolean);
+  const allAdTypes = [
+    ...linkedAdTypes,
+    ...ownedAdTypes,
+    ...(upstream.defaultAdType ? [upstream.defaultAdType] : []),
+  ];
+  const uniqueAdTypes = Array.from(new Map(allAdTypes.map(adType => [adType.id, adType])).values());
+  const adTypeCodes = Array.from(new Set(uniqueAdTypes.map(adType => adType.name)));
   return {
     id: upstream.id,
     name: upstream.name,
@@ -32,7 +38,7 @@ export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | nul
     status: upstream.status as EntityStatus,
     adTypeCode: upstream.defaultAdType?.name ?? adTypeCodes[0],
     adTypeCodes,
-    adTypes: adTypes.map(adType => ({ id: adType.id, name: adType.name })),
+    adTypes: uniqueAdTypes.map(adType => ({ id: adType.id, name: adType.name })),
   };
 }
 

@@ -12,6 +12,10 @@ exports.deleteAdId = deleteAdId;
 exports.deleteMedia = deleteMedia;
 exports.deleteMediaAdOrder = deleteMediaAdOrder;
 exports.deleteMediaId = deleteMediaId;
+exports.getAdvertiserDependencies = getAdvertiserDependencies;
+exports.getAdTypeDependencies = getAdTypeDependencies;
+exports.getAdIdDependencies = getAdIdDependencies;
+exports.getMediaDependencies = getMediaDependencies;
 const hardDelete_service_1 = require("./hardDelete.service");
 function getUserId(req) {
     return req.authUser?.id ?? '';
@@ -134,6 +138,62 @@ async function deleteMediaId(req, res) {
     try {
         const result = await (0, hardDelete_service_1.hardDeleteMediaId)(id, { userId: getUserId(req), username: getUsername(req) });
         sendResult(res, result);
+    }
+    catch (err) {
+        res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
+    }
+}
+async function getAdvertiserDependencies(req, res) {
+    const id = req.params['id'];
+    if (!id) {
+        res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
+        return;
+    }
+    try {
+        const counts = await (0, hardDelete_service_1.countAdvertiserDependencies)(id);
+        res.json({ success: true, data: counts });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
+    }
+}
+async function getAdTypeDependencies(req, res) {
+    const id = req.params['id'];
+    if (!id) {
+        res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
+        return;
+    }
+    try {
+        const counts = await (0, hardDelete_service_1.countAdTypeDependencies)(id);
+        res.json({ success: true, data: counts });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
+    }
+}
+async function getAdIdDependencies(req, res) {
+    const id = req.params['id'];
+    if (!id) {
+        res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
+        return;
+    }
+    try {
+        const counts = await (0, hardDelete_service_1.countAdSiteDependencies)(id);
+        res.json({ success: true, data: counts });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });
+    }
+}
+async function getMediaDependencies(req, res) {
+    const id = req.params['id'];
+    if (!id) {
+        res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'Invalid id' });
+        return;
+    }
+    try {
+        const counts = await (0, hardDelete_service_1.countAdSiteDependencies)(id);
+        res.json({ success: true, data: counts });
     }
     catch (err) {
         res.status(500).json({ success: false, code: 'INTERNAL_ERROR', message: err.message });

@@ -43,10 +43,10 @@ export interface UpdateDownstreamInput {
 }
 
 function normalizeType(raw: string): string {
-  const value = raw?.trim().toUpperCase();
-  if (!value) throw new BadRequestError('downstreamType is required');
-  if (!/^[A-Z0-9_]{1,20}$/.test(value)) {
-    throw new BadRequestError('downstreamType must be 1–20 chars: A–Z, 0–9, _ only');
+  const value = raw?.trim();
+  if (!value) throw new BadRequestError('name is required');
+  if (value.length > 100) {
+    throw new BadRequestError('name must be at most 100 chars');
   }
   return value;
 }

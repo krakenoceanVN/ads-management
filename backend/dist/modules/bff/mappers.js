@@ -35,6 +35,7 @@ function mapAdvertiser(upstream) {
         adTypeCode: upstream.defaultAdType?.name ?? adTypeCodes[0],
         adTypeCodes,
         adTypes: adTypes.map(adType => ({ id: adType.id, name: adType.name })),
+        adSites: upstream.adSites ?? [],
     };
 }
 function mapMedia(site) {
@@ -86,7 +87,7 @@ function mapMediaId(j) {
         type: j.adSite.billingMethod,
         rate: decimalToNull(j.customPrice),
         shareRatio: j.pctHal ? Number(j.pctHal) : null,
-        status: 'active',
+        status: j.status,
         mediaId: j.adSite.id,
         mediaName: j.adSite.name,
         adTypeCode: adType?.name ?? '',

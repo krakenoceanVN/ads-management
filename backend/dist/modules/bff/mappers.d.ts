@@ -5,6 +5,10 @@ export declare function mapAdvertiser(upstream: Upstream & {
     adTypeLinks?: Array<UpstreamAdType & {
         adType: AdType;
     }>;
+    adSites?: Array<{
+        id: string;
+        name: string;
+    }>;
 }): Advertiser;
 export declare function mapMedia(site: AdSite & {
     upstream: Upstream & {

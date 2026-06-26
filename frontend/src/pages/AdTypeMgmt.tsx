@@ -7,7 +7,9 @@ import {
   listAdTypes,
   createAdType,
   updateAdType,
+  deleteAdType,
   hardDeleteAdType,
+  getAdTypeDependencies,
   listAdvertisers,
 } from '../lib/bffApi';
 import type { AdType, Advertiser, EntityStatus } from '../lib/bffTypes';
@@ -32,7 +34,10 @@ export function AdTypeMgmt() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [advertiserFilter, setAdvertiserFilter] = useState('');
+  const [adOrderFilter, setAdOrderFilter] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
+  const [hasDeps, setHasDeps] = useState<boolean | null>(null);
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
   const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
@@ -40,17 +45,19 @@ export function AdTypeMgmt() {
   const [hardDeleteResult, setHardDeleteResult] = useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
   const [hardDeleteError, setHardDeleteError] = useState('');
-  const [nameSort, setNameSort] = useState<SortDirection>('asc');
-  const [linkCountSort, setLinkCountSort] = useState<SortDirection>('desc');
-  const [upstreamSort, setUpstreamSort] = useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = useState<SortDirection>('asc');
-  const [statusSort, setStatusSort] = useState<SortDirection>('asc');
+  const [sortState, setSortState] = useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
 
   const canWrite = can('role.update');
   const canHardDelete = can('masterData.hardDelete');
 
   const advertisersById = useMemo(
-    () => new Map(advertisers.map(a => [a.id, a])),
+    () => new Map(advertisers.map(a => [String(a.id), a])),
     [advertisers]
   );
 
@@ -72,47 +79,46 @@ export function AdTypeMgmt() {
     void loadRows();
   }, [loadRows]);
 
+  const [statusFilter, setStatusFilter] = useState('');
   const sortedRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    const filtered = keyword
-      ? rows.filter(r => {
-          const owner = r.upstreamId ? advertisersById.get(Number(r.upstreamId))?.name : '';
-          return (r.name ?? '').toLowerCase().includes(keyword)
-            || (owner ?? '').toLowerCase().includes(keyword);
-        })
-      : rows;
+    const filtered = rows.filter(r => {
+      if (advertiserFilter && String(r.upstreamId ?? '') !== advertiserFilter) return false;
+      if (adOrderFilter && r.id !== adOrderFilter) return false;
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (!keyword) return true;
+      const owner = r.upstreamId ? advertisersById.get(String(r.upstreamId))?.name : '';
+      return (r.name ?? '').toLowerCase().includes(keyword)
+        || (owner ?? '').toLowerCase().includes(keyword);
+    });
     const out = [...filtered];
     out.sort((a, b) => {
-      const nameA = a.name ?? '';
-      const nameB = b.name ?? '';
-      const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-      const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-      if (nameOrder !== 0) return nameOrder;
-      const countA = a.adSiteCount ?? 0;
-      const countB = b.adSiteCount ?? 0;
-      const countDelta = countA - countB;
-      const countOrder = linkCountSort === 'asc' ? countDelta : -countDelta;
-      if (countOrder !== 0) return countOrder;
-      const ownerA = displayName(advertisersById.get(Number(a.upstreamId))?.name ?? '');
-      const ownerB = displayName(advertisersById.get(Number(b.upstreamId))?.name ?? '');
-      const ownerDelta = ownerA.localeCompare(ownerB, undefined, { sensitivity: 'base' });
-      const ownerOrder = upstreamSort === 'asc' ? ownerDelta : -ownerDelta;
-      if (ownerOrder !== 0) return ownerOrder;
-      const notesA = a.notes ?? '';
-      const notesB = b.notes ?? '';
-      const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-      const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-      if (notesOrder !== 0) return notesOrder;
+      if (sortState) {
+        let delta = 0;
+        switch (sortState.col) {
+          case 'name':
+            delta = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+            break;
+          case 'adSiteCount':
+            delta = (a.adSiteCount ?? 0) - (b.adSiteCount ?? 0);
+            break;
+          case 'upstreamName':
+            delta = displayName(advertisersById.get(String(a.upstreamId ?? ''))?.name ?? '').localeCompare(displayName(advertisersById.get(String(b.upstreamId ?? ''))?.name ?? ''), undefined, { sensitivity: 'base' });
+            break;
+          case 'notes':
+            delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+            break;
+          case 'status':
+            delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+            break;
+        }
+        if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
+      }
       return (a.id ?? '').localeCompare(b.id ?? '');
     });
     return out;
-  }, [rows, search, nameSort, linkCountSort, upstreamSort, notesSort, advertisersById, displayName]);
+  }, [rows, search, advertiserFilter, adOrderFilter, statusFilter, sortState, advertisersById, displayName]);
 
-  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleLinkCountSort = () => setLinkCountSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleUpstreamSort = () => setUpstreamSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const openCreate = () => {
     setEditModal({ upstreamId: '', name: '', notes: '', status: 'active' });
@@ -120,6 +126,13 @@ export function AdTypeMgmt() {
   };
 
   const openEdit = (row: AdType) => {
+    setHasDeps(null);
+    getAdTypeDependencies(String(row.id))
+      .then((deps: any) => {
+        const total = Object.values(deps as Record<string, number>).reduce((s: number, v: number) => s + v, 0);
+        setHasDeps(total > 0);
+      })
+      .catch(() => setHasDeps(false));
     setEditModal({
       id: row.id,
       upstreamId: row.upstreamId ?? '',
@@ -182,6 +195,32 @@ export function AdTypeMgmt() {
       setRows(prev => prev.map(r => r.id === record.id ? { ...r, status: nextStatus } : r));
     } catch (err) {
       setError(errorMessage(err));
+    }
+  };
+
+  const removeRecord = async () => {
+    if (!editModal?.id) return;
+    if (!window.confirm(t('confirmDelete'))) return;
+    setSaving(true);
+    setEditError('');
+    try {
+      if (canHardDelete && hasDeps === false) {
+        const result = await hardDeleteAdType(editModal.id);
+        if (result.success) {
+          setRows(prev => prev.filter(r => r.id !== editModal.id));
+          closeModal();
+        } else {
+          setEditError(result.message || 'Unexpected error');
+        }
+        return;
+      }
+      await deleteAdType(editModal.id);
+      setRows(prev => prev.map(r => r.id === editModal.id ? { ...r, status: 'inactive' } : r));
+      closeModal();
+    } catch (err) {
+      setEditError(errorMessage(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -271,6 +310,9 @@ export function AdTypeMgmt() {
               </div>
             </div>
             <div className="modal-footer">
+              {editModal?.id !== undefined && (
+                <button className="btn-danger" onClick={() => void removeRecord()} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={closeModal} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={() => void handleSave()} disabled={saving}>
                 {saving ? '...' : t('saveSystem')}
@@ -292,6 +334,19 @@ export function AdTypeMgmt() {
               )}
             </div>
             <div className="toolbar-right">
+              <select className="filter-select" value={advertiserFilter} onChange={e => setAdvertiserFilter(e.target.value)}>
+                <option value="">{t('selectAdvertiser')}</option>
+                {advertisers.map(a => <option key={a.id} value={String(a.id)}>{displayName(a.name)}</option>)}
+              </select>
+              <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
+                <option value="">{t('selectAdOrder')}</option>
+                {rows.map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
+              </select>
+              <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                <option value="">{t('allStatuses')}</option>
+                <option value="active">{t('online')}</option>
+                <option value="inactive">{t('offline')}</option>
+              </select>
               <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </div>
@@ -299,17 +354,16 @@ export function AdTypeMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'upstreamName', label: t('advertiser'), render: r => r.upstreamName ?? '-', sortDirection: upstreamSort, onSortClick: toggleUpstreamSort },
-              { key: 'name', label: t('adTypeNameLabel'), sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'adSiteCount', label: t('linkCount'), render: r => r.adSiteCount ?? 0, sortDirection: linkCountSort, onSortClick: toggleLinkCountSort },
-              { key: 'notes', label: t('notes'), render: r => r.notes ?? '-', sortDirection: notesSort, onSortClick: toggleNotesSort },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={active => updateStatus(r, active)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'upstreamName', label: t('advertiser'), render: r => r.upstreamName ?? '-', sortDirection: sortState?.col === 'upstreamName' ? sortState.dir : null, onSortClick: () => toggleSort('upstreamName') },
+              { key: 'name', label: t('adType'), sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+              { key: 'adSiteCount', label: t('linkCount'), render: r => r.adSiteCount ?? 0, sortDirection: sortState?.col === 'adSiteCount' ? sortState.dir : null, onSortClick: () => toggleSort('adSiteCount') },
+              { key: 'notes', label: t('notes'), render: r => r.notes ?? '-', sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={active => updateStatus(r, active)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
               { key: '__actions__', label: t('actions') },
             ]}
             data={sortedRows}
             emptyText={rows.length === 0 && !loading ? (t('noData') || '—') : undefined}
             onEdit={canWrite ? openEdit : undefined}
-            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         </div>
       </div>

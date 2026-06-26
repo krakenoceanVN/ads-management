@@ -36,10 +36,6 @@ async function create(req, res) {
         throw new AppError_1.BadRequestError('adSiteId is required');
     if (!body.downstreamId)
         throw new AppError_1.BadRequestError('downstreamId is required');
-    // Reject status="inactive" on create
-    if (body.status && body.status !== 'active') {
-        throw new AppError_1.BadRequestError('status must be "active" — MediaId.status is a read-only compatibility field');
-    }
     const mediaId = await (0, mediaId_write_service_1.createMediaId)({
         adSiteId: body.adSiteId,
         downstreamId: body.downstreamId,
@@ -53,10 +49,6 @@ async function update(req, res) {
     if (!id)
         throw new AppError_1.NotFoundError('Invalid media id');
     const body = req.body;
-    // Reject status="inactive" on PUT
-    if (body.status !== undefined && body.status !== 'active') {
-        throw new AppError_1.BadRequestError('status must be "active" — MediaId.status is a read-only compatibility field');
-    }
     const mediaId = await (0, mediaId_write_service_1.updateMediaId)(String(id), {
         customPrice: body.customPrice,
         status: body.status,

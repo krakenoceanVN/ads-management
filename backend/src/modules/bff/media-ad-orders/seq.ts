@@ -11,6 +11,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import type { MediaAdOrder as PrismaMediaAdOrder } from '@prisma/client';
+import { ConflictError } from '../../../shared/errors/AppError';
 
 const SEQ_UNIQUE_COLUMNS = ['downstreamId', 'adTypeId', 'seq'];
 const MAX_ATTEMPTS = 5;
@@ -52,6 +53,13 @@ export async function generateAndCreateMediaAdOrder(
         const seq = (agg._max.seq ?? 0) + 1;
         const adType = await tx.adType.findUnique({ where: { id: input.adTypeId }, select: { name: true } });
         const generatedName = `${adType?.name ?? 'TYPE'}-${padSeq(seq)}`;
+        const finalName = userName || generatedName;
+        // Tên đơn quảng cáo phải duy nhất toàn hệ thống (không phân biệt hoa/thường).
+        const dupe = await tx.mediaAdOrder.findFirst({
+          where: { name: { equals: finalName, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${finalName}' đã tồn tại`);
         const { generateShortId } = await import('../../../shared/ids');
         return await tx.mediaAdOrder.create({
           data: {
@@ -59,7 +67,7 @@ export async function generateAndCreateMediaAdOrder(
             downstreamId: input.downstreamId,
             adTypeId: input.adTypeId,
             seq,
-            name: userName || generatedName,
+            name: finalName,
             notes: input.notes ?? null,
             status: input.status ?? 'active',
           },

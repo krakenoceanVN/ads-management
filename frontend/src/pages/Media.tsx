@@ -10,6 +10,7 @@ import {
   createMediaAdOrder,
   createMediaId,
   getMedia,
+  getMediaDependencies,
   hardDeleteMedia,
   hardDeleteMediaAdOrder,
   hardDeleteMediaId,
@@ -163,8 +164,10 @@ function toOptionalNumber(value: string) {
 
 export function MediaMgmt() {
   const [search, setSearch] = React.useState('');
-  const [upstreamFilter, setUpstreamFilter] = React.useState('');
+  const [mediaAdOrderFilter, setMediaAdOrderFilter] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('');
   const [rows, setRows] = React.useState<Media[]>([]);
+  const [mediaAdOrders, setMediaAdOrders] = React.useState<MediaAdOrder[]>([]);
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -176,18 +179,13 @@ export function MediaMgmt() {
   const { t, displayName, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
 
-  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
-  const [contactSort, setContactSort] = React.useState<SortDirection>('asc');
-  const [phoneSort, setPhoneSort] = React.useState<SortDirection>('asc');
-  const [emailSort, setEmailSort] = React.useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
-  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
-  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleContactSort = () => setContactSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const togglePhoneSort = () => setPhoneSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleEmailSort = () => setEmailSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
 
   const quarantine = useQuarantineAction({
     scope: 'media',
@@ -199,6 +197,7 @@ export function MediaMgmt() {
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
   const [hardDeleteError, setHardDeleteError] = React.useState('');
+  const [hasDeps, setHasDeps] = React.useState<boolean | null>(null);
 
   const openHardDelete = (row?: Media) => {
     if (row) setEditing(row);
@@ -250,9 +249,10 @@ export function MediaMgmt() {
     setLoading(true);
     setError('');
     try {
-      const [mediaRows, advertiserRows] = await Promise.all([listMedia(), listAdvertisers()]);
+      const [mediaRows, advertiserRows, mediaAdOrderRows] = await Promise.all([listMedia(), listAdvertisers(), listMediaAdOrders()]);
       setRows(mediaRows);
       setAdvertisers(advertiserRows);
+      setMediaAdOrders(mediaAdOrderRows ?? []);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -272,50 +272,44 @@ export function MediaMgmt() {
 
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
-    if (upstreamFilter && row.upstreamId !== Number(upstreamFilter)) return false;
+    if (statusFilter && row.status !== statusFilter) return false;
+    if (mediaAdOrderFilter && row.adTypeCode !== mediaAdOrderFilter) return false;
     if (!keyword) return true;
     return [row.name, row.upstreamId, advertiserName(row.upstreamId), row.billingMethod, row.status].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   }).sort((a, b) => {
-    const nameA = displayName(a.name);
-    const nameB = displayName(b.name);
-    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-    if (nameOrder !== 0) return nameOrder;
-    const contactA = a.contact ?? '';
-    const contactB = b.contact ?? '';
-    const contactDelta = contactA.localeCompare(contactB, undefined, { sensitivity: 'base' });
-    const contactOrder = contactSort === 'asc' ? contactDelta : -contactDelta;
-    if (contactOrder !== 0) return contactOrder;
-    const phoneA = a.phone ?? '';
-    const phoneB = b.phone ?? '';
-    const phoneDelta = phoneA.localeCompare(phoneB, undefined, { sensitivity: 'base' });
-    const phoneOrder = phoneSort === 'asc' ? phoneDelta : -phoneDelta;
-    if (phoneOrder !== 0) return phoneOrder;
-    const emailA = a.email ?? '';
-    const emailB = b.email ?? '';
-    const emailDelta = emailA.localeCompare(emailB, undefined, { sensitivity: 'base' });
-    const emailOrder = emailSort === 'asc' ? emailDelta : -emailDelta;
-    if (emailOrder !== 0) return emailOrder;
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'name':
+          delta = displayName(a.name).localeCompare(displayName(b.name), undefined, { sensitivity: 'base' });
+          break;
+        case 'contact':
+          delta = (a.contact ?? '').localeCompare(b.contact ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'phone':
+          delta = (a.phone ?? '').localeCompare(b.phone ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'email':
+          delta = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
+    }
     return a.id - b.id;
   });
 
   const openCreate = () => {
     setEditing(null);
     // v5.pdf cascade: pre-fill upstream with filter selection if set
-    const defaultUpstream = upstreamFilter || firstUpstreamId;
-    setForm(defaultMediaForm(defaultUpstream));
+    setForm(defaultMediaForm(firstUpstreamId));
     setFormError('');
     setFormOpen(true);
   };
@@ -325,6 +319,13 @@ export function MediaMgmt() {
     setForm(mediaFormFromRecord(record, firstUpstreamId));
     setFormError('');
     setFormOpen(true);
+    setHasDeps(null);
+    getMediaDependencies(String(record.id))
+      .then((deps: any) => {
+        const total = Object.values(deps as Record<string, number>).reduce((s: number, v: number) => s + v, 0);
+        setHasDeps(total > 0);
+      })
+      .catch(() => setHasDeps(false));
   };
 
   const buildPayload = (): CreateMediaInput | UpdateMediaInput | null => {
@@ -373,11 +374,27 @@ export function MediaMgmt() {
     }
   };
 
-  const removeRecord = (row?: Media) => {
-    const target = row ?? editing;
-    if (!target) return;
+  const removeRecord = async () => {
+    if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
+    if (canHardDelete && hasDeps === false) {
+      setSaving(true);
+      setFormError('');
+      try {
+        const result = await hardDeleteMedia(editing.id);
+        if (result.success) {
+          setRows(prev => prev.filter(r => r.id !== editing.id));
+          setFormOpen(false);
+        } else {
+          setFormError(result.message || 'Unexpected error');
+        }
+      } catch (err) {
+        setFormError(errorMessage(err));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     quarantine.openModal();
   };
 
@@ -398,9 +415,14 @@ export function MediaMgmt() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newMedia')}</button></div>
           <div className="toolbar-right">
-            <select className="filter-select" value={upstreamFilter} onChange={e => setUpstreamFilter(e.target.value)}>
-              <option value="">{t('all') || 'Tất cả'}</option>
-              {advertisers.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}
+            <select className="filter-select" value={mediaAdOrderFilter} onChange={e => setMediaAdOrderFilter(e.target.value)}>
+              <option value="">{t('selectMediaAdOrder')}</option>
+              {mediaAdOrders.map(item => <option key={item.id} value={item.adTypeCode}>{displayName(item.name)}</option>)}
+            </select>
+            <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">{t('allStatuses')}</option>
+              <option value="active">{t('online')}</option>
+              <option value="inactive">{t('offline')}</option>
             </select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media.csv', mediaColumns, visibleRows)}>{t('export')}</button>
@@ -410,18 +432,16 @@ export function MediaMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('media'), render: r => displayName(r.name), sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: contactSort, onSortClick: toggleContactSort },
-              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: phoneSort, onSortClick: togglePhoneSort },
-              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: emailSort, onSortClick: toggleEmailSort },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'name', label: t('media'), render: r => displayName(r.name), sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
+              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
+              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
               { key: '__actions__', label: t('actions') }
             ]}
             data={visibleRows}
             onEdit={openEdit}
-            onDelete={removeRecord}
-            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -465,6 +485,9 @@ export function MediaMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
@@ -498,6 +521,8 @@ export function MediaMgmt() {
 export function MediaAdOrderMgmt() {
   const [search, setSearch] = React.useState('');
   const [mediaFilter, setMediaFilter] = React.useState('');
+  const [mediaAdOrderFilter, setMediaAdOrderFilter] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('');
   const [rows, setRows] = React.useState<MediaAdOrder[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [media, setMedia] = React.useState<Media[]>([]);
@@ -509,12 +534,16 @@ export function MediaAdOrderMgmt() {
   const [formOpen, setFormOpen] = React.useState(false);
   const [form, setForm] = React.useState<AdOrderFormState>(defaultAdOrderForm());
   const [formError, setFormError] = React.useState('');
-  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
-  const [downstreamSort, setDownstreamSort] = React.useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
-  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
+  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
   const { t, displayName, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
+  const [hasDeps, setHasDeps] = React.useState<boolean | null>(false);
   const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
@@ -538,7 +567,7 @@ export function MediaAdOrderMgmt() {
       setRows(mediaOrderRows);
       setMedia(mediaRows);
       setAdTypes(adTypeRows);
-      setDownstreams((downstreamRows ?? []).filter(d => d.status === 'active'));
+      setDownstreams(downstreamRows ?? []);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -552,40 +581,42 @@ export function MediaAdOrderMgmt() {
 
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
+    if (statusFilter && row.status !== statusFilter) return false;
     if (mediaFilter && row.downstreamId !== mediaFilter) return false;
+    if (mediaAdOrderFilter && row.id !== mediaAdOrderFilter) return false;
     if (!keyword) return true;
-    const downstreamName = displayName(downstreamById.get(row.downstreamId)?.name ?? row.downstreamId);
+    const downstream = downstreamById.get(row.downstreamId);
+    const downstreamName = displayName(downstream?.name ?? downstream?.downstreamType ?? row.downstreamId);
     return [row.name, row.adTypeCode, row.notes, downstreamName].some(value =>
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   }).sort((a, b) => {
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
-    const nameA = a.name ?? '';
-    const nameB = b.name ?? '';
-    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-    if (nameOrder !== 0) return nameOrder;
-    const downA = a.downstreamId ?? '';
-    const downB = b.downstreamId ?? '';
-    const downDelta = downA.localeCompare(downB, undefined, { sensitivity: 'base' });
-    const downOrder = downstreamSort === 'asc' ? downDelta : -downDelta;
-    if (downOrder !== 0) return downOrder;
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'name':
+          delta = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'downstreamId': {
+          const aDownstream = downstreamById.get(a.downstreamId);
+          const bDownstream = downstreamById.get(b.downstreamId);
+          delta = displayName(aDownstream?.name ?? aDownstream?.downstreamType ?? '').localeCompare(displayName(bDownstream?.name ?? bDownstream?.downstreamType ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        }
+        case 'linkCount':
+          delta = (a.linkCount ?? 0) - (b.linkCount ?? 0);
+          break;
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
+    }
     return a.id.localeCompare(b.id);
   });
-
-  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleDownstreamSort = () => setDownstreamSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const updateStatus = async (record: MediaAdOrder, active: boolean) => {
     const nextStatus: EntityStatus = active ? 'active' : 'inactive';
@@ -600,7 +631,10 @@ export function MediaAdOrderMgmt() {
   const mediaAdOrderColumns: CsvColumn<MediaAdOrder>[] = [
     { label: t('mediaAdOrder'), value: r => displayName(r.name) },
     { label: t('adType'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
-    { label: t('media'), value: r => displayName(downstreamById.get(r.downstreamId)?.name ?? '-') },
+    { label: t('media'), value: r => {
+      const downstream = downstreamById.get(r.downstreamId);
+      return displayName(downstream?.name ?? downstream?.downstreamType ?? '-');
+    } },
     { label: t('notes'), value: r => r.notes ?? '-' },
   ];
 
@@ -611,16 +645,31 @@ export function MediaAdOrderMgmt() {
     setFormOpen(true);
   };
 
-  const removeRecord = async (row?: MediaAdOrder) => {
-    const target = row ?? editing;
-    if (!target) return;
+  const removeRecord = async () => {
+    if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
+    setSaving(true);
+    setFormError('');
     try {
-      await updateMediaAdOrder(target.id, { status: 'inactive' });
+      if (canHardDelete) {
+        try {
+          const result = await hardDeleteMediaAdOrder(editing.id);
+          if (result.success) {
+            setRows(prev => prev.filter(row => row.id !== editing.id));
+            setFormOpen(false);
+            return;
+          }
+        } catch {
+          // fall through to soft delete
+        }
+      }
+      await updateMediaAdOrder(editing.id, { status: 'inactive' });
       await loadRows();
+      setFormOpen(false);
     } catch (err) {
       setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -719,6 +768,15 @@ export function MediaAdOrderMgmt() {
               <option value="">{t('selectMedia')}</option>
               {downstreams.map(d => <option key={d.id} value={String(d.id)}>{displayName(d.name ?? d.downstreamType)}</option>)}
             </select>
+            <select className="filter-select" value={mediaAdOrderFilter} onChange={e => setMediaAdOrderFilter(e.target.value)}>
+              <option value="">{t('selectMediaAdOrder')}</option>
+              {rows.map(row => <option key={row.id} value={row.id}>{displayName(row.name)}</option>)}
+            </select>
+            <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">{t('allStatuses')}</option>
+              <option value="active">{t('online')}</option>
+              <option value="inactive">{t('offline')}</option>
+            </select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media-ad-orders.csv', mediaAdOrderColumns, visibleRows)}>{t('export')}</button>
           </div>
@@ -727,7 +785,10 @@ export function MediaAdOrderMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'downstreamId', label: t('media'), render: r => displayName(downstreamById.get(r.downstreamId)?.name ?? '-'), sortDirection: downstreamSort, onSortClick: toggleDownstreamSort },
+              { key: 'downstreamId', label: t('media'), render: r => {
+                const downstream = downstreamById.get(r.downstreamId);
+                return displayName(downstream?.name ?? downstream?.downstreamType ?? '-');
+              }, sortDirection: sortState?.col === 'downstreamId' ? sortState.dir : null, onSortClick: () => toggleSort('downstreamId') },
               { key: 'name', label: t('mediaAdOrder'), render: r => {
                 const dup = !!(r.adTypeName && r.name && r.name === r.adTypeName);
                 return (
@@ -742,22 +803,20 @@ export function MediaAdOrderMgmt() {
                     )}
                   </span>
                 );
-              }, sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'linkCount', label: t('linkCount'), render: r => r.linkCount ?? 0 },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
+              }, sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+              { key: 'linkCount', label: t('linkCount'), render: r => r.linkCount ?? 0, sortDirection: sortState?.col === 'linkCount' ? sortState.dir : null, onSortClick: () => toggleSort('linkCount') },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
               {
                 key: 'status',
                 label: t('status'),
                 render: r => <StatusToggle status={r.status === 'active'} onChange={active => updateStatus(r, active)} />,
-                sortDirection: statusSort,
-                onSortClick: toggleStatusSort,
+                sortDirection: sortState?.col === 'status' ? sortState.dir : null,
+                onSortClick: () => toggleSort('status'),
               },
               { key: '__actions__', label: t('actions') },
             ]}
             data={visibleRows}
             onEdit={openEdit}
-            onDelete={removeRecord}
-            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -801,6 +860,9 @@ export function MediaAdOrderMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
@@ -824,19 +886,14 @@ export function MediaIdMgmt() {
   const [search, setSearch] = React.useState('');
   const [mediaFilter, setMediaFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
-  const [typeFilter, setTypeFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
-  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
-  const [upstreamNameSort, setUpstreamNameSort] = React.useState<SortDirection>('asc');
-  const [adTypeCodeSort, setAdTypeCodeSort] = React.useState<SortDirection>('asc');
-  const [adSiteNameSort, setAdSiteNameSort] = React.useState<SortDirection>('asc');
-  const [downstreamNameSort, setDownstreamNameSort] = React.useState<SortDirection>('asc');
-  const [mediaAdTypeCodeSort, setMediaAdTypeCodeSort] = React.useState<SortDirection>('asc');
-  const [slotSort, setSlotSort] = React.useState<SortDirection>('asc');
-  const [shareRatioSort, setShareRatioSort] = React.useState<SortDirection>('asc');
-  const [rateSort, setRateSort] = React.useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
-  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
+  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<MediaId[]>([]);
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
@@ -873,6 +930,7 @@ export function MediaIdMgmt() {
   const [formError, setFormError] = React.useState('');
   const { t, displayName, mediaIdPresetFilter, clearMediaIdPresetFilter, can } = useAppContext();
   const canHardDelete = can('masterData.hardDelete');
+  const [hasDeps, setHasDeps] = React.useState<boolean | null>(false);
 
   const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
@@ -975,10 +1033,20 @@ export function MediaIdMgmt() {
       .catch(() => setMediaAdOrders([]));
   }, [form.downstreamId]);
 
+  // Khi sửa: khôi phục dropdown Đơn QC MEDIA từ mediaAdTypeCode đã lưu (qua mediaAdTypeId).
+  // Lưu ý: nhiều MediaAdOrder cùng AdType sẽ khớp cái đầu tiên (giới hạn của việc lưu qua mediaAdTypeId).
+  React.useEffect(() => {
+    if (!editing || form.mediaAdOrderId || !mediaAdOrders.length) return;
+    const code = editing.mediaAdTypeCode;
+    if (!code) return;
+    const match = mediaAdOrders.find(m => m.adTypeCode === code);
+    if (match) setForm(prev => ({ ...prev, mediaAdOrderId: match.id }));
+  }, [editing, mediaAdOrders, form.mediaAdOrderId]);
+
   // When advertiser changes: reset các field phụ thuộc
   React.useEffect(() => {
     if (!form.advertiserId) {
-      setForm(prev => ({ ...prev, adTypeCode: '', adSiteId: '', downstreamId: '', mediaAdOrderId: '', mediaIdName: '', pctHal: '', customPrice: '' }));
+      setForm(prev => ({ ...prev, adTypeId: '', adSiteId: '', downstreamId: '', mediaAdOrderId: '', mediaIdName: '', pctHal: '', customPrice: '' }));
     }
   }, [form.advertiserId]);
 
@@ -997,7 +1065,6 @@ export function MediaIdMgmt() {
     if (!mediaIdPresetFilter) return;
     setMediaFilter(mediaIdPresetFilter.ownerId);
     setOrderFilter(mediaIdPresetFilter.adTypeCode);
-    setTypeFilter('');
     setStatusFilter('');
     setSearch('');
     clearMediaIdPresetFilter();
@@ -1010,13 +1077,11 @@ export function MediaIdMgmt() {
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
   }, [rows]);
   const mediaScopedRows = mediaFilter ? rows.filter(row => row.mediaId === mediaFilter) : rows;
-  const availableAdTypeNames = Array.from(new Set(mediaScopedRows.map(row => row.adTypeCode).filter((c): c is string => !!c)));
-  const adTypeOptions = adTypes.filter(t => availableAdTypeNames.includes(t.name));
-  const adTypeScopedRows = orderFilter ? mediaScopedRows.filter(row => row.adTypeCode === orderFilter) : mediaScopedRows;
-  const typeOptions = Array.from(new Set(adTypeScopedRows.map(row => row.type).filter(Boolean)));
+  const availableMediaAdOrderNames = Array.from(new Set(mediaScopedRows.map(row => row.mediaAdTypeCode).filter((c): c is string => !!c)));
+  const mediaAdOrderOptions = availableMediaAdOrderNames.map(name => ({ id: name, name }));
+  const mediaAdOrderScopedRows = orderFilter ? mediaScopedRows.filter(row => row.mediaAdTypeCode === orderFilter) : mediaScopedRows;
   const keyword = normalizeText(search);
-  const visibleRows = adTypeScopedRows.filter(row => {
-    if (typeFilter && row.type !== typeFilter) return false;
+  const visibleRows = mediaAdOrderScopedRows.filter(row => {
     if (statusFilter && row.status !== statusFilter) return false;
     if (!keyword) return true;
     const values = [
@@ -1030,78 +1095,56 @@ export function MediaIdMgmt() {
     ];
     return values.some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
   }).sort((a, b) => {
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
-    const upA = displayName(a.upstreamName ?? '');
-    const upB = displayName(b.upstreamName ?? '');
-    const upDelta = upA.localeCompare(upB, undefined, { sensitivity: 'base' });
-    const upOrder = upstreamNameSort === 'asc' ? upDelta : -upDelta;
-    if (upOrder !== 0) return upOrder;
-    const adTypeA = adTypeNameByName.get(a.adTypeCode ?? '') ?? a.adTypeCode ?? '';
-    const adTypeB = adTypeNameByName.get(b.adTypeCode ?? '') ?? b.adTypeCode ?? '';
-    const adTypeDelta = adTypeA.localeCompare(adTypeB, undefined, { sensitivity: 'base' });
-    const adTypeOrder = adTypeCodeSort === 'asc' ? adTypeDelta : -adTypeDelta;
-    if (adTypeOrder !== 0) return adTypeOrder;
-    const adSiteA = displayName(a.adSiteName ?? '');
-    const adSiteB = displayName(b.adSiteName ?? '');
-    const adSiteDelta = adSiteA.localeCompare(adSiteB, undefined, { sensitivity: 'base' });
-    const adSiteOrder = adSiteNameSort === 'asc' ? adSiteDelta : -adSiteDelta;
-    if (adSiteOrder !== 0) return adSiteOrder;
-    const downA = displayName(a.downstreamName ?? '');
-    const downB = displayName(b.downstreamName ?? '');
-    const downDelta = downA.localeCompare(downB, undefined, { sensitivity: 'base' });
-    const downOrder = downstreamNameSort === 'asc' ? downDelta : -downDelta;
-    if (downOrder !== 0) return downOrder;
-    const maA = displayName(a.mediaAdTypeCode ?? '');
-    const maB = displayName(b.mediaAdTypeCode ?? '');
-    const maDelta = maA.localeCompare(maB, undefined, { sensitivity: 'base' });
-    const maOrder = mediaAdTypeCodeSort === 'asc' ? maDelta : -maDelta;
-    if (maOrder !== 0) return maOrder;
-    const slotA = a.slot ?? '';
-    const slotB = b.slot ?? '';
-    const slotDelta = slotA.localeCompare(slotB, undefined, { sensitivity: 'base' });
-    const slotOrder = slotSort === 'asc' ? slotDelta : -slotDelta;
-    if (slotOrder !== 0) return slotOrder;
-    const srA = a.shareRatio;
-    const srB = b.shareRatio;
-    if (srA == null && srB != null) return shareRatioSort === 'asc' ? 1 : -1;
-    if (srA != null && srB == null) return shareRatioSort === 'asc' ? -1 : 1;
-    if (srA != null && srB != null) {
-      const srDelta = srA - srB;
-      const srOrder = shareRatioSort === 'asc' ? srDelta : -srDelta;
-      if (srOrder !== 0) return srOrder;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'upstreamName':
+          delta = displayName(a.upstreamName ?? '').localeCompare(displayName(b.upstreamName ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        case 'adTypeCode':
+          delta = (adTypeNameByName.get(a.adTypeCode ?? '') ?? a.adTypeCode ?? '').localeCompare(adTypeNameByName.get(b.adTypeCode ?? '') ?? b.adTypeCode ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'adSiteName':
+          delta = displayName(a.adSiteName ?? '').localeCompare(displayName(b.adSiteName ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        case 'downstreamName':
+          delta = displayName(a.downstreamName ?? '').localeCompare(displayName(b.downstreamName ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        case 'mediaAdTypeCode':
+          delta = displayName(a.mediaAdTypeCode ?? '').localeCompare(displayName(b.mediaAdTypeCode ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        case 'slot':
+          delta = (a.slot ?? '').localeCompare(b.slot ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'shareRatio': {
+          if (a.shareRatio == null && b.shareRatio != null) return sortState.dir === 'asc' ? 1 : -1;
+          if (a.shareRatio != null && b.shareRatio == null) return sortState.dir === 'asc' ? -1 : 1;
+          if (a.shareRatio != null && b.shareRatio != null) {
+            const d = a.shareRatio - b.shareRatio;
+            if (d !== 0) return sortState.dir === 'asc' ? d : -d;
+          }
+          break;
+        }
+        case 'rate': {
+          if (a.rate == null && b.rate != null) return sortState.dir === 'asc' ? 1 : -1;
+          if (a.rate != null && b.rate == null) return sortState.dir === 'asc' ? -1 : 1;
+          if (a.rate != null && b.rate != null) {
+            const d = a.rate - b.rate;
+            if (d !== 0) return sortState.dir === 'asc' ? d : -d;
+          }
+          break;
+        }
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
-    const rA = a.rate;
-    const rB = b.rate;
-    if (rA == null && rB != null) return rateSort === 'asc' ? 1 : -1;
-    if (rA != null && rB == null) return rateSort === 'asc' ? -1 : 1;
-    if (rA != null && rB != null) {
-      const rDelta = rA - rB;
-      const rOrder = rateSort === 'asc' ? rDelta : -rDelta;
-      if (rOrder !== 0) return rOrder;
-    }
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
     return String(a.id).localeCompare(String(b.id));
   });
-
-  const toggleNameSort = () => setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleUpstreamNameSort = () => setUpstreamNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleAdTypeCodeSort = () => setAdTypeCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleAdSiteNameSort = () => setAdSiteNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleDownstreamNameSort = () => setDownstreamNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleMediaAdTypeCodeSort = () => setMediaAdTypeCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleSlotSort = () => setSlotSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleShareRatioSort = () => setShareRatioSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleRateSort = () => setRateSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const mediaIdColumns: CsvColumn<MediaId>[] = [
     { label: t('media'), value: r => displayName(r.mediaName) },
@@ -1201,9 +1244,13 @@ export function MediaIdMgmt() {
         customPrice?: number | null;
         pctHal?: number | null;
         mediaIdName?: string | null;
+        mediaAdTypeId?: string | null;
       } = {
         adSiteId: form.adSiteId,
       };
+      // Đơn QC MEDIA (dropdown 5) lưu qua mediaAdTypeId — lấy AdType của MediaAdOrder đã chọn.
+      const selectedMao = mediaAdOrders.find(m => m.id === form.mediaAdOrderId);
+      if (selectedMao) basePayload.mediaAdTypeId = selectedMao.adTypeId;
       const customPriceVal = form.customPrice.trim();
       if (customPriceVal) {
         const parsed = parseFloat(customPriceVal);
@@ -1223,6 +1270,7 @@ export function MediaIdMgmt() {
           customPrice: basePayload.customPrice ?? null,
           pctHal: basePayload.pctHal ?? null,
           mediaIdName: basePayload.mediaIdName ?? null,
+          mediaAdTypeId: basePayload.mediaAdTypeId ?? null,
         });
         await loadRows();
       } else {
@@ -1245,16 +1293,31 @@ export function MediaIdMgmt() {
     }
   };
 
-  const removeRecord = async (row?: MediaId) => {
-    const target = row ?? editing;
-    if (!target || !target.junctionId) return;
+  const removeRecord = async () => {
+    if (!editing || !editing.junctionId) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
+    setSaving(true);
+    setFormError('');
     try {
-      await updateMediaId(String(target.junctionId), { status: 'inactive' });
+      if (canHardDelete) {
+        try {
+          const result = await hardDeleteMediaId(editing.junctionId);
+          if (result.success) {
+            setRows(prev => prev.filter(row => row.junctionId !== editing.junctionId));
+            setFormOpen(false);
+            return;
+          }
+        } catch {
+          // fall through to soft delete
+        }
+      }
+      await updateMediaId(String(editing.junctionId), { status: 'inactive' });
       await loadRows();
+      setFormOpen(false);
     } catch (err) {
       setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1277,9 +1340,8 @@ export function MediaIdMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
           <div className="toolbar-right">
-            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setTypeFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{adTypeOptions.map(t => <option key={t.id} value={t.name}>{displayName(t.name)}</option>)}</select>
-            <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select>
+            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => setOrderFilter(e.target.value)}><option value="">{t('selectMediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item.id} value={item.name}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media-ids.csv', mediaIdColumns, visibleRows)}>{t('export')}</button>
@@ -1289,22 +1351,20 @@ export function MediaIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'upstreamName', label: t('advertiser'), render: r => displayName(r.upstreamName ?? '-'), sortDirection: upstreamNameSort, onSortClick: toggleUpstreamNameSort },
-              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? ''), sortDirection: adTypeCodeSort, onSortClick: toggleAdTypeCodeSort },
-              { key: 'adSiteName', label: t('adId'), render: r => displayName(r.adSiteName ?? '-'), sortDirection: adSiteNameSort, onSortClick: toggleAdSiteNameSort },
-              { key: 'downstreamName', label: t('media'), render: r => displayName(r.downstreamName ?? '-'), sortDirection: downstreamNameSort, onSortClick: toggleDownstreamNameSort },
-              { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdTypeCode ?? '-'), sortDirection: mediaAdTypeCodeSort, onSortClick: toggleMediaAdTypeCodeSort },
-              { key: 'slot', label: t('mediaId'), sortDirection: slotSort, onSortClick: toggleSlotSort },
-              { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio != null ? `${r.shareRatio}` : '-', sortDirection: shareRatioSort, onSortClick: toggleShareRatioSort },
-              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: rateSort, onSortClick: toggleRateSort },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'upstreamName', label: t('advertiser'), render: r => displayName(r.upstreamName ?? '-'), sortDirection: sortState?.col === 'upstreamName' ? sortState.dir : null, onSortClick: () => toggleSort('upstreamName') },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? ''), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
+              { key: 'adSiteName', label: t('adId'), render: r => displayName(r.adSiteName ?? '-'), sortDirection: sortState?.col === 'adSiteName' ? sortState.dir : null, onSortClick: () => toggleSort('adSiteName') },
+              { key: 'downstreamName', label: t('media'), render: r => displayName(r.downstreamName ?? '-'), sortDirection: sortState?.col === 'downstreamName' ? sortState.dir : null, onSortClick: () => toggleSort('downstreamName') },
+              { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdTypeCode ?? '-'), sortDirection: sortState?.col === 'mediaAdTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('mediaAdTypeCode') },
+              { key: 'slot', label: t('mediaId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
+              { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio != null ? `${r.shareRatio}` : '-', sortDirection: sortState?.col === 'shareRatio' ? sortState.dir : null, onSortClick: () => toggleSort('shareRatio') },
+              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
               { key: '__actions__', label: t('actions') },
             ]}
             data={visibleRows}
             onEdit={openEdit}
-            onDelete={removeRecord}
-            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -1380,6 +1440,9 @@ export function MediaIdMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>

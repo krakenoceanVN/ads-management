@@ -1,4 +1,5 @@
 import { prisma } from '../../../shared/prisma/client';
+import { ConflictError } from '../../../shared/errors/AppError';
 import { mapMediaAdOrder } from '../mappers';
 import { generateAndCreateMediaAdOrder } from './seq';
 import { isValidId } from '../../../shared/ids';
@@ -50,7 +51,18 @@ export async function updateMediaAdOrder(id: string, input: UpdateMediaAdOrderIn
   const { downstreamId, adTypeId, ...rest } = input;
   const updateData: Record<string, unknown> = {};
 
-  if (rest.name !== undefined) updateData['name'] = rest.name;
+  if (rest.name !== undefined) {
+    const name = (rest.name ?? '').trim();
+    // Tên đơn quảng cáo phải duy nhất toàn hệ thống (không phân biệt hoa/thường).
+    if (name) {
+      const dupe = await prisma.mediaAdOrder.findFirst({
+        where: { name: { equals: name, mode: 'insensitive' }, NOT: { id } },
+        select: { id: true },
+      });
+      if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${name}' đã tồn tại`);
+    }
+    updateData['name'] = rest.name;
+  }
   if (rest.notes !== undefined) updateData['notes'] = rest.notes;
   if (rest.status !== undefined) updateData['status'] = rest.status;
   if (downstreamId !== undefined) {

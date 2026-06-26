@@ -6,6 +6,7 @@ export interface CreateMediaIdInput {
     pctHal?: number | null;
     mediaAdTypeId?: string | null;
     mediaIdName?: string | null;
+    status?: EntityStatus;
 }
 export interface UpdateMediaIdInput {
     customPrice?: number | null;

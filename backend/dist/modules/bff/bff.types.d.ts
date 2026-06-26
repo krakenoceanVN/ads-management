@@ -26,6 +26,10 @@ export interface Advertiser {
         id: string;
         name: string;
     }>;
+    adSites?: Array<{
+        id: string;
+        name: string;
+    }>;
 }
 export interface Media {
     id: string;

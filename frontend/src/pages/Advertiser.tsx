@@ -15,6 +15,8 @@ import {
   deleteAdId,
   hardDeleteAdvertiser,
   hardDeleteAdId,
+  getAdvertiserDependencies,
+  getAdIdDependencies,
   type HardDeleteResult,
 } from '../lib/bffApi';
 import type {
@@ -129,13 +131,15 @@ function getAdvertiserAdTypeIds(record: Advertiser): string[] {
         : [];
 }
 
-function getAdvertiserAdTypeNames(record: Advertiser, map: Map<string, string>): string {
+function getAdvertiserAdTypeNameList(record: Advertiser, mapById: Map<string, string>): string[] {
   if (record.adTypes?.length) {
-    return record.adTypes.map(at => at.name).join(', ');
+    return record.adTypes.map(at => at.name);
   }
-  return getAdvertiserAdTypeIds(record)
-    .map(id => map.get(id) ?? id)
-    .join(', ');
+  return getAdvertiserAdTypeIds(record).map(id => mapById.get(id) ?? id);
+}
+
+function getAdvertiserAdTypeNames(record: Advertiser, map: Map<string, string>): string {
+  return getAdvertiserAdTypeNameList(record, map).join(', ');
 }
 
 function defaultAdvertiserForm(adTypeId = ''): AdvertiserFormState {
@@ -157,7 +161,8 @@ function advertiserFormFromRecord(record: Advertiser, fallbackAdTypeId = ''): Ad
 
 export function AdvertiserList() {
   const [search, setSearch] = React.useState('');
-  const [advFilter, setAdvFilter] = React.useState('');
+  const [adTypeFilter, setAdTypeFilter] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('');
   const [rows, setRows] = React.useState<Advertiser[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -180,9 +185,9 @@ export function AdvertiserList() {
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
   const [hardDeleteError, setHardDeleteError] = React.useState('');
+  const [hasDeps, setHasDeps] = React.useState<boolean | null>(null);
 
-  const handleHardDeleteClick = (row?: Advertiser) => {
-    if (row) setEditing(row);
+  const openHardDelete = () => {
     setHardDeleteResult(null);
     setHardDeleteError('');
     setHardDeleteOpen(true);
@@ -219,25 +224,13 @@ export function AdvertiserList() {
     quarantine.openModal();
   };
 
-  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
-  const [nameSort, setNameSort] = React.useState<SortDirection>('asc');
-  const [adTypeSort, setAdTypeSort] = React.useState<SortDirection>('asc');
-  const [contactSort, setContactSort] = React.useState<SortDirection>('asc');
-  const [phoneSort, setPhoneSort] = React.useState<SortDirection>('asc');
-  const [emailSort, setEmailSort] = React.useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
-
-  const toggleStatusSort = () => {
-    setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
   };
-  const toggleNameSort = () => {
-    setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  };
-  const toggleAdTypeSort = () => setAdTypeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleContactSort = () => setContactSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const togglePhoneSort = () => setPhoneSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleEmailSort = () => setEmailSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const advertiserColumns: CsvColumn<Advertiser>[] = [
     { label: t('advertiser'), value: r => displayName(r.name) },
@@ -292,7 +285,8 @@ export function AdvertiserList() {
   const firstAdTypeId = adTypeOptions[0]?.id ?? '';
   const keyword = normalizeText(search);
   const visibleRows = rows.filter(row => {
-    if (advFilter && row.status !== advFilter) return false;
+    if (statusFilter && row.status !== statusFilter) return false;
+    if (adTypeFilter && !getAdvertiserAdTypeIds(row).includes(adTypeFilter)) return false;
     if (!keyword) return true;
     return [
       row.name,
@@ -307,42 +301,34 @@ export function AdvertiserList() {
       normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
     );
   }).sort((a, b) => {
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
-    const nameA = displayName(a.name);
-    const nameB = displayName(b.name);
-    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-    if (nameOrder !== 0) return nameOrder;
-    const adTypeA = getAdvertiserAdTypeNames(a, adTypeNameById);
-    const adTypeB = getAdvertiserAdTypeNames(b, adTypeNameById);
-    const adTypeDelta = adTypeA.localeCompare(adTypeB, undefined, { sensitivity: 'base' });
-    const adTypeOrder = adTypeSort === 'asc' ? adTypeDelta : -adTypeDelta;
-    if (adTypeOrder !== 0) return adTypeOrder;
-    const contactA = a.contact ?? '';
-    const contactB = b.contact ?? '';
-    const contactDelta = contactA.localeCompare(contactB, undefined, { sensitivity: 'base' });
-    const contactOrder = contactSort === 'asc' ? contactDelta : -contactDelta;
-    if (contactOrder !== 0) return contactOrder;
-    const phoneA = a.phone ?? '';
-    const phoneB = b.phone ?? '';
-    const phoneDelta = phoneA.localeCompare(phoneB, undefined, { sensitivity: 'base' });
-    const phoneOrder = phoneSort === 'asc' ? phoneDelta : -phoneDelta;
-    if (phoneOrder !== 0) return phoneOrder;
-    const emailA = a.email ?? '';
-    const emailB = b.email ?? '';
-    const emailDelta = emailA.localeCompare(emailB, undefined, { sensitivity: 'base' });
-    const emailOrder = emailSort === 'asc' ? emailDelta : -emailDelta;
-    if (emailOrder !== 0) return emailOrder;
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
-    return a.id - b.id;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'name':
+          delta = displayName(a.name).localeCompare(displayName(b.name), undefined, { sensitivity: 'base' });
+          break;
+        case 'adTypeCode':
+          delta = getAdvertiserAdTypeNames(a, adTypeNameById).localeCompare(getAdvertiserAdTypeNames(b, adTypeNameById), undefined, { sensitivity: 'base' });
+          break;
+        case 'contact':
+          delta = (a.contact ?? '').localeCompare(b.contact ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'phone':
+          delta = (a.phone ?? '').localeCompare(b.phone ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'email':
+          delta = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
+    }
+    return String(a.id).localeCompare(String(b.id));
   });
 
   const openCreate = () => {
@@ -357,6 +343,13 @@ export function AdvertiserList() {
     setForm(advertiserFormFromRecord(record, firstAdTypeId));
     setFormError('');
     setFormOpen(true);
+    setHasDeps(null);
+    getAdvertiserDependencies(String(record.id))
+      .then((deps: any) => {
+        const total = Object.values(deps as Record<string, number>).reduce((s: number, v: number) => s + v, 0);
+        setHasDeps(total > 0);
+      })
+      .catch(() => setHasDeps(false));
   };
 
   const submitForm = async () => {
@@ -398,11 +391,27 @@ export function AdvertiserList() {
     }
   };
 
-  const removeRecord = (row?: Advertiser) => {
-    const target = row ?? editing;
-    if (!target) return;
+  const removeRecord = async () => {
+    if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
+    if (canHardDelete && hasDeps === false) {
+      setSaving(true);
+      setFormError('');
+      try {
+        const result = await hardDeleteAdvertiser(editing.id);
+        if (result.success) {
+          setRows(prev => prev.filter(r => r.id !== editing.id));
+          setFormOpen(false);
+        } else {
+          setFormError(result.message || 'Unexpected error');
+        }
+      } catch (err) {
+        setFormError(errorMessage(err));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     quarantine.openModal();
   };
 
@@ -423,8 +432,12 @@ export function AdvertiserList() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdvertiser')}</button></div>
           <div className="toolbar-right">
-            <select className="filter-select" value={advFilter} onChange={e => setAdvFilter(e.target.value)}>
-              <option value="">{t('all') || 'Tất cả'}</option>
+            <select className="filter-select" value={adTypeFilter} onChange={e => setAdTypeFilter(e.target.value)}>
+              <option value="">{t('selectAdOrder')}</option>
+              {adTypeOptions.map(type => <option key={type.id} value={type.id}>{displayName(type.name)}</option>)}
+            </select>
+            <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">{t('allStatuses')}</option>
               <option value="active">{t('online')}</option>
               <option value="inactive">{t('offline')}</option>
             </select>
@@ -436,19 +449,17 @@ export function AdvertiserList() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'name', label: t('advertiser'), render: r => displayName(r.name), sortDirection: nameSort, onSortClick: toggleNameSort },
-              { key: 'adTypeCode', label: t('adType'), render: r => getAdvertiserAdTypeNames(r, adTypeNameById), sortDirection: adTypeSort, onSortClick: toggleAdTypeSort },
-              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: contactSort, onSortClick: toggleContactSort },
-              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: phoneSort, onSortClick: togglePhoneSort },
-              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: emailSort, onSortClick: toggleEmailSort },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'name', label: t('advertiser'), render: r => displayName(r.name), sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+              { key: 'adTypeCode', label: t('adType'), render: r => getAdvertiserAdTypeNames(r, adTypeNameById), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
+              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
+              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
+              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
               { key: '__actions__', label: t('actions') }
             ]}
             data={visibleRows}
             onEdit={openEdit}
-            onDelete={removeRecord}
-            onHardDelete={canHardDelete ? handleHardDeleteClick : undefined}
           />
         )}
       </div>
@@ -461,31 +472,6 @@ export function AdvertiserList() {
             </div>
             <div className="modal-body">
               <div className="form-group"><label>{t('advertiserName')} <span style={{ color: 'red' }}>*</span></label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('adType')}</label>
-                <div className="checkbox-list">
-                  {adTypeOptions.map(type => {
-                    const checked = form.adTypeIds.includes(type.id);
-                    return (
-                      <label key={type.id} className="checkbox-list-item">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => setForm(prev => ({
-                            ...prev,
-                            adTypeIds: checked
-                              ? prev.adTypeIds.filter(id => id !== type.id)
-                              : [...prev.adTypeIds, type.id],
-                          }))}
-                        />
-                        <span>{displayName(type.name)}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                  {t('adTypeOptionalHint') || 'Có thể bỏ trống'}
-                </div>
-              </div>
               <div className="form-group"><label>{t('contact')}</label><input type="text" value={form.contact} onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))} /></div>
               <div className="form-group"><label>{t('phone')}</label><input type="text" value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} /></div>
               <div className="form-group"><label>{t('email')}</label><input type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} /></div>
@@ -499,6 +485,9 @@ export function AdvertiserList() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>
@@ -562,15 +551,16 @@ export function AdIdMgmt() {
   const [search, setSearch] = React.useState('');
   const [advFilter, setAdvFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
+  const [adIdFilter, setAdIdFilter] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
-  const [slotSort, setSlotSort] = React.useState<SortDirection>('asc');
-  const [statusSort, setStatusSort] = React.useState<SortDirection>('asc');
-  const [advertiserNameSort, setAdvertiserNameSort] = React.useState<SortDirection>('asc');
-  const [adTypeCodeSort, setAdTypeCodeSort] = React.useState<SortDirection>('asc');
-  const [typeSort, setTypeSort] = React.useState<SortDirection>('asc');
-  const [rateSort, setRateSort] = React.useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = React.useState<SortDirection>('asc');
+  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
   const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
   const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
   const [rows, setRows] = React.useState<AdId[]>([]);
@@ -594,6 +584,7 @@ export function AdIdMgmt() {
   const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
   const [hardDeleteError, setHardDeleteError] = React.useState('');
+  const [hasDeps, setHasDeps] = React.useState<boolean | null>(null);
 
   const openHardDelete = (row?: AdId) => {
     if (row) setEditing(row);
@@ -655,6 +646,7 @@ export function AdIdMgmt() {
     if (!adIdPresetFilter) return;
     setAdvFilter(adIdPresetFilter.ownerId);
     setOrderFilter(adIdPresetFilter.adTypeCode);
+    setAdIdFilter('');
     setTypeFilter('');
     setStatusFilter('');
     setSearch('');
@@ -662,31 +654,44 @@ export function AdIdMgmt() {
   }, [adIdPresetFilter, clearAdIdPresetFilter]);
 
   const adTypeNameById = React.useMemo(() => new Map(adTypes.map(at => [String(at.id), at.name])), [adTypes]);
-  // Display label keyed by name (DTO's adTypeCode field = AdType.name after migration)
-  const adTypeNameByName = React.useMemo(() => new Map(adTypes.map(at => [at.name, at.name])), [adTypes]);
+  const advertiserById = React.useMemo(
+    () => new Map(advertisers.map(a => [String(a.id), a])),
+    [advertisers]
+  );
+  // Một AdId thuộc về nhà QC; nhà QC có nhiều đơn QC → một AdId "mang" toàn bộ đơn QC của nhà sở hữu.
+  const adIdAdTypeNames = React.useCallback(
+    (row: AdId): string[] => {
+      const owner = advertiserById.get(String(row.advertiserId));
+      return owner ? getAdvertiserAdTypeNameList(owner, adTypeNameById) : [];
+    },
+    [advertiserById, adTypeNameById]
+  );
   const selectedAdvertiser = React.useMemo(
-    () => advertisers.find(advertiser => advertiser.id === Number(advFilter)),
+    () => advertisers.find(advertiser => String(advertiser.id) === String(advFilter)),
     [advertisers, advFilter]
   );
-  const selectedAdvertiserAdTypeIds = React.useMemo(
-    () => selectedAdvertiser ? getAdvertiserAdTypeIds(selectedAdvertiser) : [],
-    [selectedAdvertiser]
-  );
   const adTypeScopedRows = React.useMemo(
-    () => orderFilter ? rows.filter(row => row.adTypeCode === orderFilter) : rows,
-    [orderFilter, rows]
+    () => orderFilter ? rows.filter(row => adIdAdTypeNames(row).includes(orderFilter)) : rows,
+    [orderFilter, rows, adIdAdTypeNames]
   );
   const advertiserOptions = React.useMemo(
-    () => advertisers.filter(advertiser => !orderFilter || getAdvertiserAdTypeNames(advertiser, adTypeNameByName).includes(orderFilter)),
-    [advertisers, orderFilter, adTypeNameByName]
+    () => advertisers.filter(advertiser => !orderFilter || getAdvertiserAdTypeNameList(advertiser, adTypeNameById).includes(orderFilter)),
+    [advertisers, orderFilter, adTypeNameById]
   );
   const advertiserScopedRows = React.useMemo(
     () => advFilter ? adTypeScopedRows.filter(row => String(row.advertiserId) === String(advFilter)) : adTypeScopedRows,
     [adTypeScopedRows, advFilter]
   );
-  const adTypeOptions = React.useMemo(
-    () => adTypes.filter(adType => selectedAdvertiser ? selectedAdvertiserAdTypeIds.includes(adType.id) : rows.some(row => row.adTypeCode === adType.name)),
-    [adTypes, rows, selectedAdvertiser, selectedAdvertiserAdTypeIds]
+  const adTypeOptions = React.useMemo(() => {
+    const names = selectedAdvertiser
+      ? getAdvertiserAdTypeNameList(selectedAdvertiser, adTypeNameById)
+      : rows.flatMap(row => adIdAdTypeNames(row));
+    // Filter so theo TÊN đơn QC → gom trùng để mỗi tên chỉ hiện 1 lần trong dropdown.
+    return Array.from(new Set(names)).filter(Boolean).map(name => ({ id: name, name }));
+  }, [rows, selectedAdvertiser, adTypeNameById, adIdAdTypeNames]);
+  const adIdOptions = React.useMemo(
+    () => advertiserScopedRows.map(row => ({ id: String(row.id), name: row.slot })).filter(item => item.name),
+    [advertiserScopedRows]
   );
   const typeOptions = React.useMemo(
     () => Array.from(new Set(advertiserScopedRows.map(row => row.type).filter(Boolean))),
@@ -694,12 +699,13 @@ export function AdIdMgmt() {
   );
   const keyword = normalizeText(search);
   const visibleRows = advertiserScopedRows.filter(row => {
+    if (adIdFilter && String(row.id) !== adIdFilter) return false;
     if (typeFilter && row.type !== typeFilter) return false;
     if (statusFilter && row.status !== statusFilter) return false;
     if (!keyword) return true;
     const values = [
       row.advertiserName,
-      adTypeNameByName.get(row.adTypeCode ?? '') ?? row.adTypeCode,
+      adIdAdTypeNames(row).join(', '),
       row.slot,
       formatBillingMethodLabel(row.type),
       row.rate,
@@ -707,59 +713,45 @@ export function AdIdMgmt() {
     ];
     return values.some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
   }).sort((a, b) => {
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
-    const slotA = a.slot ?? '';
-    const slotB = b.slot ?? '';
-    const slotDelta = slotA.localeCompare(slotB, undefined, { sensitivity: 'base' });
-    const slotOrder = slotSort === 'asc' ? slotDelta : -slotDelta;
-    if (slotOrder !== 0) return slotOrder;
-    const advA = displayName(a.advertiserName ?? '');
-    const advB = displayName(b.advertiserName ?? '');
-    const advDelta = advA.localeCompare(advB, undefined, { sensitivity: 'base' });
-    const advOrder = advertiserNameSort === 'asc' ? advDelta : -advDelta;
-    if (advOrder !== 0) return advOrder;
-    const adTypeA = adTypeNameByName.get(a.adTypeCode ?? '') ?? a.adTypeCode ?? '';
-    const adTypeB = adTypeNameByName.get(b.adTypeCode ?? '') ?? b.adTypeCode ?? '';
-    const adTypeDelta = adTypeA.localeCompare(adTypeB, undefined, { sensitivity: 'base' });
-    const adTypeOrder = adTypeCodeSort === 'asc' ? adTypeDelta : -adTypeDelta;
-    if (adTypeOrder !== 0) return adTypeOrder;
-    const typeA = a.type ?? '';
-    const typeB = b.type ?? '';
-    const typeDelta = typeA.localeCompare(typeB, undefined, { sensitivity: 'base' });
-    const typeOrder = typeSort === 'asc' ? typeDelta : -typeDelta;
-    if (typeOrder !== 0) return typeOrder;
-    const rateA = a.rate;
-    const rateB = b.rate;
-    if (rateA == null && rateB != null) return rateSort === 'asc' ? 1 : -1;
-    if (rateA != null && rateB == null) return rateSort === 'asc' ? -1 : 1;
-    if (rateA != null && rateB != null) {
-      const rateDelta = rateA - rateB;
-      const rateOrder = rateSort === 'asc' ? rateDelta : -rateDelta;
-      if (rateOrder !== 0) return rateOrder;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'slot':
+          delta = (a.slot ?? '').localeCompare(b.slot ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'advertiserName':
+          delta = displayName(a.advertiserName ?? '').localeCompare(displayName(b.advertiserName ?? ''), undefined, { sensitivity: 'base' });
+          break;
+        case 'adTypeCode':
+          delta = adIdAdTypeNames(a).join(', ').localeCompare(adIdAdTypeNames(b).join(', '), undefined, { sensitivity: 'base' });
+          break;
+        case 'type':
+          delta = (a.type ?? '').localeCompare(b.type ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'rate': {
+          if (a.rate == null && b.rate != null) return sortState.dir === 'asc' ? 1 : -1;
+          if (a.rate != null && b.rate == null) return sortState.dir === 'asc' ? -1 : 1;
+          if (a.rate != null && b.rate != null) {
+            const d = a.rate - b.rate;
+            if (d !== 0) return sortState.dir === 'asc' ? d : -d;
+          }
+          break;
+        }
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
-    return a.id - b.id;
+    return String(a.id).localeCompare(String(b.id));
   });
-
-  const toggleSlotSort = () => setSlotSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleStatusSort = () => setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleAdvertiserNameSort = () => setAdvertiserNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleAdTypeCodeSort = () => setAdTypeCodeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleTypeSort = () => setTypeSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleRateSort = () => setRateSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   const adIdColumns: CsvColumn<AdId>[] = [
     { label: t('advertiser'), value: r => displayName(r.advertiserName) },
-    { label: t('adType'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
+    { label: t('adType'), value: r => adIdAdTypeNames(r).map(name => displayName(name)).join(', ') },
     { label: t('adId'), value: r => r.slot ?? '' },
     { label: t('type'), value: r => r.type ?? '' },
     { label: t('rate'), value: r => formatMgmtRate(r.type, r.rate) },
@@ -768,7 +760,7 @@ export function AdIdMgmt() {
 
   React.useEffect(() => {
     if (!advFilter) return;
-    if (!advertiserOptions.some(advertiser => advertiser.id === Number(advFilter))) {
+    if (!advertiserOptions.some(advertiser => String(advertiser.id) === String(advFilter))) {
       setAdvFilter('');
     }
   }, [advFilter, advertiserOptions]);
@@ -784,7 +776,7 @@ export function AdIdMgmt() {
 
   const openCreate = () => {
     setEditing(null);
-    const advertiser = advertisers.find(item => item.id === Number(advFilter));
+    const advertiser = advertisers.find(item => String(item.id) === String(advFilter));
     const ids = advertiser ? getAdvertiserAdTypeIds(advertiser) : [];
     // If orderFilter (which still carries display name) matches an advertiser adType name, resolve to id
     const orderFilterName = orderFilter;
@@ -799,6 +791,13 @@ export function AdIdMgmt() {
     setForm(adIdFormFromRecord(record));
     setFormError('');
     setFormOpen(true);
+    setHasDeps(null);
+    getAdIdDependencies(String(record.id))
+      .then((deps: any) => {
+        const total = Object.values(deps as Record<string, number>).reduce((s: number, v: number) => s + v, 0);
+        setHasDeps(total > 0);
+      })
+      .catch(() => setHasDeps(false));
   };
 
   const submitForm = async () => {
@@ -838,7 +837,7 @@ export function AdIdMgmt() {
       }
     }
     const payload: CreateAdIdInput | UpdateAdIdInput = {
-      advertiserId: Number(form.advertiserId),
+      advertiserId: form.advertiserId,
       adTypeId: form.adTypeId,
       slot: form.slot.trim(),
       type,
@@ -865,11 +864,27 @@ export function AdIdMgmt() {
     }
   };
 
-  const removeRecord = (row?: AdId) => {
-    const target = row ?? editing;
-    if (!target) return;
+  const removeRecord = async () => {
+    if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
+    if (canHardDelete && hasDeps === false) {
+      setSaving(true);
+      setFormError('');
+      try {
+        const result = await hardDeleteAdId(editing.id);
+        if (result.success) {
+          setRows(prev => prev.filter(r => r.id !== editing.id));
+          setFormOpen(false);
+        } else {
+          setFormError(result.message || 'Unexpected error');
+        }
+      } catch (err) {
+        setFormError(errorMessage(err));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     quarantine.openModal();
   };
 
@@ -891,8 +906,9 @@ export function AdIdMgmt() {
         <div className="toolbar">
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
           <div className="toolbar-right">
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.id} value={type.name}>{displayName(type.name)}</option>)}</select>
-            <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
+            <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setAdIdFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setAdIdFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.id} value={type.name}>{displayName(type.name)}</option>)}</select>
+            <select className="filter-select" value={adIdFilter} onChange={e => setAdIdFilter(e.target.value)}><option value="">{t('selectAdId')}</option>{adIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{formatBillingMethodLabel(type)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
@@ -903,19 +919,17 @@ export function AdIdMgmt() {
           <Table
             columns={[
               { key: '__no__', label: t('no') },
-              { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName), sortDirection: advertiserNameSort, onSortClick: toggleAdvertiserNameSort },
-              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? ''), sortDirection: adTypeCodeSort, onSortClick: toggleAdTypeCodeSort },
-              { key: 'slot', label: t('adId'), sortDirection: slotSort, onSortClick: toggleSlotSort },
-              { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} />, sortDirection: typeSort, onSortClick: toggleTypeSort },
-              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: rateSort, onSortClick: toggleRateSort },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: statusSort, onSortClick: toggleStatusSort },
+              { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName), sortDirection: sortState?.col === 'advertiserName' ? sortState.dir : null, onSortClick: () => toggleSort('advertiserName') },
+              { key: 'adTypeCode', label: t('adType'), render: r => adIdAdTypeNames(r).map(n => displayName(n)).join(', '), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
+              { key: 'slot', label: t('adId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
+              { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} />, sortDirection: sortState?.col === 'type' ? sortState.dir : null, onSortClick: () => toggleSort('type') },
+              { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },
+              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
+              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
               { key: '__actions__', label: t('actions') },
             ]}
             data={visibleRows}
             onEdit={openEdit}
-            onDelete={removeRecord}
-            onHardDelete={canHardDelete ? openHardDelete : undefined}
           />
         )}
       </div>
@@ -973,6 +987,9 @@ export function AdIdMgmt() {
               {formError && <div className="form-error">{formError}</div>}
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
             </div>

@@ -14,73 +14,12 @@ export interface Column<T> {
 
 interface TableProps<T> {
   onEdit?: (row: T) => void;
-  onDelete?: (row: T) => void;
-  onHardDelete?: (row: T) => void;
   columns: Column<T>[];
   data: T[];
   emptyText?: string;
 }
 
-function ActionMenu<T>({ row, onEdit, onDelete, onHardDelete, editLabel, deleteLabel, hardDeleteLabel }: {
-  row: T;
-  onEdit?: (row: T) => void;
-  onDelete?: (row: T) => void;
-  onHardDelete?: (row: T) => void;
-  editLabel: string;
-  deleteLabel: string;
-  hardDeleteLabel: string;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const wrapRef = React.useRef<HTMLDivElement | null>(null);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const close = () => setOpen(false);
-
-  return (
-    <div ref={wrapRef} className="action-menu-wrap">
-      <button
-        type="button"
-        className="action-btn"
-        title={editLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(prev => !prev)}
-      >✏️</button>
-      {open && (
-        <div className="action-menu" role="menu">
-          {onEdit && (
-            <button type="button" className="action-menu-item" role="menuitem" onClick={() => { close(); onEdit(row); }}>
-              <span className="action-menu-icon">✏️</span>
-              <span>{editLabel}</span>
-            </button>
-          )}
-          {onDelete && (
-            <button type="button" className="action-menu-item action-menu-item-danger" role="menuitem" onClick={() => { close(); onDelete(row); }}>
-              <span className="action-menu-icon">🗑️</span>
-              <span>{deleteLabel}</span>
-            </button>
-          )}
-          {onHardDelete && (
-            <button type="button" className="action-menu-item action-menu-item-danger" role="menuitem" onClick={() => { close(); onHardDelete(row); }}>
-              <span className="action-menu-icon">🗑️</span>
-              <span>{hardDeleteLabel}</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete, onHardDelete }: TableProps<T>) {
+export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProps<T>) {
   const { t } = useAppContext();
 
   if (!data.length) {
@@ -120,18 +59,15 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete, o
                 if (c.key === '__no__') return <td key={colIndex} className="td-no">{rowIndex + 1}</td>;
                 if (c.key === '__actions__') {
                   if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;
-                  if (!onEdit && !onDelete && !onHardDelete) return <td key={colIndex}>—</td>;
+                  if (!onEdit) return <td key={colIndex}>—</td>;
                   return (
                     <td key={colIndex}>
-                      <ActionMenu
-                        row={row}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        onHardDelete={onHardDelete}
-                        editLabel={t('edit')}
-                        deleteLabel={t('delete')}
-                        hardDeleteLabel={t('hardDelete')}
-                      />
+                      <button
+                        type="button"
+                        className="action-btn"
+                        title={t('edit')}
+                        onClick={() => onEdit(row)}
+                      >✏️</button>
                     </td>
                   );
                 }

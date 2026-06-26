@@ -621,6 +621,20 @@ export interface ResetPasswordInput {
   password: string;
 }
 
+export interface DependencyCounts {
+  adSiteCount: number;
+  upstreamCount: number;
+  downstreamCount: number;
+  adSiteDownstreamCount: number;
+  rebateRateCount: number;
+  adSiteEventCount: number;
+  mediaAdOrderCount: number;
+  dailyInputCount: number;
+  confirmedCount: number;
+  unconfirmedCount: number;
+  quarantinedCount: number;
+}
+
 export type QuarantineScope = 'advertiser' | 'media';
 
 export interface QuarantineParams {

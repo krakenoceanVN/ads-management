@@ -4,6 +4,7 @@ import { mapAdvertiser } from '../mappers';
 const advertiserInclude = {
   defaultAdType: true,
   adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' as const } },
+  ownedAdTypes: { orderBy: { id: 'asc' as const } },
 };
 
 export async function listAdvertisers() {

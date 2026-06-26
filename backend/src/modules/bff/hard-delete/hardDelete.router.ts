@@ -14,6 +14,10 @@ import {
   deleteMedia,
   deleteMediaAdOrder,
   deleteMediaId,
+  getAdvertiserDependencies,
+  getAdTypeDependencies,
+  getAdIdDependencies,
+  getMediaDependencies,
 } from './hardDelete.controller';
 import { requireAuth } from '../../../middleware/requireAuth';
 import { requirePermission } from '../../../middleware/requirePermission';
@@ -54,5 +58,27 @@ export function hardDeleteRouter(router: Router) {
     requireAuth,
     requirePermission('masterData.hardDelete'),
     asyncHandler(deleteMediaId)
+  );
+
+  // Read-only dependency checks (no masterData.hardDelete permission required).
+  router.get(
+    '/hard-delete/advertisers/:id/dependencies',
+    requireAuth,
+    asyncHandler(getAdvertiserDependencies)
+  );
+  router.get(
+    '/hard-delete/ad-types/:id/dependencies',
+    requireAuth,
+    asyncHandler(getAdTypeDependencies)
+  );
+  router.get(
+    '/hard-delete/ad-ids/:id/dependencies',
+    requireAuth,
+    asyncHandler(getAdIdDependencies)
+  );
+  router.get(
+    '/hard-delete/media/:id/dependencies',
+    requireAuth,
+    asyncHandler(getMediaDependencies)
   );
 }

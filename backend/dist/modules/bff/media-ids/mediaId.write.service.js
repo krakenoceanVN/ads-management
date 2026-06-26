@@ -40,7 +40,7 @@ const client_1 = require("../../../shared/prisma/client");
 const mappers_1 = require("../mappers");
 const AppError_1 = require("../../../shared/errors/AppError");
 async function createMediaId(input) {
-    const { adSiteId, downstreamId, customPrice, pctHal, mediaAdTypeId, mediaIdName } = input;
+    const { adSiteId, downstreamId, customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
     if (!adSiteId)
         throw new AppError_1.BadRequestError('adSiteId is required');
     if (!downstreamId)
@@ -90,6 +90,7 @@ async function createMediaId(input) {
             pctHal: pctHal != null ? new Prisma.Decimal(pctHal) : null,
             mediaAdTypeId: mediaAdTypeId ?? null,
             mediaIdName: mediaIdName ?? null,
+            status: status ?? 'active',
         },
         include: {
             adSite: { include: { upstream: { include: { defaultAdType: true } } } },
@@ -100,7 +101,7 @@ async function createMediaId(input) {
     return (0, mappers_1.mapMediaId)(row);
 }
 async function updateMediaId(junctionId, input) {
-    const { customPrice, pctHal, mediaAdTypeId, mediaIdName } = input;
+    const { customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
     const { Prisma } = await Promise.resolve().then(() => __importStar(require('@prisma/client')));
     // Validate mediaAdTypeId if provided — must exist in AdType
     if (mediaAdTypeId) {
@@ -123,6 +124,7 @@ async function updateMediaId(junctionId, input) {
                 : {}),
             ...(mediaAdTypeId !== undefined ? { mediaAdTypeId: mediaAdTypeId ?? null } : {}),
             ...(mediaIdName !== undefined ? { mediaIdName: mediaIdName ?? null } : {}),
+            ...(status !== undefined ? { status } : {}),
         },
         include: {
             adSite: { include: { upstream: { include: { defaultAdType: true } } } },

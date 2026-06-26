@@ -7,6 +7,7 @@ const mappers_1 = require("../mappers");
 const advertiserInclude = {
     defaultAdType: true,
     adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } },
+    adSites: { where: { isArchived: false }, select: { id: true, name: true }, orderBy: { id: 'asc' } },
 };
 async function listAdvertisers() {
     const rows = await client_1.prisma.upstream.findMany({

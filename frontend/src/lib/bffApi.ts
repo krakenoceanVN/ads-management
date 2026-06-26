@@ -3,6 +3,7 @@ import type {
   Advertiser,
   AdvertiserEntryRow,
   AdvertiserReportParams,
+  DependencyCounts,
   AdvertiserSettlementParams,
   AdvertiserSettlementRow,
   AdType,
@@ -596,3 +597,16 @@ export const hardDeleteAdId = (id: string | number) => hardDelete('ad-ids', id);
 export const hardDeleteMedia = (id: string | number) => hardDelete('media', id);
 export const hardDeleteMediaAdOrder = (id: string | number) => hardDelete('media-ad-orders', id);
 export const hardDeleteMediaId = (id: string | number) => hardDelete('media-ids', id);
+
+export async function getAdvertiserDependencies(id: string): Promise<DependencyCounts> {
+  return unwrapData(await request<BffDataResponse<DependencyCounts>>(`/api/bff/hard-delete/advertisers/${id}/dependencies`, { method: 'GET' }));
+}
+export async function getAdTypeDependencies(id: string): Promise<DependencyCounts> {
+  return unwrapData(await request<BffDataResponse<DependencyCounts>>(`/api/bff/hard-delete/ad-types/${id}/dependencies`, { method: 'GET' }));
+}
+export async function getAdIdDependencies(id: string): Promise<DependencyCounts> {
+  return unwrapData(await request<BffDataResponse<DependencyCounts>>(`/api/bff/hard-delete/ad-ids/${id}/dependencies`, { method: 'GET' }));
+}
+export async function getMediaDependencies(id: string): Promise<DependencyCounts> {
+  return unwrapData(await request<BffDataResponse<DependencyCounts>>(`/api/bff/hard-delete/media/${id}/dependencies`, { method: 'GET' }));
+}

@@ -11,7 +11,7 @@ export async function getAll(req: Request, res: Response) {
   const { advertiserId, adTypeId, type, archived } = req.query;
 
   const filters = {
-    advertiserId: advertiserId ? parseInt(String(advertiserId), 10) : undefined,
+    advertiserId: advertiserId ? String(advertiserId) : undefined,
     adTypeId: adTypeId ? String(adTypeId) : undefined,
     type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,

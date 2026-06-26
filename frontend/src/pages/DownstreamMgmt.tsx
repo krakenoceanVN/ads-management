@@ -9,11 +9,8 @@ import {
   createDownstream,
   updateDownstream,
   deleteDownstream,
-  listAdTypes,
 } from '../lib/bffApi';
-import type { AdType, DownstreamDto, EntityStatus } from '../lib/bffTypes';
-
-const DOWNSTREAM_TYPES = ['ML', 'LE', 'YIYI'];
+import type { DownstreamDto, EntityStatus } from '../lib/bffTypes';
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
@@ -34,7 +31,6 @@ function getDownstreamAdTypeCodes(record: DownstreamDto): string[] {
 interface EditState {
   id?: number;
   adTypeIds: string[];
-  downstreamType: string;
   name: string;
   contact: string;
   phone: string;
@@ -89,21 +85,21 @@ export function DownstreamMgmt() {
   const { t, displayName, can } = useAppContext();
   const canWrite = can('media.update');
   const [rows, setRows] = useState<DownstreamDto[]>([]);
-  const [adTypes, setAdTypes] = useState<AdType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterAdType, setFilterAdType] = useState('');
+  const [filterDownstream, setFilterDownstream] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [statusSort, setStatusSort] = useState<SortDirection>('asc');
-  const [nameSort, setNameSort] = useState<SortDirection>('asc');
-  const [contactSort, setContactSort] = useState<SortDirection>('asc');
-  const [phoneSort, setPhoneSort] = useState<SortDirection>('asc');
-  const [emailSort, setEmailSort] = useState<SortDirection>('asc');
-  const [notesSort, setNotesSort] = useState<SortDirection>('asc');
+  const [sortState, setSortState] = useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
+  const toggleSort = (col: string) => {
+    setSortState(prev => {
+      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+      return { col, dir: 'asc' };
+    });
+  };
   const [editing, setEditing] = useState<DownstreamDto | null>(null);
 
   const quarantine = useQuarantineAction({
@@ -112,24 +108,12 @@ export function DownstreamMgmt() {
     targetName: editing?.downstreamType ?? '',
   });
 
-  const toggleStatusSort = () => {
-    setStatusSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  };
-  const toggleNameSort = () => {
-    setNameSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  };
-  const toggleContactSort = () => setContactSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const togglePhoneSort = () => setPhoneSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleEmailSort = () => setEmailSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-  const toggleNotesSort = () => setNotesSort(prev => (prev === 'asc' ? 'desc' : 'asc'));
-
   const loadRows = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [ds, ats] = await Promise.all([listDownstreams(), listAdTypes()]);
+      const ds = await listDownstreams();
       setRows(ds ?? []);
-      setAdTypes(ats ?? []);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -141,25 +125,9 @@ export function DownstreamMgmt() {
     void loadRows();
   }, [loadRows]);
 
-  const adTypeName = useCallback(
-    (id: string) => displayName(adTypes.find(a => a.id === id)?.name ?? id),
-    [adTypes, displayName],
-  );
-
-  const getAdTypeNames = useCallback(
-    (record: DownstreamDto) => {
-      const codes = getDownstreamAdTypeCodes(record);
-      return codes.map(code => adTypeName(code)).join(', ');
-    },
-    [adTypeName],
-  );
-
   const keyword = normalizeText(search);
   const filteredRows = useMemo(() => rows.filter(r => {
-    if (filterAdType) {
-      const ids = getDownstreamAdTypeCodes(r);
-      if (!ids.includes(filterAdType)) return false;
-    }
+    if (filterDownstream && String(r.id) !== filterDownstream) return false;
     if (filterStatus && r.status !== filterStatus) return false;
     if (!keyword) return true;
     return [
@@ -173,38 +141,32 @@ export function DownstreamMgmt() {
       r.status,
     ].some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
   }).sort((a, b) => {
-    const aActive = a.status === 'active' ? 1 : 0;
-    const bActive = b.status === 'active' ? 1 : 0;
-    const statusDelta = aActive - bActive;
-    const statusOrder = statusSort === 'asc' ? statusDelta : -statusDelta;
-    if (statusOrder !== 0) return statusOrder;
-    const nameA = a.name ?? a.downstreamType ?? '';
-    const nameB = b.name ?? b.downstreamType ?? '';
-    const nameDelta = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-    const nameOrder = nameSort === 'asc' ? nameDelta : -nameDelta;
-    if (nameOrder !== 0) return nameOrder;
-    const contactA = a.contact ?? '';
-    const contactB = b.contact ?? '';
-    const contactDelta = contactA.localeCompare(contactB, undefined, { sensitivity: 'base' });
-    const contactOrder = contactSort === 'asc' ? contactDelta : -contactDelta;
-    if (contactOrder !== 0) return contactOrder;
-    const phoneA = a.phone ?? '';
-    const phoneB = b.phone ?? '';
-    const phoneDelta = phoneA.localeCompare(phoneB, undefined, { sensitivity: 'base' });
-    const phoneOrder = phoneSort === 'asc' ? phoneDelta : -phoneDelta;
-    if (phoneOrder !== 0) return phoneOrder;
-    const emailA = a.email ?? '';
-    const emailB = b.email ?? '';
-    const emailDelta = emailA.localeCompare(emailB, undefined, { sensitivity: 'base' });
-    const emailOrder = emailSort === 'asc' ? emailDelta : -emailDelta;
-    if (emailOrder !== 0) return emailOrder;
-    const notesA = a.notes ?? '';
-    const notesB = b.notes ?? '';
-    const notesDelta = notesA.localeCompare(notesB, undefined, { sensitivity: 'base' });
-    const notesOrder = notesSort === 'asc' ? notesDelta : -notesDelta;
-    if (notesOrder !== 0) return notesOrder;
+    if (sortState) {
+      let delta = 0;
+      switch (sortState.col) {
+        case 'name':
+          delta = (a.name ?? a.downstreamType ?? '').localeCompare(b.name ?? b.downstreamType ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'contact':
+          delta = (a.contact ?? '').localeCompare(b.contact ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'phone':
+          delta = (a.phone ?? '').localeCompare(b.phone ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'email':
+          delta = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'notes':
+          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
+          break;
+      }
+      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
+    }
     return a.id - b.id;
-  }), [rows, filterAdType, filterStatus, keyword, getAdTypeNames, statusSort, nameSort, contactSort, phoneSort, emailSort, notesSort, displayName]);
+  }), [rows, filterDownstream, filterStatus, keyword, sortState, displayName]);
 
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [
     { label: t('downstreamType') + ' / ' + t('media'), value: r => r.downstreamType },
@@ -220,7 +182,6 @@ export function DownstreamMgmt() {
     setEditing(null);
     setEditModal({
       adTypeIds: [],
-      downstreamType: '',
       name: '',
       contact: '',
       phone: '',
@@ -236,8 +197,7 @@ export function DownstreamMgmt() {
     setEditModal({
       id: row.id,
       adTypeIds: getDownstreamAdTypeCodes(row),
-      downstreamType: row.downstreamType,
-      name: row.name ?? '',
+      name: row.name || row.downstreamType,
       contact: row.contact ?? '',
       phone: row.phone ?? '',
       email: row.email ?? '',
@@ -253,24 +213,12 @@ export function DownstreamMgmt() {
     setEditing(null);
   };
 
-  const toggleAdType = (id: string) => {
-    setEditModal(prev => {
-      if (!prev) return prev;
-      const exists = prev.adTypeIds.includes(id);
-      return {
-        ...prev,
-        adTypeIds: exists
-          ? prev.adTypeIds.filter(c => c !== id)
-          : [...prev.adTypeIds, id],
-      };
-    });
-  };
-
   const handleSave = async () => {
     if (!editModal) return;
-    const { id, adTypeIds, downstreamType, name, contact, phone, email, notes, status } = editModal;
+    const { id, adTypeIds, name, contact, phone, email, notes, status } = editModal;
 
-    if (!downstreamType.trim()) { setEditError(t('requiredFields')); return; }
+    const trimmedName = name.trim();
+    if (!trimmedName) { setEditError(t('requiredFields')); return; }
     if (email.trim() && !isValidEmailForm(email)) {
       setEditError(t('invalidEmail') || 'Email không hợp lệ');
       return;
@@ -281,8 +229,8 @@ export function DownstreamMgmt() {
     try {
       const trimmed = (s: string) => s.trim() || null;
       const common = {
-        downstreamType,
-        name: trimmed(name),
+        downstreamType: trimmedName,
+        name: trimmedName,
         contact: trimmed(contact),
         phone: trimmed(phone),
         email: trimmed(email),
@@ -305,11 +253,9 @@ export function DownstreamMgmt() {
     }
   };
 
-  const removeRecord = (row?: DownstreamDto) => {
-    const target = row ?? editing;
-    if (!target) return;
+  const removeRecord = () => {
+    if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    setEditing(target);
     quarantine.openModal();
   };
 
@@ -325,17 +271,17 @@ export function DownstreamMgmt() {
 
   const columns: Column<DownstreamDto>[] = [
     { key: '__no__', label: t('no') },
-    { key: 'name', label: t('mediaName'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.name || r.downstreamType}</code>, sortDirection: nameSort, onSortClick: toggleNameSort },
-    { key: 'contact', label: t('contact'), render: (r: DownstreamDto) => displayName(r.contact ?? '-'), sortDirection: contactSort, onSortClick: toggleContactSort },
-    { key: 'phone', label: t('phone'), render: (r: DownstreamDto) => r.phone ?? '-', sortDirection: phoneSort, onSortClick: togglePhoneSort },
-    { key: 'email', label: t('email'), render: (r: DownstreamDto) => r.email ?? '-', sortDirection: emailSort, onSortClick: toggleEmailSort },
-    { key: 'notes', label: t('notes'), render: (r: DownstreamDto) => displayName(r.notes ?? '-'), sortDirection: notesSort, onSortClick: toggleNotesSort },
+    { key: 'name', label: t('mediaName'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.name || r.downstreamType}</code>, sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+    { key: 'contact', label: t('contact'), render: (r: DownstreamDto) => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
+    { key: 'phone', label: t('phone'), render: (r: DownstreamDto) => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
+    { key: 'email', label: t('email'), render: (r: DownstreamDto) => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
+    { key: 'notes', label: t('notes'), render: (r: DownstreamDto) => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
     {
       key: 'status',
       label: t('status'),
       render: (r: DownstreamDto) => <StatusToggle status={r.status === 'active'} onChange={active => updateStatus(r, active)} />,
-      sortDirection: statusSort,
-      onSortClick: toggleStatusSort,
+      sortDirection: sortState?.col === 'status' ? sortState.dir : null,
+      onSortClick: () => toggleSort('status'),
     },
     {
       key: '__actions__',
@@ -357,54 +303,14 @@ export function DownstreamMgmt() {
             <div className="modal-body">
               {editError && <div className="form-error" style={{ marginBottom: '8px' }}>{editError}</div>}
               <div className="form-group">
-                <label>{t('downstreamType')} <span style={{ color: 'red' }}>*</span></label>
-                <input
-                  className="input"
-                  list="downstream-type-suggestions"
-                  value={editModal.downstreamType}
-                  placeholder="ML / LE / YIYI / ..."
-                  maxLength={20}
-                  style={{ textTransform: 'uppercase' }}
-                  disabled={saving}
-                  onChange={e => setEditModal(prev => prev ? { ...prev, downstreamType: e.target.value.toUpperCase() } : prev)}
-                />
-                <datalist id="downstream-type-suggestions">
-                  {DOWNSTREAM_TYPES.map(type => <option key={type} value={type} />)}
-                </datalist>
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                  {t('downstreamTypeHint')}
-                </div>
-              </div>
-              <div className="form-group">
-                <label>{t('mediaName')}</label>
+                <label>{t('downstreamName')} <span style={{ color: 'red' }}>*</span></label>
                 <input
                   className="input"
                   value={editModal.name}
+                  maxLength={100}
                   disabled={saving}
                   onChange={e => setEditModal(prev => prev ? { ...prev, name: e.target.value } : prev)}
                 />
-              </div>
-              <div className="form-group">
-                <label>{t('adType')}</label>
-                <div className="checkbox-list">
-                  {adTypes.map(type => {
-                    const checked = editModal.adTypeIds.includes(type.id);
-                    return (
-                      <label key={type.id} className="checkbox-list-item">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={saving}
-                          onChange={() => toggleAdType(type.id)}
-                        />
-                        <span>{displayName(type.name)}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-sub)', marginTop: '4px' }}>
-                  {t('adTypeOptionalHint') || 'Có thể bỏ trống'}
-                </div>
               </div>
               <div className="form-group">
                 <label>{t('contact')}</label>
@@ -456,6 +362,9 @@ export function DownstreamMgmt() {
               </div>
             </div>
             <div className="modal-footer">
+              {editing && (
+                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
+              )}
               <button className="btn-outline" onClick={closeModal} disabled={saving}>{t('cancel')}</button>
               <button className="btn-primary" onClick={() => void handleSave()} disabled={saving}>
                 {saving ? '...' : t('submit')}
@@ -477,9 +386,9 @@ export function DownstreamMgmt() {
               )}
             </div>
             <div className="toolbar-right">
-              <select className="filter-select" value={filterAdType} onChange={e => setFilterAdType(e.target.value)}>
-                <option value="">{t('allAdTypes')}</option>
-                {adTypes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              <select className="filter-select" value={filterDownstream} onChange={e => setFilterDownstream(e.target.value)}>
+                <option value="">{t('selectDownstream')}</option>
+                {rows.map(d => <option key={d.id} value={String(d.id)}>{displayName(d.name || d.downstreamType)}</option>)}
               </select>
               <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>
@@ -496,7 +405,6 @@ export function DownstreamMgmt() {
               data={filteredRows}
               emptyText={filteredRows.length === 0 && !loading ? (t('noData') || '—') : undefined}
               onEdit={canWrite ? openEdit : undefined}
-              onDelete={canWrite ? removeRecord : undefined}
             />
           )}
         </div>

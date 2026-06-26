@@ -1,1 +1,1 @@
-{"version":3,"file":"hardDelete.router.d.ts","sourceRoot":"","sources":["../../../../src/modules/bff/hard-delete/hardDelete.router.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAatC,wBAAgB,gBAAgB,CAAC,MAAM,EAAE,MAAM,QAqC9C"}
+{"version":3,"file":"hardDelete.router.d.ts","sourceRoot":"","sources":["../../../../src/modules/bff/hard-delete/hardDelete.router.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAiBtC,wBAAgB,gBAAgB,CAAC,MAAM,EAAE,MAAM,QA2D9C"}

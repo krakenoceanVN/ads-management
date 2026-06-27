@@ -93,7 +93,7 @@ model UpstreamAdType {
 model MediaAdOrder {
   id           String   @id
   downstreamId String
-  adTypeId     String
+  adTypeId     String?
   seq          Int
   name         String
   notes        String?
@@ -102,9 +102,10 @@ model MediaAdOrder {
   updatedAt    DateTime  @updatedAt
 
   downstream Downstream @relation(fields: [downstreamId], references: [id])
-  adType     AdType     @relation(fields: [adTypeId], references: [id])
+  adType     AdType?    @relation(fields: [adTypeId], references: [id])
+  mediaIds   AdSiteDownstream[]
 
-  @@unique([downstreamId, adTypeId, seq])
+  @@unique([downstreamId, seq])
   @@index([downstreamId])
   @@index([adTypeId])
   @@index([status])
@@ -175,6 +176,7 @@ model AdSiteDownstream {
   id                String   @id
   adSiteId          String
   downstreamId      String
+  mediaAdOrderId    String?   // FK tới MediaAdOrder — đơn QC media mà MediaId này thuộc về
   customPrice       Decimal?  // giá tự điền cho hạ nguồn
   pctHal            Decimal?  // tỷ lệ chia riêng cho cặp (AdSite, Downstream); null = dùng DownstreamPeriod.pctHal
   notes             String?   // ghi chú cho từng junction (mục 2.3)
@@ -185,11 +187,13 @@ model AdSiteDownstream {
   adSite     AdSite     @relation(fields: [adSiteId], references: [id], onDelete: Cascade)
   downstream Downstream @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
   mediaAdType AdType?   @relation(fields: [mediaAdTypeId], references: [id], onDelete: SetNull)
+  mediaAdOrder MediaAdOrder? @relation(fields: [mediaAdOrderId], references: [id], onDelete: SetNull)
 
   @@unique([adSiteId, downstreamId])
   @@index([adSiteId])
   @@index([downstreamId])
   @@index([mediaAdTypeId])
+  @@index([mediaAdOrderId])
 }
 
 // ============================================================

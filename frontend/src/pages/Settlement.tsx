@@ -113,7 +113,7 @@ function uniqueById<T>(rows: T[], getId: (row: T) => string | number, getName: (
     const name = getName(row);
     if (id != null && name) map.set(String(id), name);
   });
-  return Array.from(map.entries()).map(([id, name]) => ({ id: Number(id), name }));
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
 }
 
 export function AdvSettlement() {
@@ -205,7 +205,7 @@ export function MediaSettlement() {
     setError('');
     getMediaSettlement({
       period,
-      mediaId: mediaId ? Number(mediaId) : undefined,
+      mediaId: mediaId ? String(mediaId) : undefined,
     })
       .then(setRows)
       .catch(err => setError(errorMessage(err)))
@@ -217,7 +217,7 @@ export function MediaSettlement() {
   }, [loadRows]);
 
   const visibleRows = mediaId
-    ? rows.filter(row => row.mediaId === Number(mediaId))
+    ? rows.filter(row => String(row.mediaId) === String(mediaId))
     : rows;
   const mediaOptions = uniqueById(rows, row => row.mediaId, row => row.media);
 

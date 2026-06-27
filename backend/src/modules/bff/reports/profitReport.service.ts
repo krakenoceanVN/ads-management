@@ -109,6 +109,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
+    ...(params.adTypeCode && { defaultAdType: { id: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -117,7 +118,6 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
       ...dateFilter,
       status: 'confirmed',
       adSite: {
-        ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
@@ -243,6 +243,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
+    ...(params.adTypeCode && { defaultAdType: { id: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -251,7 +252,6 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
       ...dateFilter,
       status: 'confirmed',
       adSite: {
-        ...(params.adTypeCode && actualAdTypeWhere(params.adTypeCode)),
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },

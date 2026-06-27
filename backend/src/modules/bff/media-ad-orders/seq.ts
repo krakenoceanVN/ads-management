@@ -1,24 +1,23 @@
 /**
  * MediaAdOrder sequence helpers.
  *
- * Mirrors ad-orders/seq.ts. The (downstreamId, adTypeId, seq) unique index
- * enforces seq uniqueness per (Downstream, AdType) pair. On P2002 we retry by
- * re-reading max(seq) for the pair.
+ * The (downstreamId, seq) unique index enforces seq uniqueness per Downstream.
+ * On P2002 we retry by re-reading max(seq) for the downstream.
  *
- * Concurrency model: Read Committed + unique index + retry-on-P2002 (same as
- * ad-orders/seq.ts). Serializable is intentionally avoided.
+ * Concurrency model: Read Committed + unique index + retry-on-P2002.
+ * Serializable is intentionally avoided.
  */
 
 import type { PrismaClient } from '@prisma/client';
 import type { MediaAdOrder as PrismaMediaAdOrder } from '@prisma/client';
-import { ConflictError } from '../../../shared/errors/AppError';
+import { ConflictError, BadRequestError } from '../../../shared/errors/AppError';
 
-const SEQ_UNIQUE_COLUMNS = ['downstreamId', 'adTypeId', 'seq'];
+const SEQ_UNIQUE_COLUMNS = ['downstreamId', 'seq'];
 const MAX_ATTEMPTS = 5;
 
 export interface CreateMediaAdOrderInput {
   downstreamId: string;
-  adTypeId: string;
+  adTypeId?: string | null;
   name?: string | null;
   notes?: string | null;
   status?: 'active' | 'inactive';
@@ -33,27 +32,22 @@ function isSeqUniqueViolation(e: unknown): boolean {
   return SEQ_UNIQUE_COLUMNS.every(col => targetArr.includes(col));
 }
 
-function padSeq(seq: number): string {
-  return String(seq).padStart(3, '0');
-}
-
 export async function generateAndCreateMediaAdOrder(
   prisma: PrismaClient,
   input: CreateMediaAdOrderInput
 ): Promise<PrismaMediaAdOrder> {
-  const userName = (input.name ?? '').trim();
+  const finalName = (input.name ?? '').trim();
+  // Tên do người dùng tự đặt, bắt buộc, không tự sinh.
+  if (!finalName) throw new BadRequestError('Tên đơn quảng cáo là bắt buộc');
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       return await prisma.$transaction(async (tx) => {
         const agg = await tx.mediaAdOrder.aggregate({
-          where: { downstreamId: input.downstreamId, adTypeId: input.adTypeId },
+          where: { downstreamId: input.downstreamId },
           _max: { seq: true },
         });
         const seq = (agg._max.seq ?? 0) + 1;
-        const adType = await tx.adType.findUnique({ where: { id: input.adTypeId }, select: { name: true } });
-        const generatedName = `${adType?.name ?? 'TYPE'}-${padSeq(seq)}`;
-        const finalName = userName || generatedName;
         // Tên đơn quảng cáo phải duy nhất toàn hệ thống (không phân biệt hoa/thường).
         const dupe = await tx.mediaAdOrder.findFirst({
           where: { name: { equals: finalName, mode: 'insensitive' } },
@@ -65,7 +59,7 @@ export async function generateAndCreateMediaAdOrder(
           data: {
             id: generateShortId(),
             downstreamId: input.downstreamId,
-            adTypeId: input.adTypeId,
+            adTypeId: input.adTypeId ?? null,
             seq,
             name: finalName,
             notes: input.notes ?? null,

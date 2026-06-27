@@ -22,22 +22,22 @@ export async function listMediaAdOrders(params?: { downstreamId?: string; adType
     orderBy: { id: 'asc' },
   });
 
-  const downstreamIds = Array.from(new Set(rows.map(r => r.downstreamId)));
-  // linkCount: số MediaId (AdSiteDownstream junction) thuộc các AdSite mà downstream này đang liên kết.
-  // Tính bằng cách đếm AdSiteDownstream rows mà adSiteId thuộc tập AdSite của downstream đó.
-  const downstreamAdSiteIds = downstreamIds.length
-    ? await prisma.adSiteDownstream.findMany({
-        where: { downstreamId: { in: downstreamIds } },
-        select: { adSiteId: true, downstreamId: true },
+  // linkCount: số MediaId (AdSiteDownstream) được gắn trực tiếp với đơn QC media này
+  // qua AdSiteDownstream.mediaAdOrderId.
+  const orderIds = rows.map(r => r.id);
+  const counts = orderIds.length
+    ? await prisma.adSiteDownstream.groupBy({
+        by: ['mediaAdOrderId'],
+        where: { mediaAdOrderId: { in: orderIds } },
+        _count: { _all: true },
       })
     : [];
-  // Count MediaId per downstream: number of AdSiteDownstream rows whose adSiteId is linked to that downstream.
   const countMap = new Map<string, number>();
-  for (const row of downstreamAdSiteIds) {
-    countMap.set(row.downstreamId, (countMap.get(row.downstreamId) ?? 0) + 1);
+  for (const c of counts) {
+    if (c.mediaAdOrderId) countMap.set(c.mediaAdOrderId, c._count._all);
   }
 
-  return rows.map(r => mapMediaAdOrder(r, countMap.get(r.downstreamId) ?? 0));
+  return rows.map(r => mapMediaAdOrder(r, countMap.get(r.id) ?? 0));
 }
 
 export async function getMediaAdOrder(id: string) {
@@ -49,7 +49,7 @@ export async function getMediaAdOrder(id: string) {
     },
   });
   if (!row) return null;
-  // linkCount = số MediaId (AdSiteDownstream) của downstream này
-  const count = await prisma.adSiteDownstream.count({ where: { downstreamId: row.downstreamId } });
+  // linkCount = số MediaId (AdSiteDownstream) gắn trực tiếp với đơn QC media này
+  const count = await prisma.adSiteDownstream.count({ where: { mediaAdOrderId: row.id } });
   return mapMediaAdOrder(row, count);
 }

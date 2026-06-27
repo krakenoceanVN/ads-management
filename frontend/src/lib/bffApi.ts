@@ -381,7 +381,7 @@ export async function saveMediaEntryBatch(payload: SaveMediaEntryBatchPayload): 
 }
 
 export async function getAdvertiserReport(params: AdvertiserReportParams): Promise<AdvertiserEntryRow[]> {
-  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertiser', { params }));
+  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertisers', { params }));
 }
 
 export async function getMediaReport(params: MediaReportParams): Promise<AdvertiserEntryRow[]> {
@@ -429,23 +429,23 @@ export async function getRoles(): Promise<Role[]> {
 }
 
 export async function getPermissions(): Promise<Permission[]> {
-  return unwrapData(await request<BffDataResponse<Permission[]>>('/api/roles/permissions'));
+  return unwrapData(await request<BffDataResponse<Permission[]>>('/api/permissions'));
 }
 
-export async function updateRolePermissions(id: number, permissionIds: number[]): Promise<Role> {
-  return unwrapData(await request<BffDataResponse<Role>>(`/api/roles/${id}/permissions`, { method: 'PUT', body: { permissionIds } }));
+export async function updateRolePermissions(id: string, permissionKeys: string[]): Promise<Role> {
+  return unwrapData(await request<BffDataResponse<Role>>(`/api/roles/${id}/permissions`, { method: 'PUT', body: { permissionKeys } }));
 }
 
 export async function quarantineRecords(params: QuarantineParams): Promise<QuarantineResult> {
-  return unwrapData(await request<BffDataResponse<QuarantineResult>>('/api/bff/quarantine', { method: 'POST', body: params }));
+  return unwrapData(await request<BffDataResponse<QuarantineResult>>('/api/bff/daily-input/quarantine', { method: 'POST', body: params }));
 }
 
 export async function listQuarantineBatches(params?: { scope?: 'advertiser' | 'media'; page?: number; pageSize?: number }): Promise<QuarantineResult[]> {
-  return unwrapData(await request<BffDataResponse<QuarantineResult[]>>('/api/bff/quarantine', { params }));
+  return unwrapData(await request<BffDataResponse<QuarantineResult[]>>('/api/bff/daily-input/quarantine', { params }));
 }
 
 export async function restoreQuarantineBatch(id: string): Promise<{ success: boolean }> {
-  return unwrapData(await request<BffDataResponse<{ success: boolean }>>(`/api/bff/quarantine/${id}/restore`, { method: 'POST' }));
+  return unwrapData(await request<BffDataResponse<{ success: boolean }>>(`/api/bff/daily-input/quarantine/${id}/restore`, { method: 'POST' }));
 }
 
 // ─── AdType CRUD ──────────────────────────────────────────────────────────────

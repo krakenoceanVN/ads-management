@@ -29,11 +29,11 @@ export async function getById(req: Request, res: Response) {
 export async function create(req: Request, res: Response) {
   const body = req.body as CreateMediaAdOrderInput;
   if (!body || !body.downstreamId) throw new BadRequestError('downstreamId is required');
-  if (!body.adTypeId?.trim()) throw new BadRequestError('adTypeId is required');
+  if (!body.name?.trim()) throw new BadRequestError('name is required');
   const order = await createMediaAdOrder({
     downstreamId: body.downstreamId,
-    adTypeId: body.adTypeId.trim(),
-    name: body.name,
+    adTypeId: body.adTypeId?.trim() || null,
+    name: body.name.trim(),
     notes: body.notes ?? null,
     status: body.status ?? 'active',
   });

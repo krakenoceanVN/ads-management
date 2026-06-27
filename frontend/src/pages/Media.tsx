@@ -101,7 +101,6 @@ type MediaFormState = {
 
 type AdOrderFormState = {
   downstreamId: string;
-  adTypeId: string;
   name: string;
   notes: string;
   status: EntityStatus;
@@ -127,7 +126,6 @@ function defaultMediaForm(upstreamId = ''): MediaFormState {
 function defaultAdOrderForm(): AdOrderFormState {
   return {
     downstreamId: '',
-    adTypeId: '',
     name: '',
     notes: '',
     status: 'active',
@@ -137,7 +135,6 @@ function defaultAdOrderForm(): AdOrderFormState {
 function adOrderFormFromRecord(record: MediaAdOrder): AdOrderFormState {
   return {
     downstreamId: record.downstreamId ?? '',
-    adTypeId: record.adTypeId ?? '',
     name: record.name ?? '',
     notes: record.notes ?? '',
     status: record.status ?? 'active',
@@ -329,7 +326,7 @@ export function MediaMgmt() {
   };
 
   const buildPayload = (): CreateMediaInput | UpdateMediaInput | null => {
-    const upstreamId = Number(form.upstreamId);
+    const upstreamId = form.upstreamId.trim();
     if (!form.name.trim() || !upstreamId || !form.billingMethod) return null;
     const payload: CreateMediaInput | UpdateMediaInput = {
       name: form.name.trim(),
@@ -718,7 +715,8 @@ export function MediaAdOrderMgmt() {
   );
 
   const submitForm = async () => {
-    if (!form.downstreamId || !form.adTypeId) {
+    const trimmedName = form.name.trim();
+    if (!form.downstreamId || !trimmedName) {
       setFormError(t('requiredFields'));
       return;
     }
@@ -726,11 +724,9 @@ export function MediaAdOrderMgmt() {
     setSaving(true);
     setFormError('');
     try {
-      const trimmedName = form.name.trim();
       const payload: CreateMediaAdOrderInput = {
         downstreamId: form.downstreamId,
-        adTypeId: form.adTypeId,
-        name: trimmedName || null,
+        name: trimmedName,
         notes: form.notes.trim() || null,
         status: form.status,
       };
@@ -834,17 +830,10 @@ export function MediaAdOrderMgmt() {
                   {downstreams.map(item => <option key={item.id} value={String(item.id)}>{displayName(item.name ?? item.downstreamType)}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>{t('adType')}</label>
-                <select value={form.adTypeId} onChange={e => setForm(prev => ({ ...prev, adTypeId: e.target.value }))}>
-                  <option value="">-</option>
-                  {adTypes.map(at => <option key={at.id} value={at.id}>{displayName(at.name)}</option>)}
-                </select>
-              </div>
-              <div className="form-group"><label>{t('mediaAdOrderName')}</label>
+              <div className="form-group"><label>{t('mediaAdOrderName')} <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="text"
                   value={form.name}
-                  placeholder={t('autoGenNameHint')}
                   onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
@@ -1183,7 +1172,7 @@ export function MediaIdMgmt() {
       adTypeId,
       adSiteId: String(record.adSiteId),
       downstreamId: String(record.downstreamId),
-      mediaAdOrderId: '',
+      mediaAdOrderId: record.mediaAdOrderId ?? '',
       mediaIdName: record.mediaIdName ?? '',
       pctHal: record.pctHal != null ? String(record.pctHal) : '',
       customPrice: record.rate != null ? String(record.rate) : '',
@@ -1267,6 +1256,7 @@ export function MediaIdMgmt() {
 
       if (editing && editing.junctionId) {
         await updateMediaId(editing.junctionId, {
+          mediaAdOrderId: form.mediaAdOrderId || null,
           customPrice: basePayload.customPrice ?? null,
           pctHal: basePayload.pctHal ?? null,
           mediaIdName: basePayload.mediaIdName ?? null,
@@ -1274,7 +1264,7 @@ export function MediaIdMgmt() {
         });
         await loadRows();
       } else {
-        const created = await createMediaId({ ...basePayload, downstreamId: form.downstreamId } as any);
+        const created = await createMediaId({ ...basePayload, downstreamId: form.downstreamId, mediaAdOrderId: form.mediaAdOrderId || null } as any);
         setRows(prev => [...prev, created]);
         await loadRows();
       }

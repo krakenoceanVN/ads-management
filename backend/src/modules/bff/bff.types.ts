@@ -96,6 +96,7 @@ export interface MediaId {
   isActive: boolean;
   isArchived: boolean;
   // Extended fields for "Tạo ID media" form (docx §2.3)
+  mediaAdOrderId?: string | null;
   mediaAdTypeCode?: string | null;
   mediaIdName?: string | null;
   pctHal?: number | null;
@@ -123,7 +124,7 @@ export interface DownstreamDto {
 export interface MediaAdOrderDto {
   id: string;
   downstreamId: string;
-  adTypeId: string;
+  adTypeId: string | null;
   adTypeCode: string;
   adTypeName: string | null;
   seq: number;

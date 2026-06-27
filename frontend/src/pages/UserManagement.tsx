@@ -53,7 +53,7 @@ export function UserManagement() {
     username: '',
     password: '',
     password2: '',
-    roleId: 0,
+    roleId: '',
     status: 'active',
   });
   const [saving, setSaving] = useState(false);
@@ -84,7 +84,7 @@ export function UserManagement() {
   };
 
   const openCreate = () => {
-    setFormData({ username: '', password: '', password2: '', roleId: roles[0]?.id ?? 0, status: 'active' });
+    setFormData({ username: '', password: '', password2: '', roleId: roles[0]?.id ?? '', status: 'active' });
     setFormError('');
     setModalMode('create');
   };
@@ -263,7 +263,7 @@ export function UserManagement() {
                   <select
                     className="form-select"
                     value={formData.roleId}
-                    onChange={e => setFormData(prev => ({ ...prev, roleId: Number(e.target.value) }))}
+                    onChange={e => setFormData(prev => ({ ...prev, roleId: e.target.value }))}
                   >
                     {roles.filter(r => !['MANAGER', 'EDITOR'].includes(r.code)).map(r => (
                       <option key={r.id} value={r.id}>{r.name}</option>

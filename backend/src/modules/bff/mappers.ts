@@ -19,14 +19,10 @@ function decimalToNull(d: Decimal | null | undefined): number | null {
 }
 
 export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | null; adTypeLinks?: Array<UpstreamAdType & { adType: AdType }>; ownedAdTypes?: AdType[] }): Advertiser {
-  const linkedAdTypes = (upstream.adTypeLinks ?? []).map(link => link.adType).filter(Boolean);
+  // Đơn QC của một nhà QC được suy ra TỪ quyền sở hữu (AdType.upstreamId = owner),
+  // không lấy từ defaultAdType/adTypeLinks (chiều ngược, là dữ liệu legacy).
   const ownedAdTypes = (upstream.ownedAdTypes ?? []).filter(Boolean);
-  const allAdTypes = [
-    ...linkedAdTypes,
-    ...ownedAdTypes,
-    ...(upstream.defaultAdType ? [upstream.defaultAdType] : []),
-  ];
-  const uniqueAdTypes = Array.from(new Map(allAdTypes.map(adType => [adType.id, adType])).values());
+  const uniqueAdTypes = Array.from(new Map(ownedAdTypes.map(adType => [adType.id, adType])).values());
   const adTypeCodes = Array.from(new Set(uniqueAdTypes.map(adType => adType.name)));
   return {
     id: upstream.id,
@@ -36,7 +32,7 @@ export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | nul
     email: upstream.email,
     notes: upstream.notes,
     status: upstream.status as EntityStatus,
-    adTypeCode: upstream.defaultAdType?.name ?? adTypeCodes[0],
+    adTypeCode: adTypeCodes[0],
     adTypeCodes,
     adTypes: uniqueAdTypes.map(adType => ({ id: adType.id, name: adType.name })),
   };
@@ -117,6 +113,7 @@ export function mapMediaId(
     billingMethod: j.adSite.billingMethod as EntryType,
     isActive: j.adSite.isActive,
     isArchived: j.adSite.isArchived,
+    mediaAdOrderId: j.mediaAdOrderId ?? null,
     mediaAdTypeCode: j.mediaAdType?.name ?? null,
     mediaIdName: j.mediaIdName ?? null,
     pctHal: j.pctHal ? Number(j.pctHal) : null,

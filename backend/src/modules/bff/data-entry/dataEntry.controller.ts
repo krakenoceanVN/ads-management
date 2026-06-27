@@ -13,8 +13,9 @@ export async function getAdvertiserEntries(req: Request, res: Response) {
 
   const params: ListAdvertiserEntriesParams = {
     date: String(date),
-    ...(advertiserId !== undefined && { advertiserId: parseInt(String(advertiserId), 10) }),
-    ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
+    // id là String (6-char) — không parseInt; adType filter dùng field `adTypeId`.
+    ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
+    ...(adTypeCode !== undefined && { adTypeId: String(adTypeCode) }),
     ...(status !== undefined && { status: String(status) }),
   };
 
@@ -32,8 +33,9 @@ export async function getMediaEntries(req: Request, res: Response) {
 
   const params: ListMediaEntriesParams = {
     date: String(date),
-    ...(mediaId !== undefined && { mediaId: parseInt(String(mediaId), 10) }),
-    ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
+    // id là String (6-char) — không parseInt; adType filter dùng field `adTypeId`.
+    ...(mediaId !== undefined && { mediaId: String(mediaId) }),
+    ...(adTypeCode !== undefined && { adTypeId: String(adTypeCode) }),
     ...(status !== undefined && { status: String(status) }),
   };
 

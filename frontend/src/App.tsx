@@ -28,10 +28,10 @@ import {
 import type { UserRole } from './lib/bffTypes';
 
 interface CurrentUserInfo {
-  id: number;
+  id: string;
   username: string;
   role: UserRole;
-  roleId?: number;
+  roleId?: string;
   roleCode?: string;
   roleName?: string;
   permissions?: string[];

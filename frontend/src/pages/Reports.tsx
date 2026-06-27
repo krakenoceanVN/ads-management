@@ -696,14 +696,14 @@ export function OrderProfit() {
 
 export function AdvQuery() {
   const { t, displayName } = useAppContext();
-  const [advertisers, setAdvertisers] = React.useState<{ id: number; name: string }[]>([]);
+  const [advertisers, setAdvertisers] = React.useState<{ id: string; name: string }[]>([]);
   const [adTypes, setAdTypes] = React.useState<{ code: string; name: string }[]>([]);
 
   const [draftFilters, setDraftFilters] = React.useState({
     startDate: '',
     endDate: '',
     business: '',
-    advertiserId: '' as string | number,
+    advertiserId: '',
     adTypeCode: '',
     adId: '',
     type: '',
@@ -917,7 +917,7 @@ export function AdvQuery() {
 
 export function MediaQuery() {
   const { t, displayName } = useAppContext();
-  const [mediaList, setMediaList] = React.useState<{ id: number; name: string }[]>([]);
+  const [mediaList, setMediaList] = React.useState<{ id: string; name: string }[]>([]);
   const [adTypes, setAdTypes] = React.useState<{ code: string; name: string }[]>([]);
 
   const [draftFilters, setDraftFilters] = React.useState({
@@ -946,7 +946,7 @@ export function MediaQuery() {
 
   // Load media and ad type master data once
   React.useEffect(() => {
-    import('../lib/bffApi').then(m => m.listMedia ? m.listMedia() : Promise.resolve([])).then((data: unknown) => setMediaList((data as { id: number; name: string }[]) ?? [])).catch(() => {});
+    import('../lib/bffApi').then(m => m.listMedia ? m.listMedia() : Promise.resolve([])).then((data: unknown) => setMediaList((data as { id: string; name: string }[]) ?? [])).catch(() => {});
     import('../lib/bffApi').then(m => m.listAdTypes ? m.listAdTypes() : Promise.resolve([])).then((data: unknown) => setAdTypes((data as { code: string; name: string }[]) ?? [])).catch(() => {});
   }, []);
 
@@ -954,7 +954,7 @@ export function MediaQuery() {
     startDate: appliedFilters.startDate || undefined,
     endDate: appliedFilters.endDate || undefined,
     status: statusParam(appliedFilters.status),
-    mediaId: appliedFilters.mediaId ? Number(appliedFilters.mediaId) : undefined,
+    mediaId: appliedFilters.mediaId ? String(appliedFilters.mediaId) : undefined,
     adTypeCode: appliedFilters.business || undefined,
   }), [appliedFilters.startDate, appliedFilters.endDate, appliedFilters.status, appliedFilters.mediaId, appliedFilters.business]);
 

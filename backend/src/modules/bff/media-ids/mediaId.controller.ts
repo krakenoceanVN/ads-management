@@ -36,7 +36,12 @@ export async function create(req: Request, res: Response) {
   const mediaId = await createMediaId({
     adSiteId: body.adSiteId,
     downstreamId: body.downstreamId,
+    mediaAdOrderId: body.mediaAdOrderId ?? null,
     customPrice: body.customPrice ?? null,
+    pctHal: body.pctHal ?? null,
+    mediaAdTypeId: body.mediaAdTypeId ?? null,
+    mediaIdName: body.mediaIdName ?? null,
+    status: body.status,
   });
   await recordMasterDataOperation(req, 'CREATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
   res.status(201).json(bffData(mediaId));
@@ -48,8 +53,12 @@ export async function update(req: Request, res: Response) {
   const body = req.body as UpdateMediaIdInput;
 
   const mediaId = await updateMediaId(String(id), {
+    mediaAdOrderId: body.mediaAdOrderId,
     customPrice: body.customPrice,
-    status: (body as any).status,
+    pctHal: body.pctHal,
+    mediaAdTypeId: body.mediaAdTypeId,
+    mediaIdName: body.mediaIdName,
+    status: body.status,
   });
   await recordMasterDataOperation(req, 'UPDATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
   res.json(bffData(mediaId));

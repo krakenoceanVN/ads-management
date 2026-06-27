@@ -8,7 +8,7 @@ import type { EntityStatus } from '../bff.types';
 
 export interface CreateMediaAdOrderInput {
   downstreamId: string;
-  adTypeId: string;
+  adTypeId?: string | null;
   name?: string | null;
   notes?: string | null;
   status?: EntityStatus;
@@ -19,20 +19,26 @@ export interface UpdateMediaAdOrderInput {
   notes?: string | null;
   status?: EntityStatus;
   downstreamId?: string;
-  adTypeId?: string;
+  adTypeId?: string | null;
 }
 
 export async function createMediaAdOrder(input: CreateMediaAdOrderInput) {
   const { downstreamId, adTypeId, ...rest } = input;
-  if (!isValidId(downstreamId)) throw new Error('Invalid downstreamId');
-  if (!isValidId(adTypeId)) throw new Error('Invalid adTypeId');
+  // Validate by existence, not id format — legacy ids (e.g. "DS001") are valid.
+  if (!downstreamId) throw new Error('Invalid downstreamId');
+  const downstream = await prisma.downstream.findUnique({ where: { id: downstreamId } });
+  if (!downstream) throw new Error('Invalid downstreamId');
 
-  const adType = await prisma.adType.findUnique({ where: { id: adTypeId } });
-  if (!adType) throw new Error('Invalid adTypeId');
+  let resolvedAdTypeId: string | null = null;
+  if (adTypeId != null && adTypeId !== '') {
+    const adType = await prisma.adType.findUnique({ where: { id: adTypeId } });
+    if (!adType) throw new Error('Invalid adTypeId');
+    resolvedAdTypeId = adType.id;
+  }
 
   const row = await generateAndCreateMediaAdOrder(prisma, {
     downstreamId,
-    adTypeId: adType.id,
+    adTypeId: resolvedAdTypeId,
     name: rest.name ?? null,
     notes: rest.notes ?? null,
     status: rest.status ?? 'active',
@@ -43,7 +49,7 @@ export async function createMediaAdOrder(input: CreateMediaAdOrderInput) {
     include: { downstream: true, adType: true },
   });
   if (!reloaded) throw new Error('MediaAdOrder disappeared after create');
-  return mapMediaAdOrder(reloaded as MediaAdOrder & { downstream: Downstream; adType: AdType });
+  return mapMediaAdOrder(reloaded as MediaAdOrder & { downstream: Downstream; adType: AdType | null });
 }
 
 export async function updateMediaAdOrder(id: string, input: UpdateMediaAdOrderInput) {
@@ -66,12 +72,18 @@ export async function updateMediaAdOrder(id: string, input: UpdateMediaAdOrderIn
   if (rest.notes !== undefined) updateData['notes'] = rest.notes;
   if (rest.status !== undefined) updateData['status'] = rest.status;
   if (downstreamId !== undefined) {
-    if (!isValidId(downstreamId)) throw new Error('Invalid downstreamId');
+    const downstream = await prisma.downstream.findUnique({ where: { id: downstreamId } });
+    if (!downstream) throw new Error('Invalid downstreamId');
     updateData['downstreamId'] = downstreamId;
   }
   if (adTypeId !== undefined) {
-    if (!isValidId(adTypeId)) throw new Error('Invalid adTypeId');
-    updateData['adTypeId'] = adTypeId;
+    if (adTypeId == null || adTypeId === '') {
+      updateData['adTypeId'] = null;
+    } else {
+      const adType = await prisma.adType.findUnique({ where: { id: adTypeId } });
+      if (!adType) throw new Error('Invalid adTypeId');
+      updateData['adTypeId'] = adTypeId;
+    }
   }
 
   const row = await prisma.mediaAdOrder.update({
@@ -79,7 +91,7 @@ export async function updateMediaAdOrder(id: string, input: UpdateMediaAdOrderIn
     data: updateData,
     include: { downstream: true, adType: true },
   });
-  return mapMediaAdOrder(row as MediaAdOrder & { downstream: Downstream; adType: AdType });
+  return mapMediaAdOrder(row as MediaAdOrder & { downstream: Downstream; adType: AdType | null });
 }
 
 export async function deleteMediaAdOrder(id: string) {
@@ -90,5 +102,5 @@ export async function deleteMediaAdOrder(id: string) {
     data: { status: 'inactive' },
     include: { downstream: true, adType: true },
   });
-  return mapMediaAdOrder(row as MediaAdOrder & { downstream: Downstream; adType: AdType });
+  return mapMediaAdOrder(row as MediaAdOrder & { downstream: Downstream; adType: AdType | null });
 }

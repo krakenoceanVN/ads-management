@@ -1,6 +1,6 @@
 # KrakenOcean — Tài liệu Kỹ thuật & Logic Nghiệp vụ
 
-> Tài liệu tổng hợp toàn bộ kiến trúc, mô hình dữ liệu, luồng nghiệp vụ và quy tắc tính toán của hệ thống **Ads Management** (mã nội bộ: KrakenOcean). Cập nhật lần cuối: **2026-06-24** (đồng bộ với code hiện tại sau khi drop bảng AdOrder, mở rộng AdType, đổi tất cả ID sang `String`).
+> Tài liệu tổng hợp toàn bộ kiến trúc, mô hình dữ liệu, luồng nghiệp vụ và quy tắc tính toán của hệ thống **Ads Management** (mã nội bộ: KrakenOcean). Cập nhật lần cuối: **2026-06-26** (đồng bộ với code hiện tại: xác nhận MediaAdOrder scope theo Downstream, AdSite.rebateRate vẫn còn, resolveDownstreamRate throw thay vì trả 0, route đã đổi sang dạng số nhiều + thêm `/daily-input/quarantine`).
 >
 > Mục tiêu: một tài liệu duy nhất để onboarding kỹ sư mới, đối chiếu nghiệp vụ với khách hàng, và làm cơ sở cho các bài review/QA.
 
@@ -51,9 +51,13 @@
 
 ### Thay đổi lớn gần đây (xem §17)
 - **Drop bảng `AdOrder`**: trước đây có bảng `AdOrder` (đơn QC của nhà QC), đã được gộp vào `AdType` — `AdType` hiện giữ vai trò "đơn QC" với field `upstreamId` (chủ sở hữu), `notes`, `status`.
-- **Bỏ folder `bff/ad-orders/`**: route `/api/bff/ad-orders/*` đã xóa. Thay bằng `bff/media-ad-orders/` (đơn QC gắn với AdSite).
-- **Đổi tất cả PK sang `String`** (6-char alphanumeric, tạo app-side qua `generateShortId()`).
+- **`MediaAdOrder` scope theo `(downstreamId, adTypeId, seq)`** — KHÔNG gắn với AdSite. Mỗi downstream sở hữu một tập đơn QC, có thứ tự `seq` (auto-increment).
+- **Bỏ folder `bff/ad-orders/`**: route `/api/bff/ad-orders/*` đã xóa. Thay bằng `bff/media-ad-orders/` (đơn QC gắn với Downstream).
+- **Đổi tất cả PK sang `String`** (6-char alphanumeric, tạo app-side qua `generateShortId()`). PK của `OperationLog` dùng format inline `opl_<timestamp>_<random>`.
 - **Tất cả route `/api/users/me` đổi thành `/api/auth/me`** (để đồng bộ với router auth).
+- **Routes plural**: data-entry, reports, settlement dùng dạng số nhiều (`advertisers`, `media`).
+- **Quarantine routes** đổi từ `/quarantine` → `/daily-input/quarantine` (xem §6.3, §7.1.4).
+- **`resolveDownstreamRate` throw** khi không tìm được rate (trước đây fallback về 0).
 
 ---
 
@@ -111,26 +115,26 @@
 │       │   ├── ids.ts                            # generateShortId (6-char alphanumeric)
 │       │   └── services/
 │       │       ├── revenue.service.ts            # calculateRevenue()
-│       │       ├── rebate.service.ts             # resolveRebateRate()
-│       │       └── payout.service.ts             # resolveDownstreamRate / aggregateDownstreamCost / calculateProfit
+│       │       ├── rebate.service.ts             # resolveRebateRate() (priority: AdSiteRebateRate → AdSite.rebateRate)
+│       │       └── payout.service.ts             # resolveDownstreamRate (THROW nếu không match) / aggregateDownstreamCost / calculateProfit
 │       └── modules/
 │           ├── auth/                             # JWT login + /me
 │           ├── users/                            # CRUD user
-│           ├── roles/                            # CRUD role + permission
+│           ├── roles/                            # role + permission
 │           ├── health/
 │           ├── yiyi/                             # 4-channel daily/monthly/batch
 │           └── bff/
-│               ├── advertisers/                  # CRUD Upstream
+│               ├── advertisers/                  # CRUD Upstream (soft delete)
 │               ├── ad-types/                     # CRUD AdType (loại QC)
-│               ├── ad-ids/                       # CRUD AdSite (UI: "ID quảng cáo")
+│               ├── ad-ids/                       # CRUD AdSite (soft delete)
 │               ├── media/                        # CRUD (legacy, route ẩn khỏi menu)
-│               ├── media-ids/                    # AdSiteDownstream junction
-│               ├── media-ad-orders/              # per-AdSite ad order (thay thế AdOrder)
-│               ├── downstreams/                  # CRUD + period
+│               ├── media-ids/                    # AdSiteDownstream junction (delete throw)
+│               ├── media-ad-orders/              # per-Downstream ad order (soft delete)
+│               ├── downstreams/                  # CRUD + period (delete khi không có ref, ngược lại deactivate)
 │               ├── data-entry/                   # list/save/confirm/unconfirm (advertiser + media)
 │               ├── reports/                      # advertiser / media / total-profit / order-profit
 │               ├── settlement/                   # advertiser / media settlement
-│               ├── quarantine/                   # quarantine + restore
+│               ├── quarantine/                   # quarantine + restore (route /daily-input/quarantine)
 │               ├── operation-logs/               # read + list
 │               ├── dashboard/                    # monthly aggregate
 │               ├── hard-delete/                  # master data delete (có kiểm tra ràng buộc)
@@ -173,18 +177,18 @@
 
 | Bảng | Vai trò | Ghi chú đặc biệt |
 |---|---|---|
-| `AdType` | Loại quảng cáo (SM, 360, BAIDU_JS, …) — **cũng đóng vai trò "đơn QC của nhà QC"** sau khi drop bảng AdOrder | Có `upstreamId` (FK → Upstream, nullable = Nhà QC sở hữu), `notes`, `status` (active/inactive) |
+| `AdType` | Loại quảng cáo (SM, 360, BAIDU_JS, …) — **cũng đóng vai trò "đơn QC của nhà QC"** sau khi drop bảng AdOrder | Có `upstreamId` (FK → Upstream, nullable = Nhà QC sở hữu), `notes`, `status` (active/inactive). `code` đã bỏ — `id` (6-char alphanumeric) là identifier duy nhất. |
 | `Upstream` | Nhà quảng cáo (advertiser) | 1 upstream gắn 1 `defaultAdType` (FK → AdType); có thể thêm nhiều `UpstreamAdType` |
 | `UpstreamAdType` | Junction Upstream ↔ AdType | `@@unique([upstreamId, adTypeId])` |
-| `AdSite` | ID quảng cáo (UI gọi "ID quảng cáo" / "Media") | Có `billingMethod` (CPM/CPS/CPA), `currentUnitPrice`, `currentRatio`, `isActive`, `isArchived`. **KHÔNG còn field `rebateRate`** (đã chuyển sang `AdSiteRebateRate`) |
-| `AdSiteDownstream` | Junction AdSite ↔ Downstream | Có `customPrice` (giá tự điền cho cặp), `pctHal` (tỷ lệ chia riêng — hiện chưa dùng, giữ để tương thích) |
-| `AdSiteRebateRate` | Lịch sử tỷ lệ hoàn CPM (thay thế `AdSite.rebateRate`) | Có `startDate`/`endDate` (null = đang hiệu lực) |
+| `AdSite` | ID quảng cáo (UI gọi "ID quảng cáo" / "Media") | Có `billingMethod` (CPM/CPS/CPA), `currentUnitPrice`, `currentRatio`, `isActive`, `isArchived`, **`rebateRate` (Float?) — vẫn còn** dùng làm fallback cho CPM rebate. |
+| `AdSiteDownstream` | Junction AdSite ↔ Downstream | Có `customPrice` (giá tự điền cho cặp), `pctHal` (tỷ lệ chia riêng — hiện chưa dùng, giữ để tương thích), `mediaAdTypeId` (FK AdType — đơn QC ở MEDIA side), `mediaIdName` (tên media tự đặt), `status` |
+| `AdSiteRebateRate` | Lịch sử tỷ lệ hoàn CPM | Có `startDate`/`endDate` (null = đang hiệu lực), **ưu tiên cao hơn `AdSite.rebateRate`** |
 | `AdSiteEvent` | Sự kiện của AdSite (note + ngày) | Dùng cho timeline |
-| `Downstream` | Đối tác phân phối (hạ nguồn) | `downstreamType`: ML / LE / YIYI. **KHÔNG còn field `payoutRate`** (đã chuyển sang `DownstreamPeriod`) |
+| `Downstream` | Đối tác phân phối (hạ nguồn) | `downstreamType`: ML / LE / YIYI. **API có nhận `payoutRate` nhưng KHÔNG lưu** (no-op, chỉ validate). |
 | `DownstreamPeriod` | Kỳ giá/tỷ lệ của Downstream | `pctHal` (1.0 = 100%), `unitPrice` (payout rate), `startDate`/`endDate` |
 | `DownstreamAdType` | Junction Downstream ↔ AdType | Tương tự UpstreamAdType |
 | `DailyDownstreamRate` | Giá payout theo ngày (override period) | `@@unique([downstreamId, date])` |
-| `MediaAdOrder` | Đơn hàng QC gắn với (AdSite, AdType) — **THAY THẾ bảng AdOrder cũ** | Có `seq` để sắp xếp |
+| `MediaAdOrder` | Đơn hàng QC gắn với `(downstreamId, adTypeId)` — **THAY THẾ bảng AdOrder cũ** | Có `seq` (auto-increment theo `(downstreamId, adTypeId)`), `name` (unique toàn hệ thống), `notes`, `status`. **KHÔNG gắn với AdSite.** |
 | `DailyInput` | **Bản ghi nhập liệu hằng ngày** | Trái tim của hệ thống; `@@unique([recordDate, adSiteId])` |
 | `DailyInputQuarantineBatch` | Đợt cách ly | `scopeType`: advertiser / media |
 | `DailyInputQuarantineRecord` | Bản ghi thuộc đợt cách ly | Snapshot `statusBefore` + `revenueSnapshot` |
@@ -193,7 +197,7 @@
 | `LEDailyCost` | Chi phí LE theo ngày | `vendorCost`, `mlCost`, `costAmount` |
 | `User` | Tài khoản | Có cả `role` (legacy string: SUPER_ADMIN/ADMIN/EDITOR/VIEWER/MANAGER/OPERATOR) + `roleId` (RBAC FK) + 3 cờ legacy `permDataInput/permDataConfirm/permAdmin` |
 | `Role` / `Permission` / `RolePermission` | RBAC | `Role.isSystem` không cho sửa/xoá |
-| `OperationLog` | Nhật ký thao tác | `userId` (String?), `action`, `module`, `targetType`, `targetId`, `detail` |
+| `OperationLog` | Nhật ký thao tác | `userId` (String?), `action`, `module`, `targetType`, `targetId`, `detail`. **PK dùng format inline `opl_<timestamp>_<random>`** (không dùng `generateShortId()`). |
 
 ### 4.2 Cấu trúc bảng `DailyInput` (trung tâm)
 
@@ -235,12 +239,13 @@ AdType ──< UpstreamAdType >── Upstream ──< AdSite ──< AdSiteDown
    │                                │           │                              │
    │                                │           │                              └─< DownstreamPeriod
    │                                │           ├─< AdSiteRebateRate (lịch sử hoàn CPM)
-   │                                │           ├─< AdSiteEvent
-   │                                │           └─< MediaAdOrder (đơn QC)
+   │                                │           └─< AdSiteEvent
    │                                │
-   │                                └──< DailyInput (theo ngày)
-   │                                           │
-   │                                           └─< DailyInputQuarantineRecord >── DailyInputQuarantineBatch
+   │                                ├──< DailyInput (theo ngày)
+   │                                │           │
+   │                                │           └─< DailyInputQuarantineRecord >── DailyInputQuarantineBatch
+   │                                │
+   └─< MediaAdOrder >──── Downstream   (đơn QC gắn với downstream, KHÔNG gắn AdSite)
    │
    └─< owner (Upstream? — Nhà QC sở hữu AdType, nullable)
 ```
@@ -277,7 +282,7 @@ AdType ──< UpstreamAdType >── Upstream ──< AdSite ──< AdSiteDown
 
 ### 5.3 Phân quyền chi tiết
 
-Có **2 lớp** phân quyền chạy song song (`requirePermission`):
+Có **3 lớp** phân quyền chạy song song (`requirePermission`):
 
 **Lớp 1 — RBAC đầy đủ (ưu tiên):**
 - Bảng `Permission` chứa các key dạng `module.action` (vd: `dataEntry.create`, `report.read`).
@@ -298,17 +303,15 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
 | `media.create / update / delete` | `permAdmin` |
 | `adId.create / update / delete` | `permAdmin` |
 | `mediaId.create / update / delete` | `permAdmin` |
-| `mediaAdOrder.create / update / delete` | `permAdmin` |
+| `user.create / update` | `permAdmin` |
 | `masterData.hardDelete` | `permAdmin` |
 | `report.read` | `permAdmin` |
 | `settlement.read` | `permAdmin` |
 | `oplog.read` | `permAdmin` |
-| `auditLog.read` | `permAdmin` |
 | `quarantine.execute / restore` | `permAdmin` |
 | `role.update` | `permAdmin` |
-| `user.create / update` | `permAdmin` |
 
-> **Lưu ý**: permission keys `adOrder.*` đã bị **XÓA** sau khi drop bảng AdOrder. Các route tương ứng (`/api/bff/ad-orders/*`) không còn tồn tại.
+> **Lưu ý**: permission keys `adOrder.*` đã bị **XÓA** sau khi drop bảng AdOrder. Tương tự `mediaAdOrder.*` cũng KHÔNG có trong legacy map (route media-ad-orders đang không gắn permission trong `mediaAdOrderRouter.ts` — đây là điểm cần xem lại).
 
 **Lớp 3 — SUPER_ADMIN bypass:** `role === 'SUPER_ADMIN'` thì luôn pass.
 
@@ -325,48 +328,66 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
 
 > Tất cả trả về JSON dạng `{ success: boolean, data?, error?, code? }`. Frontend dùng `unwrapData()` để extract `data` (xem `frontend/src/lib/bffApi.ts:unwrapData`).
 
-### 6.1 Auth (không cần token)
-- `POST /api/auth/login` — body `{ username, password }` → `{ success, data: { token, user } }`
-- `GET  /api/auth/me` — cần token → trả `AuthUser` (đã sửa từ `/api/users/me` cũ)
+### 6.1 Auth (mount `/api/auth`, không cần token cho login)
+- `POST /api/auth/login` — body `{ username, password }` → `{ success, data: { token, user } }`. Rate-limit 5 req/15 phút (chỉ production).
+- `GET  /api/auth/me` — cần `requireAuth` → trả `AuthUser`.
 
 ### 6.2 User / Role / Yiyi (mount `/api`)
-- `GET/POST/PUT /api/users`, `POST /api/users/:id/reset-password`
-- `GET /api/roles`, `GET /api/permissions`, `PUT /api/roles/:id/permissions`
+- `GET /api/users` — list (cần `user.update`)
+- `POST /api/users` — create (cần `user.create`)
+- `PUT /api/users/:id` — update (cần `user.update`)
+- `POST /api/users/:id/reset-password` — reset password (cần `user.update`)
+- `GET /api/roles` — list roles (cần `role.update`)
+- `GET /api/permissions` — list permissions (cần `role.update`)
+- `PUT /api/roles/:id/permissions` — update (cần `role.update`)
 - `GET /api/yiyi-data?date=YYYY-MM-DD` — 4 dòng (channel qty)
 - `GET /api/yiyi-data/monthly?year&month` — 31 dòng/tháng
 - `POST /api/yiyi-data/batch` — body `{ date, items: [{channel, qty}, ...], pricing?: { unitPrice, profitUnitPrice } }`
 
 ### 6.3 BFF (mount `/api/bff`)
 
-| Prefix | Endpoint | Permission |
+| Prefix | Method | Permission / Middleware |
 |---|---|---|
-| `/advertisers` | GET/POST/PUT/DELETE | (chưa gắn perm riêng — sử dụng fallback) |
-| `/ad-types` | GET/POST/PUT/DELETE | `role.update` (legacy) |
-| `/ad-ids` | GET/POST/PUT/DELETE | `adId.*` |
-| `/media-ids` | CRUD AdSiteDownstream | `mediaId.*` |
-| `/media-ad-orders` | CRUD MediaAdOrder | `masterData.hardDelete` (legacy) |
-| `/downstreams` | CRUD + periods | (fallback) |
-| `/data-entry/advertiser` | GET (list) | `requireAuth` |
-| `/data-entry/advertiser/batch` | POST (save) | `dataEntry.create` |
-| `/data-entry/advertiser/confirm` | POST (confirm) | `dataEntry.confirm` |
-| `/data-entry/advertiser/:id/unconfirm` | PUT | `dataEntry.unconfirm` |
-| `/data-entry/media/*` | tương tự advertiser | |
-| `/reports/advertiser` | GET | `report.read` |
-| `/reports/media` | GET | `report.read` |
-| `/reports/total-profit` | GET | `report.read` |
-| `/reports/order-profit` | GET | `report.read` |
-| `/settlement/advertiser` | GET | `settlement.read` |
-| `/settlement/media` | GET | `settlement.read` |
-| `/dashboard/monthly` | GET | `report.read` |
-| `/quarantine` | POST (quarantine) | `quarantine.execute` |
-| `/quarantine/:batchId/restore` | POST | `quarantine.restore` |
-| `/quarantine` | GET (list batches) | `quarantine.execute` |
-| `/quarantine/:batchId/records` | GET | `quarantine.execute` |
-| `/oplog` | GET (read logs) | `oplog.read` hoặc `permAdmin` |
-| `/hard-delete/{advertisers,ad-types,ad-ids,media,media-ad-orders,media-ids}/:id` | DELETE | `masterData.hardDelete` |
+| `/advertisers` | CRUD | **KHÔNG có middleware** (cả list/create/update/delete đều public — cần xem lại) |
+| `/ad-types` | CRUD | `requireAuth` (không gắn `requirePermission` cụ thể) |
+| `/ad-ids` | CRUD | **KHÔNG có middleware** (cả list/create/update/delete đều public — cần xem lại) |
+| `/media` | CRUD (legacy) | **KHÔNG có middleware** (route ẩn khỏi menu nhưng vẫn public) |
+| `/media-ids` | CRUD | **KHÔNG có middleware** (read-only — `delete` throw ConflictError) |
+| `/media-ad-orders` | CRUD | **KHÔNG có middleware** |
+| `/downstreams` | CRUD | `requireAuth` (không gắn permission cụ thể) |
+| `/data-entry/advertisers` | GET | `requireAuth` |
+| `/data-entry/advertisers/batch` | POST | `requireAuth` + `dataEntry.create` |
+| `/data-entry/advertisers/confirm-batch` | POST | `requireAuth` + `dataEntry.confirm` |
+| `/data-entry/advertisers/:id/unconfirm` | PUT | `requireAuth` + `dataEntry.unconfirm` |
+| `/data-entry/media/*` | (tương tự advertisers) | tương tự |
+| `/reports/advertisers` | GET | `requireAuth` + `report.read` |
+| `/reports/media` | GET | `requireAuth` + `report.read` |
+| `/reports/total-profit` | GET | `requireAuth` + `report.read` |
+| `/reports/order-profit` | GET | `requireAuth` + `report.read` |
+| `/settlement/advertisers` | GET | `requireAuth` + `settlement.read` |
+| `/settlement/media` | GET | `requireAuth` + `settlement.read` |
+| `/dashboard/monthly` | GET | `requireAuth` + `report.read` |
+| `/daily-input/quarantine` | POST (quarantine) | `requireAuth` + `quarantine.execute` |
+| `/daily-input/quarantine/:batchId/restore` | POST | `requireAuth` + `quarantine.restore` |
+| `/daily-input/quarantine` | GET (list batches) | `requireAuth` + `quarantine.execute` |
+| `/daily-input/quarantine/:batchId/records` | GET | `requireAuth` + `quarantine.execute` |
+| `/oplog` | GET | `requireAuth` + `oplog.read` |
+| `/hard-delete/{advertisers,ad-types,ad-ids,media,media-ad-orders,media-ids}/:id` | DELETE | `requireAuth` + `masterData.hardDelete` |
+| `/hard-delete/{advertisers,ad-types,ad-ids,media}/:id/dependencies` | GET | `requireAuth` (không gắn permission) |
 
 ### 6.4 Health
 - `GET /health` — kiểm tra server sống
+
+### 6.5 Sai lệch giữa frontend và backend
+
+| Frontend gọi | Backend thực tế | Trạng thái |
+|---|---|---|
+| `/api/bff/reports/advertiser` (số ít) | `/api/bff/reports/advertisers` (số nhiều) | ❌ Mismatch — cần fix frontend |
+| `/api/bff/reports/media` | `/api/bff/reports/media` | ✅ Khớp |
+| `/api/bff/quarantine` | `/api/bff/daily-input/quarantine` | ❌ Mismatch — frontend sẽ luôn 404 |
+| `/api/bff/quarantine/:id/restore` | `/api/bff/daily-input/quarantine/:batchId/restore` | ❌ Mismatch |
+| `/api/roles/permissions` | `/api/permissions` | ❌ Mismatch |
+| `/api/users/:id` PUT | (có) | ✅ Khớp |
 
 ---
 
@@ -392,17 +413,17 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
                                                                         ẩn khỏi báo cáo)
 ```
 
-**(1) Save batch** (`POST /api/bff/data-entry/{advertiser,media}/batch`)
+**(1) Save batch** (`POST /api/bff/data-entry/{advertisers,media}/batch`)
 - Validate input theo `billingMethod` (xem §8.1).
 - Với CPM: tự resolve `rebateRate` qua `resolveRebateRate(adSiteId, recordDate)`.
 - Tính `revenue` qua `calculateRevenue()`.
 - Tìm bản ghi hiện tại theo `@@unique([recordDate, adSiteId])`:
-  - Không có → `create` (status mặc định `unconfirmed`).
+  - Không có → `create` (status mặc định `unconfirmed`, id = `di_<adSiteId>_<YYYYMMDD>`).
   - Có + `status='confirmed'` → **bỏ qua**, log lỗi "cannot be edited".
   - Có + `status='quarantined'` → **bỏ qua**, log lỗi.
   - Có + `status='unconfirmed'` → `update`.
 
-**(2) Confirm batch** (`POST /api/bff/data-entry/{advertiser,media}/confirm`)
+**(2) Confirm batch** (`POST /api/bff/data-entry/{advertisers,media}/confirm-batch`)
 - Body: `{ date: string, adSiteIds: string[] }` (id là String).
 - Trong transaction:
   - Tìm tất cả `DailyInput` của (recordDate, adSiteIds[]) với `status='unconfirmed'`.
@@ -410,13 +431,13 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
   - Update tất cả sang `confirmed`.
   - Ghi `OperationLog` action `CONFIRM_ADVERTISER` / `CONFIRM_MEDIA`.
 
-**(3) Unconfirm** (`PUT /api/bff/data-entry/{advertiser,media}/:id/unconfirm`)
+**(3) Unconfirm** (`PUT /api/bff/data-entry/{advertisers,media}/:id/unconfirm`)
 - `id` là String.
 - Chỉ chấp nhận nếu `status='confirmed'`, đưa về `unconfirmed`.
 - Ghi `OperationLog` action `UNCONFIRM_*`.
 - **Không thể unconfirm** khi đang `quarantined` (cần restore trước).
 
-**(4) Quarantine** (`POST /api/bff/quarantine`)
+**(4) Quarantine** (`POST /api/bff/daily-input/quarantine`)
 - Body advertiser: `{ advertiserId: string, startDate, endDate, reason }`.
 - Body media: `{ adSiteId: string, startDate, endDate, reason }`.
 - Trong transaction:
@@ -426,7 +447,7 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
   - Update mỗi bản ghi → `status='quarantined'`, set `quarantineBatchId`, `quarantinedAt`, `quarantinedBy`, `quarantineReason`.
   - Ghi `OperationLog` action `QUARANTINE_*`.
 
-**(5) Restore** (`POST /api/bff/quarantine/:batchId/restore`)
+**(5) Restore** (`POST /api/bff/daily-input/quarantine/:batchId/restore`)
 - Trong transaction:
   - Kiểm tra batch tồn tại, chưa `restoredAt`, có records.
   - Với mỗi record snapshot, update `DailyInput` về `status=record.statusBefore` (thường là `confirmed`).
@@ -435,18 +456,29 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
 
 ### 7.2 Thiết lập master data (Admin)
 
-1. **AdType**: tạo loại QC (code + name). Có thể gán `upstreamId` (FK → Upstream) để xác định chủ sở hữu, `notes`, `status`. Theo docx mục 1.2: form có dropdown Nhà QC, textarea Ghi chú, dropdown Trạng thái.
+1. **AdType**: tạo đơn QC (chỉ cần `name` + tùy chọn `upstreamId`, `notes`, `status`). Tên phải duy nhất toàn hệ thống (case-insensitive). Theo docx mục 1.2: form có dropdown Nhà QC, textarea Ghi chú, dropdown Trạng thái.
 2. **Upstream (Advertiser)**: tạo nhà quảng cáo, set `defaultAdType` (FK tới `AdType.id`). Có thể thêm các loại QC phụ qua bảng `UpstreamAdType`.
-3. **AdSite (ID quảng cáo)**: tạo ID QC, gắn `upstreamId`, set `billingMethod` (CPM/CPS/CPA), `currentUnitPrice` / `currentRatio`, `isActive`, `isArchived`. Nếu muốn áp dụng hoàn CPM theo kỳ → tạo `AdSiteRebateRate` với `startDate`/`endDate`.
-4. **Downstream**: tạo đối tác phân phối, set `downstreamType` (ML/LE/YIYI). Tạo `DownstreamPeriod` để set `pctHal` + `unitPrice` theo kỳ. Có thể tạo `DailyDownstreamRate` để override theo ngày cụ thể.
-5. **AdSiteDownstream (MediaId)**: ghép (AdSite, Downstream). Có thể set `customPrice` (ưu tiên cao nhất) hoặc `pctHal` riêng cho cặp.
-6. **MediaAdOrder**: tạo đơn hàng QC gắn với (AdSite, AdType), có `seq` để sắp xếp.
+3. **AdSite (ID quảng cáo)**: tạo ID QC, gắn `upstreamId`, set `billingMethod` (CPM/CPS/CPA), `currentUnitPrice` / `currentRatio`, `isActive`, `isArchived`, `rebateRate` (fallback khi không có `AdSiteRebateRate`). Nếu muốn áp dụng hoàn CPM theo kỳ → tạo `AdSiteRebateRate` với `startDate`/`endDate`.
+4. **Downstream**: tạo đối tác phân phối, set `downstreamType` (ML/LE/YIYI). Tạo `DownstreamPeriod` để set `pctHal` + `unitPrice` theo kỳ. Có thể tạo `DailyDownstreamRate` để override theo ngày cụ thể. **API nhận `payoutRate` nhưng no-op** (giữ để tương thích).
+5. **AdSiteDownstream (MediaId)**: ghép (AdSite, Downstream). Có thể set `customPrice` (ưu tiên cao nhất), `pctHal`, `mediaAdTypeId`, `mediaIdName`, `status`. **`delete` throw ConflictError** — không cho xoá để bảo toàn lịch sử báo cáo.
+6. **MediaAdOrder**: tạo đơn hàng QC gắn với `(downstreamId, adTypeId)`. `seq` auto-increment theo cặp; `name` mặc định `<adType.name>-<seq padded 3>`, phải duy nhất toàn hệ thống (case-insensitive).
 
-### 7.3 Hard delete
+### 7.3 Hard delete vs Soft delete
 
-> Tất cả hard-delete đều **kiểm tra ràng buộc trước**, không xoá tuỳ tiện.
+> Hệ thống dùng **soft delete làm mặc định** cho hầu hết entity. Chỉ `DELETE /api/bff/hard-delete/{entityType}/:id` mới thực sự xoá row (và chỉ khi không có constraint).
 
-`DELETE /api/bff/hard-delete/{entityType}/:id` (`masterData.hardDelete`)
+**Soft delete (mặc định qua các endpoint CRUD):**
+
+| Entity | Hành vi delete | File |
+|---|---|---|
+| `Upstream` (advertiser) | set `status='inactive'` | `advertiser.write.service.ts:109-115` |
+| `AdSite` (adId) | set `status='inactive'` | `adId.write.service.ts:109-119` |
+| `AdSite` (media, legacy) | set `isArchived=true` | `media.write.service.ts:77-83` |
+| `MediaAdOrder` | set `status='inactive'` (không giải phóng `seq`) | `mediaAdOrder.write.service.ts:85-93` |
+| `Downstream` | Nếu không có ref → `prisma.downstream.delete`. Có ref (mediaIds/periods/dailyRates) → set `status='inactive'` | `downstream.write.service.ts:193-211` |
+| `AdSiteDownstream` (MediaId) | **throw ConflictError** — không cho xoá | `mediaId.write.service.ts:127-130` |
+
+**Hard delete** (`DELETE /api/bff/hard-delete/{entityType}/:id`, permission `masterData.hardDelete`):
 
 | Entity | Quy tắc |
 |---|---|
@@ -455,9 +487,9 @@ Có **2 lớp** phân quyền chạy song song (`requirePermission`):
 | `ad-ids/:id` (= `AdSite`) | Nếu có `DailyInput` → block + gợi ý `quarantine` theo media. Nếu có junction/rebate/event → block. |
 | `media/:id` (legacy) | Tương tự `ad-ids`. |
 | `media-ad-orders/:id` | Cho phép xoá trực tiếp (chỉ ghi log). |
-| `media-ids/:id` (= `AdSiteDownstream`) | Cho phép xoá trực tiếp. |
+| `media-ids/:id` (= `AdSiteDownstream`) | Cho phép xoá trực tiếp (chỉ ghi log). |
 
-Mỗi thao tác (cả thành công lẫn block) đều ghi `OperationLog` action `HARD_DELETE` / `HARD_DELETE_BLOCKED` với snapshot đầy đủ.
+Mỗi thao tác hard delete (cả thành công lẫn block) đều ghi `OperationLog` action `HARD_DELETE` / `HARD_DELETE_BLOCKED` với snapshot đầy đủ trong cùng transaction.
 
 ---
 
@@ -472,14 +504,16 @@ Mỗi thao tác (cả thành công lẫn block) đều ghi `OperationLog` action
 | **CPS** | `revenue = (amount1 + amount2) * ratio` |
 | **CPA** | `revenue = qty * unitPrice` |
 
-> `RATIO` (alias cũ) → tự động chuẩn hoá thành `CPS` (xem `normalizeBillingMethod()` trong `bff.types.ts`).
+> `RATIO` (alias cũ) → tự động chuẩn hoá thành `CPS` (xem `normalizeBillingMethod()` trong `revenue.service.ts`).
 
 ### 8.2 Resolve `rebateRate` cho CPM (`resolveRebateRate`)
 
 Ưu tiên từ cao xuống thấp:
 1. **`AdSiteRebateRate`** đang hiệu lực (`startDate <= recordDate <= endDate` hoặc `endDate=null`), lấy row có `startDate` mới nhất.
-2. **Không có** fallback `AdSite.rebateRate` nữa (đã chuyển sang `AdSiteRebateRate`).
+2. **Fallback `AdSite.rebateRate`** (Float, trên schema `AdSite` — vẫn còn).
 3. Không có → `null` (không hoàn).
+
+> ⚠️ Tài liệu cũ ghi "đã chuyển sang `AdSiteRebateRate`" nhưng **code vẫn dùng `AdSite.rebateRate` làm fallback** (`rebate.service.ts:49-58`). Nếu muốn bỏ hẳn `AdSite.rebateRate` cần migration + sửa service.
 
 ### 8.3 Resolve payout rate cho cost (`resolveDownstreamRate`)
 
@@ -488,9 +522,10 @@ Mỗi thao tác (cả thành công lẫn block) đều ghi `OperationLog` action
 1. **`AdSiteDownstream.customPrice`** — giá riêng cho cặp (nếu > 0).
 2. **`DailyDownstreamRate.effectiveRate`** — giá theo ngày.
 3. **`DownstreamPeriod.unitPrice`** — giá theo kỳ (active trên `recordDate`).
-4. **Fallback cuối** (an toàn) — trả `0` thay vì throw. Comment trong code ghi `payoutRate` có thể không còn trên schema.
+4. **`Downstream.payoutRate`** — fallback cuối (column có thể không tồn tại trên schema hiện tại — chỉ fallback nếu cast được).
+5. **Không tìm được → THROW Error** (`payout.service.ts:67-135`).
 
-> Nếu không tìm được ở 3 mức đầu → cost = 0 (không throw), log warning. Bản ghi đó vẫn được cộng revenue vào lợi nhuận.
+> ⚠️ Tài liệu cũ ghi "Fallback cuối (an toàn) — trả `0` thay vì throw". Code hiện tại **throw** — `aggregateDownstreamCost` sẽ catch lỗi và push vào `errors[]`, KHÔNG làm fail cả batch. Từng bản ghi fail sẽ có cost = 0 và được liệt kê trong `result.errors`.
 
 ### 8.4 Tính cost cho từng bản ghi (`calculateCost`)
 
@@ -621,6 +656,8 @@ Mỗi batch chứa:
 
 ## 11. Hard Delete & Toàn vẹn dữ liệu
 
+> **Phần này chỉ nói về hard delete** (xoá row thật). Soft delete (mặc định cho hầu hết entity) đã được trình bày trong §7.3.
+
 ### 11.1 Nguyên tắc
 
 - **Không bao giờ xoá cứng** dữ liệu đã có `DailyInput` liên quan → dùng `quarantine` thay thế.
@@ -645,44 +682,47 @@ Mỗi batch chứa:
 
 ## 12. Báo cáo & Dashboard
 
-### 12.1 Advertiser Report (`GET /api/bff/reports/advertiser`)
+### 12.1 Advertiser Report (`GET /api/bff/reports/advertisers`)
 
 - Trả về **từng dòng DailyInput** (không gộp), sử dụng `revenue` đã lưu.
 - Mặc định chỉ `status='confirmed'`, loại bỏ `quarantined`.
 - Có thể lọc: `?date=YYYY-MM-DD` hoặc `?startDate&endDate`, `?advertiserId`, `?adTypeCode`, `?status`.
+- ⚠️ Frontend hiện đang gọi `/reports/advertiser` (số ít) — cần sửa thành `/reports/advertisers` (xem §6.5).
 
 ### 12.2 Media Report (`GET /api/bff/reports/media`)
 
 - Tương tự advertiser nhưng trả về 1 dòng cho mỗi (DailyInput, AdSiteDownstream junction).
-- Có cột `shareRatio` (hiện **hard-code `0.8`** trong `report.service.ts:272` — TODO: dùng `DownstreamPeriod.pctHal`) và `actualReceived = receivable * shareRatio` (làm tròn 3 số).
+- Có cột `shareRatio` (resolve từ `DownstreamPeriod.pctHal` theo đúng `(downstreamId, recordDate)`, chuẩn hoá qua `normalizePctHal()`, fallback `1.0` nếu không có period active) và `actualReceived = receivable * shareRatio` (làm tròn 3 số).
 - Lọc tương tự + `?mediaId` (Upstream.id).
+
+> ✅ `getMediaReport` batch-fetch tất cả `DownstreamPeriod` của các downstream liên quan (giới hạn theo cửa sổ ngày của report, tránh N+1), gom theo `downstreamId` rồi tìm period active trên từng `recordDate` — dùng cùng logic `pctHal` với `aggregateDownstreamCost` (`payout.service.ts`). Hard-code `payoutRate = 0.8` cũ đã được gỡ bỏ.
 
 ### 12.3 Total Profit (`GET /api/bff/reports/total-profit`)
 
 - Group theo **(recordDate, Upstream, billingMethod)**.
 - `revenue` = SUM `DailyInput.revenue`.
-- `cost` = tổng cost từ tất cả active downstream của các DailyInput trong group + `yiyiCost` (nếu ngày đó có yiyi).
+- `cost` = tổng cost từ tất cả active downstream của các DailyInput trong group + `yiyiCost` (nếu ngày đó có yiyi, mỗi ngày cộng 1 lần qua `yiyiAppliedDates` Set).
 - Áp dụng `calculateProfit()` → trả `{ revenue, cost, grossProfit, tax, profit, profitRate, recordCount }`.
 
 ### 12.4 Order Profit (`GET /api/bff/reports/order-profit`)
 
 - Group theo **(recordDate, AdType, Upstream, billingMethod)** — tương tự total-profit nhưng tách theo AdType.
 - **Hiện KHÔNG cộng yiyiCost** (chỉ cộng downstream cost).
-- Trả `{ ..., adTypeCode, adTypeName }`.
+- Trả `{ ..., adTypeCode, adTypeName }`. Lưu ý: `orderId`/`orderName` đều trả `null` vì cấu trúc hiện tại group theo `adType.id` chứ không theo MediaAdOrder.
 
 ### 12.5 Dashboard Monthly (`GET /api/bff/dashboard/monthly?year&month`)
 
 - Tái sử dụng `getTotalProfit()` cho toàn tháng, sau đó cộng dồn:
   - `monthly.revenue / cost / grossProfit / tax / profit` (= tổng các ngày)
-  - `monthly.profitRate = profit / revenue`
+  - `monthly.profitRate = profit / revenue` (trả 0 nếu revenue=0)
   - `monthly.recordCount`
 - `daily` mảng = kết quả `getTotalProfit` từng ngày.
 
-### 12.6 Settlement (`GET /api/bff/settlement/{advertiser,media}`)
+### 12.6 Settlement
 
-- **Advertiser**: group theo (advertiser, adType), `totalAmount = SUM(DailyInput.revenue)`. Không tính cost.
-- **Media**: group theo (media, adType), `revenue = SUM(DailyInput.revenue)`, `cost` = aggregateDownstreamCost, áp dụng `calculateProfit`.
-- Lọc theo `period=YYYY-MM` (tính cả tháng).
+- **Advertiser** (`GET /api/bff/settlement/advertisers`): group theo (advertiser, adType), `totalAmount = SUM(DailyInput.revenue)`. Không tính cost.
+- **Media** (`GET /api/bff/settlement/media`): group theo (media, adType), `revenue = SUM(DailyInput.revenue)`, `cost` = aggregateDownstreamCost, áp dụng `calculateProfit`. Có thêm cột `downstreamName` (concat các `downstreamType` của junction).
+- Lọc theo `period=YYYY-MM` (tính cả tháng, dùng `Date.UTC(year, month-1, 1)` → `Date.UTC(year, month, 0)`).
 - `advertiserId` / `mediaId` filter là **String** (sau khi đổi ID sang String).
 
 ### 12.7 Yiyi Report (`GET /api/yiyi-data/monthly?year&month`)
@@ -728,17 +768,19 @@ Mỗi ngày chỉ cộng 1 lần vào total profit (dùng `Set<date>` để dedu
 
 ```
 OperationLog {
-  id         String   // opl_<timestamp>_<random>
+  id         String   // opl_<timestamp>_<random6>  (inline format, KHÔNG dùng generateShortId)
   userId     String?  // null nếu system
   username   String?
   action     String   // CONFIRM_ADVERTISER | UNCONFIRM_MEDIA | QUARANTINE_* | RESTORE_* | HARD_DELETE | HARD_DELETE_BLOCKED | CREATE_MASTER_DATA | UPDATE_MASTER_DATA | DELETE_MASTER_DATA
   module     String   // dataEntry | quarantine | masterData
   targetType String?  // DailyInput | DailyInputQuarantineBatch | advertiser | adType | adSite | adId | downstream | mediaAdOrder | mediaId
   targetId   String?  // id hoặc danh sách id (csv)
-  detail     String?  // JSON stringify
+  detail     String?  // JSON stringify (hoặc text ngắn cho dataEntry/quarantine)
   createdAt  DateTime
 }
 ```
+
+> ⚠️ Trong `quarantine.service.ts` PK được tạo qua `generateShortId()` (6-char alphanumeric), trong khi `advertiserBatch.service.ts` / `mediaBatch.service.ts` / `hardDelete.service.ts` dùng format inline `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`. Hai format tồn tại song song — cần thống nhất.
 
 ### 14.2 Action thường gặp
 
@@ -840,23 +882,46 @@ OperationLog {
 |---|---|---|---|
 | 1 | 3 cách tính tiền (CPM/CPS/CPA) đã đủ chưa, hay sẽ thêm? | Thêm `EntryType` mới → phải sửa `calculateRevenue` + validate + UI | `revenue.service.ts` |
 | 2 | Thuế 6% có phải cố định không? | Đang hard-code `TAX_RATE = 0.06` | `payout.service.ts:24` |
-| 3 | Lỗ có được trừ thuế không? | Hiện tại `grossProfit < 0` → `tax = 0` | `payout.service.ts:205` |
+| 3 | Lỗ có được trừ thuế không? | Hiện tại `grossProfit < 0` → `tax = 0` | `payout.service.ts:206` |
 | 4 | Có cần thêm báo cáo riêng cho từng kênh quảng cáo (SM / 360 / BAIDU_JS) không? | Hiện đã có `adTypeCode` filter; có thể cần thêm dimension | `Reports.tsx` |
 | 5 | YiyiCost có cần cộng vào Order Profit không? | Hiện total-profit có, order-profit chưa | `profitReport.service.ts` |
-| 6 | `payoutRate` trong `MediaEntryRow.shareRatioNum` hiện hard-code 0.8 — đã đúng? | Có vẻ là placeholder từ migration cũ; logic đúng phải resolve qua `DownstreamPeriod.unitPrice` + `pctHal` | `report.service.ts:272` (TODO: dùng `resolveDownstreamRate`) |
+| 6 | ✅ ĐÃ FIX (2026-06-26): `MediaReport.shareRatioNum` đã resolve từ `DownstreamPeriod.pctHal` (qua `normalizePctHal`) thay vì hard-code 0.8 | Đã khớp với logic `aggregateDownstreamCost` | `report.service.ts:getMediaReport` |
 | 7 | CORS `origin: true` trong dev có cần thắt chặt khi prod? | Có thể gây rủi ro nếu public | `app.ts:32` |
 | 8 | Nhật ký thao tác cần lưu bao lâu? | Hiện tại giữ vĩnh viễn; có thể cần retention policy | `OperationLog` |
 | 9 | Mật khẩu user có cần policy phức tạp (độ dài, ký tự đặc biệt)? | Hiện chỉ bcrypt, không validate | `users/user.service.ts` |
 | 10 | `customPrice` trên AdSiteDownstream có cần lịch sử (startDate/endDate) giống rebateRate? | Hiện chỉ 1 giá hiện tại, đổi là đổi hết | `AdSiteDownstream` schema |
 | 11 | `pctHal` trên AdSiteDownstream có ý nghĩa gì khi đã có trên DownstreamPeriod? | Có thể để override theo cặp, nhưng hiện code chỉ dùng từ Period | `payout.service.ts:268-277` |
 | 12 | `YiyiReport` có cần trộn vào báo cáo lợi nhuận chính không, hay tách riêng? | Hiện chỉ cộng vào total-profit theo công thức `sum(qty)/1000 * (unit+profit)` | `profitReport.service.ts:32-49` |
-| 13 | `MANAGER` role có thực sự cần không, hay chỉ enum-only? | Hiện không có code path nào dùng `MANAGER` | `bffTypes.ts:544` (chỉ enum) |
+| 13 | `MANAGER` role có thực sự cần không, hay chỉ enum-only? | Hiện không có code path nào dùng `MANAGER` | `bffTypes.ts:571` (chỉ enum) |
 | 14 | `AiEntry` page có nên bị xoá khỏi menu, hay giữ như placeholder? | Hiện tại là placeholder "featureLocked" — chiếm menu slot nhưng không hoạt động | `DataEntry.tsx:146` |
 | 15 | `AdSiteEvent` table có thực sự được dùng? | Schema có nhưng không thấy code path sử dụng | `AdSiteEvent` model |
+| 16 | `AdSite.rebateRate` (Float) còn dùng không hay đã thay thế hoàn toàn bằng `AdSiteRebateRate`? | Doc nói "đã chuyển" nhưng code vẫn dùng làm fallback | `rebate.service.ts:49-58` |
+| 17 | Router `/advertisers`, `/ad-ids`, `/media`, `/media-ids`, `/media-ad-orders` KHÔNG có `requireAuth` middleware — đây là bug hay cố ý? | Có thể truy cập dữ liệu nhạy cảm khi chưa đăng nhập | `advertiser.router.ts`, `adId.router.ts`, `media.router.ts`, `mediaId.router.ts`, `mediaAdOrder.router.ts` |
+| 18 | Frontend `bffApi.ts` gọi `/reports/advertiser` (số ít) nhưng backend mount `/reports/advertisers` (số nhiều) → 404 | Advertiser Report không load được | `bffApi.ts:384` vs `report.router.ts:8` |
+| 19 | Frontend `bffApi.ts` gọi `/quarantine` nhưng backend mount `/daily-input/quarantine` | Toàn bộ Quarantine không hoạt động | `bffApi.ts:440-449` vs `quarantine.router.ts:13-16` |
+| 20 | Frontend `bffApi.ts` gọi `/roles/permissions` nhưng backend mount `/permissions` | Permission list 404 | `bffApi.ts:432` vs `role.router.ts:8` |
+| 21 | `OperationLog.id` dùng 2 format song song (`generateShortId()` cho quarantine vs inline `opl_<ts>_<rand>` cho dataEntry/hardDelete) | Khó đối chiếu, cần thống nhất | `quarantine.service.ts:115` vs `advertiserBatch.service.ts:213` |
+| 22 | `resolveDownstreamRate` throw → `aggregateDownstreamCost` catch lỗi và push vào `errors[]`. Có muốn trả `errors` qua response cho client biết? | Hiện `total-profit` / `order-profit` / `settlement` không expose errors ra ngoài | `payout.service.ts:67-135, 238-315` |
 
 ---
 
 ## 17. Lịch sử thay đổi lớn
+
+### 2026-06-26: MediaReport shareRatio resolve từ DownstreamPeriod.pctHal
+- **Gỡ hard-code `payoutRate = 0.8`** trong `getMediaReport` (`report.service.ts`). Thay bằng resolve `shareRatio` từ `DownstreamPeriod.pctHal` theo `(downstreamId, recordDate)`, chuẩn hoá qua `normalizePctHal()` (fallback `1.0`).
+- Batch-fetch periods 1 lần theo cửa sổ ngày của report (tránh N+1), gom theo `downstreamId` rồi match period active từng ngày — cùng logic với `aggregateDownstreamCost`.
+- Đổi tên param `payoutRate` → `shareRatioNum` trong `makeReportMediaRow` cho đúng ngữ nghĩa.
+- Verify: `tsc --noEmit` sạch.
+
+### 2026-06-26: Routes plural, Quarantine route đổi, AdSite.rebateRate xác nhận
+- **Routes đổi sang số nhiều**: `/data-entry/advertiser` → `/data-entry/advertisers`, `/data-entry/media/confirm` → `/data-entry/media/confirm-batch`, `/data-entry/advertiser/confirm` → `/data-entry/advertisers/confirm-batch`, `/reports/advertiser` → `/reports/advertisers`, `/settlement/advertiser` → `/settlement/advertisers`.
+- **Quarantine routes**: `/api/bff/quarantine` → `/api/bff/daily-input/quarantine`.
+- **`resolveDownstreamRate` đổi từ "trả 0" → "throw"** khi không match rate. `aggregateDownstreamCost` catch lỗi, push vào `errors[]`.
+- **`AdSite.rebateRate` (Float) xác nhận vẫn còn** trên schema — làm fallback khi không có `AdSiteRebateRate` đang hiệu lực.
+- **`Downstream.payoutRate` API field no-op**: service validate nhưng không lưu.
+- **Default delete chuyển sang soft delete** cho hầu hết entity (advertiser, adId, mediaAdOrder, downstream khi có ref, mediaId luôn throw).
+- **`OperationLog.id` có 2 format song song** (xem §16 #21).
+- **Phát hiện frontend↔backend route mismatch** (xem §16 #18-20) — đây là bug cần fix.
 
 ### 2026-06-24: Drop bảng AdOrder, mở rộng AdType
 - **Drop bảng `AdOrder`** (migration `20260626000000_drop_ad_order_expand_ad_type`).
@@ -864,6 +929,7 @@ OperationLog {
   - `upstreamId: String?` (FK → Upstream, nullable) — Nhà QC sở hữu đơn QC.
   - `notes: String?` — ghi chú.
   - `status: String @default("active")` — active / inactive.
+- **`MediaAdOrder` scope theo `(downstreamId, adTypeId, seq)`** (KHÔNG gắn với AdSite). Có `name` duy nhất toàn hệ thống.
 - **Xoá folder `bff/ad-orders/`** + route `/api/bff/ad-orders/*` (thay bằng `/api/bff/media-ad-orders/`).
 - **Đổi tất cả PK sang `String`** (6-char alphanumeric, generateShortId()).
 - **Sửa `requirePermission.ts`**: bỏ permission keys `adOrder.*`.
@@ -876,7 +942,9 @@ OperationLog {
 - **Test end-to-end**: login admin → dashboard → list 11 advertisers OK.
 
 ### Planned (xem §16)
-- TODO: hard-code `payoutRate = 0.8` trong `report.service.ts:272` → dùng `resolveDownstreamRate()`.
+- TODO: sửa frontend↔backend route mismatch (§16 #18-20).
+- TODO: thêm `requireAuth` cho các router public (§16 #17).
+- TODO: thống nhất `OperationLog.id` format (§16 #21).
 - TODO: validate password policy.
 - TODO: AiEntry page — implement hoặc bỏ khỏi menu.
 - TODO: CORS hardening cho production.

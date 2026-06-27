@@ -18,6 +18,7 @@ import type { Prisma } from '@prisma/client';
 import type { Upstream, AdSite, AdType, Downstream, AdSiteDownstream } from '../../../shared/prisma/client';
 import type { AdvertiserEntryRow, MediaEntryRow } from '../data-entry/dataEntry.types';
 import type { DataEntryStatus, EntryType } from '../bff.types';
+import { normalizePctHal } from '../../../shared/services/payout.service';
 
 export interface AdvertiserReportParams {
   date?: string;
@@ -121,24 +122,29 @@ export async function getAdvertiserReport(params: AdvertiserReportParams): Promi
     dateFilter = { recordDate: { gte: start, lte: end } };
   }
 
-  const statusFilter: Prisma.DailyInputWhereInput = {};
-  if (status && status !== 'all') {
-    statusFilter.status = status;
+  // 'pending' là alias UI của 'unconfirmed'. 'all' = mọi trạng thái trừ quarantined.
+  let statusCondition: Prisma.DailyInputWhereInput['status'];
+  if (!status || status === 'confirmed') {
+    statusCondition = 'confirmed';
+  } else if (status === 'unconfirmed' || status === 'pending') {
+    statusCondition = 'unconfirmed';
   } else {
-    statusFilter.status = 'confirmed';
+    // status === 'all'
+    statusCondition = { not: 'quarantined' };
   }
 
+  // Gộp filter advertiserId + adTypeCode vào cùng một điều kiện `upstream`
+  // (tránh key collision khi trải `actualAdTypeWhere` vốn cũng dùng key `upstream`).
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(advertiserId != null && { id: advertiserId }),
+    ...(adTypeCode && { defaultAdType: { id: adTypeCode } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
     where: {
       ...dateFilter,
-      ...statusFilter,
-      status: { not: 'quarantined' },
+      status: statusCondition,
       adSite: {
-        ...(adTypeCode && actualAdTypeWhere(adTypeCode)),
         upstream: {
           ...upstreamWhere,
         },
@@ -171,7 +177,7 @@ function makeReportMediaRow(
   site: Prisma.AdSiteGetPayload<{ include: { upstream: { include: { defaultAdType: true } }; downstreams: { include: { downstream: true } } } }>,
   upstream: Prisma.UpstreamGetPayload<{ include: { defaultAdType: true } }>,
   junction: Prisma.AdSiteDownstreamGetPayload<{ include: { downstream: true } }>,
-  payoutRate: number,
+  shareRatioNum: number,
 ): MediaEntryRow {
   const adTypeCode = actualAdType(site)?.name ?? null;
   const adTypeName = actualAdType(site)?.name ?? null;
@@ -190,7 +196,6 @@ function makeReportMediaRow(
   }
 
   const receivable = toNum(di.revenue) ?? 0;
-  const shareRatioNum = payoutRate;
   const shareRatio = shareRatioNum === 1 ? '1' : String(shareRatioNum);
   const actualReceived = receivable && shareRatioNum
     ? Number((receivable * shareRatioNum).toFixed(3))
@@ -233,18 +238,21 @@ export async function getMediaReport(params: MediaReportParams): Promise<MediaEn
     dateFilter = { recordDate: { gte: start, lte: end } };
   }
 
-  const statusFilter: Prisma.DailyInputWhereInput = {};
-  if (status && status !== 'all') {
-    statusFilter.status = status;
+  // 'pending' là alias UI của 'unconfirmed'. 'all' = mọi trạng thái trừ quarantined.
+  let statusCondition: Prisma.DailyInputWhereInput['status'];
+  if (!status || status === 'confirmed') {
+    statusCondition = 'confirmed';
+  } else if (status === 'unconfirmed' || status === 'pending') {
+    statusCondition = 'unconfirmed';
   } else {
-    statusFilter.status = 'confirmed';
+    // status === 'all'
+    statusCondition = { not: 'quarantined' };
   }
 
   const dailyInputs = await prisma.dailyInput.findMany({
     where: {
       ...dateFilter,
-      ...statusFilter,
-      status: { not: 'quarantined' },
+      status: statusCondition,
       adSite: {
         downstreams: { some: {} },
         ...(mediaId != null && { upstreamId: mediaId }),
@@ -264,13 +272,50 @@ export async function getMediaReport(params: MediaReportParams): Promise<MediaEn
     orderBy: { recordDate: 'asc' },
   });
 
+  // Batch-fetch every DownstreamPeriod for the junction downstreams that overlaps
+  // the report window, then resolve pctHal per (downstreamId, recordDate) in memory
+  // (mirrors aggregateDownstreamCost in payout.service.ts).
+  const recordDates = dailyInputs.map(di => di.recordDate);
+  const downstreamIds = Array.from(new Set(
+    dailyInputs.flatMap(di => di.adSite.downstreams.map(j => j.downstreamId))
+  ));
+  const minDate = recordDates.length ? new Date(Math.min(...recordDates.map(d => d.getTime()))) : undefined;
+  const maxDate = recordDates.length ? new Date(Math.max(...recordDates.map(d => d.getTime()))) : undefined;
+
+  const periods = downstreamIds.length
+    ? await prisma.downstreamPeriod.findMany({
+        where: {
+          downstreamId: { in: downstreamIds },
+          ...(minDate && { startDate: { lte: maxDate } }),
+          ...(minDate && { OR: [{ endDate: null }, { endDate: { gte: minDate } }] }),
+        },
+        orderBy: { startDate: 'desc' },
+      })
+    : [];
+
+  const periodsByDownstream = new Map<string, typeof periods>();
+  for (const p of periods) {
+    const list = periodsByDownstream.get(p.downstreamId);
+    if (list) list.push(p);
+    else periodsByDownstream.set(p.downstreamId, [p]);
+  }
+
+  // periods are ordered startDate desc, so the first one active on the date wins
+  const resolveShareRatio = (downstreamId: string, recordDate: Date): number => {
+    const list = periodsByDownstream.get(downstreamId);
+    const active = list?.find(p =>
+      p.startDate <= recordDate && (p.endDate == null || p.endDate >= recordDate)
+    );
+    return normalizePctHal(active?.pctHal ?? 1.0);
+  };
+
   const rows: MediaEntryRow[] = [];
   for (const di of dailyInputs) {
     const site = di.adSite;
     if (!site.downstreams || site.downstreams.length === 0) continue;
     for (const junction of site.downstreams) {
-      const payoutRate = 0.8; // payoutRate moved to DownstreamPeriod; fixed default for now
-      rows.push(makeReportMediaRow(di, site, site.upstream, junction, payoutRate));
+      const shareRatio = resolveShareRatio(junction.downstreamId, di.recordDate);
+      rows.push(makeReportMediaRow(di, site, site.upstream, junction, shareRatio));
     }
   }
   return rows;

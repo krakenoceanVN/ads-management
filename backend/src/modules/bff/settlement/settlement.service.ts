@@ -65,6 +65,7 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
 
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(advertiserId != null && { id: advertiserId }),
+    ...(adTypeId && { defaultAdType: { id: adTypeId } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
@@ -72,7 +73,6 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
       ...dateFilter,
       status: 'confirmed',
       adSite: {
-        ...(adTypeId && actualAdTypeWhere(adTypeId)),
         upstream: { ...upstreamWhere },
       },
     },
@@ -150,6 +150,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
 
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(mediaId != null && { id: mediaId }),
+    ...(adTypeId && { defaultAdType: { id: adTypeId } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
@@ -157,7 +158,6 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
       ...dateFilter,
       status: 'confirmed',
       adSite: {
-        ...(adTypeId && actualAdTypeWhere(adTypeId)),
         upstream: { ...upstreamWhere },
         downstreams: { some: {} },
       },

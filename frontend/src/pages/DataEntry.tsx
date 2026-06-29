@@ -295,7 +295,7 @@ export function AdvEntry() {
       const validationError = getAdvertiserRowValidationError(row);
       if (validationError) throw new Error(`${getAdvertiserRowKey(row)}: ${validationError}`);
     }
-    const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ adId: number; type: EntryType; rate: string; traffic: string; settlement: string; recordDate: string }> }>();
+    const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ adId: string; type: EntryType; rate: string; traffic: string; settlement: string; recordDate: string }> }>();
     for (const row of targetRows) {
       const date = normalizeDate(row.date);
       const adTypeCode = adTypeCodeForRow(row);
@@ -352,7 +352,7 @@ export function AdvEntry() {
   };
 
   const unconfirmRow = async (row: AdvertiserEntryRow) => {
-    if (row.id <= 0) return; // cannot unconfirm a generated (unsaved) row
+    if (!row.id) return;
     setBusy(true);
     setError('');
     setMessage('');
@@ -597,7 +597,7 @@ export function MediaDataMgmt() {
     setError('');
     try {
       const dateRows = await listMediaEntries({ date });
-      setRows((Array.isArray(dateRows) ? (dateRows as unknown as MediaEntryRow[]) : []).filter(row => isAllowedEntryType(row.type)));
+      setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -670,7 +670,7 @@ export function MediaDataMgmt() {
         if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error(t('dataCoefficientNeutralRequired'));
       }
     }
-    const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ mediaId: number; type: EntryType; rate: string; traffic: string; settlement: string; dataCoefficient: string; recordDate: string }> }>();
+    const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ mediaId: string; type: EntryType; rate: string; traffic: string; settlement: string; dataCoefficient: string; recordDate: string }> }>();
     for (const row of targetRows) {
       const date = normalizeDate(row.date);
       const adTypeCode = adTypeCodeForRow(row);
@@ -722,7 +722,7 @@ export function MediaDataMgmt() {
   };
 
   const unconfirmRow = async (row: MediaEntryRow) => {
-    if (row.id <= 0) return; // cannot unconfirm a generated (unsaved) row
+    if (!row.id) return;
     setBusy(true);
     setError('');
     try {

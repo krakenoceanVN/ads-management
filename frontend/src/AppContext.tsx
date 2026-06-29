@@ -32,8 +32,8 @@ interface AppState {
   renderLog: (log: OperationLog) => string;
   adIdPresetFilter: DetailPresetFilter;
   mediaIdPresetFilter: DetailPresetFilter;
-  navigateToAdIds: (advId: number, adTypeCode: string) => void;
-  navigateToMediaIds: (mediaId: number, adTypeCode: string) => void;
+  navigateToAdIds: (advId: string, adTypeCode: string) => void;
+  navigateToMediaIds: (mediaId: string, adTypeCode: string) => void;
   clearAdIdPresetFilter: () => void;
   clearMediaIdPresetFilter: () => void;
   currentUser: CurrentUserInfo | null;
@@ -94,13 +94,13 @@ export function AppProvider({ children, initialCurrentUser }: AppProviderProps) 
   const displayName = (value: string | number | undefined | null) => localizeName(value, lang);
   const renderLog = (log: OperationLog) => renderOperationLog(log, lang);
 
-  const navigateToAdIds = (advId: number, adTypeCode: string) => {
-    setAdIdPresetFilter({ ownerId: String(advId), adTypeCode });
+  const navigateToAdIds = (advId: string, adTypeCode: string) => {
+    setAdIdPresetFilter({ ownerId: advId, adTypeCode });
     setCurrentPage('pAdIdMgmt');
   };
 
-  const navigateToMediaIds = (mediaId: number, adTypeCode: string) => {
-    setMediaIdPresetFilter({ ownerId: String(mediaId), adTypeCode });
+  const navigateToMediaIds = (mediaId: string, adTypeCode: string) => {
+    setMediaIdPresetFilter({ ownerId: mediaId, adTypeCode });
     setCurrentPage('pMediaIdMgmt');
   };
 

@@ -262,7 +262,7 @@ export function MediaMgmt() {
   }, [loadRows]);
 
   const firstUpstreamId = advertisers[0]?.id ? String(advertisers[0].id) : '';
-  const advertiserName = (id: number | undefined) => {
+  const advertiserName = (id: string | undefined) => {
     if (!id) return '-';
     return displayName(advertisers.find(item => item.id === id)?.name ?? '-');
   };
@@ -300,7 +300,7 @@ export function MediaMgmt() {
       }
       if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
-    return a.id - b.id;
+    return String(a.id).localeCompare(String(b.id));
   });
 
   const openCreate = () => {

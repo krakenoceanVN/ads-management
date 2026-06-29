@@ -31,6 +31,7 @@ import type {
   LoginResponse,
   Media,
   MediaAdOrder,
+  MediaEntryRow,
   MediaId,
   MediaReportParams,
   MediaSettlementParams,
@@ -184,7 +185,7 @@ export async function listAdvertisers(): Promise<Advertiser[]> {
   return unwrapData(await request<BffDataResponse<Advertiser[]>>('/api/bff/advertisers'));
 }
 
-export async function getAdvertiser(id: number) {
+export async function getAdvertiser(id: string) {
   return unwrapData(await request<BffDataResponse<Advertiser>>(`/api/bff/advertisers/${id}`));
 }
 
@@ -195,14 +196,14 @@ export async function createAdvertiser(data: CreateAdvertiserInput): Promise<Adv
   }));
 }
 
-export async function updateAdvertiser(id: number, data: UpdateAdvertiserInput): Promise<Advertiser> {
+export async function updateAdvertiser(id: string, data: UpdateAdvertiserInput): Promise<Advertiser> {
   return unwrapData(await request<BffDataResponse<Advertiser>>(`/api/bff/advertisers/${id}`, {
     method: 'PUT',
     body: data,
   }));
 }
 
-export async function deleteAdvertiser(id: number) {
+export async function deleteAdvertiser(id: string) {
   return request<BffMutationResponse>(`/api/bff/advertisers/${id}`, { method: 'DELETE' });
 }
 
@@ -210,7 +211,7 @@ export async function listMedia(params?: ListMediaParams): Promise<Media[]> {
   return unwrapData(await request<BffDataResponse<Media[]>>('/api/bff/media', { params }));
 }
 
-export async function getMedia(id: number): Promise<Media> {
+export async function getMedia(id: string): Promise<Media> {
   return unwrapData(await request<BffDataResponse<Media>>(`/api/bff/media/${id}`));
 }
 
@@ -221,14 +222,14 @@ export async function createMedia(data: CreateMediaInput): Promise<Media> {
   }));
 }
 
-export async function updateMedia(id: number, data: UpdateMediaInput): Promise<Media> {
+export async function updateMedia(id: string, data: UpdateMediaInput): Promise<Media> {
   return unwrapData(await request<BffDataResponse<Media>>(`/api/bff/media/${id}`, {
     method: 'PUT',
     body: data,
   }));
 }
 
-export async function deleteMedia(id: number) {
+export async function deleteMedia(id: string) {
   return request<BffMutationResponse>(`/api/bff/media/${id}`, { method: 'DELETE' });
 }
 
@@ -262,7 +263,7 @@ export async function listAdIds(params?: ListAdIdsParams): Promise<AdId[]> {
   return unwrapData(await request<BffDataResponse<AdId[]>>('/api/bff/ad-ids', { params }));
 }
 
-export async function getAdId(id: number) {
+export async function getAdId(id: string) {
   return unwrapData(await request<BffDataResponse<AdId>>(`/api/bff/ad-ids/${id}`));
 }
 
@@ -273,14 +274,14 @@ export async function createAdId(data: CreateAdIdInput): Promise<AdId> {
   }));
 }
 
-export async function updateAdId(id: number, data: UpdateAdIdInput): Promise<AdId> {
+export async function updateAdId(id: string, data: UpdateAdIdInput): Promise<AdId> {
   return unwrapData(await request<BffDataResponse<AdId>>(`/api/bff/ad-ids/${id}`, {
     method: 'PUT',
     body: data,
   }));
 }
 
-export async function deleteAdId(id: number) {
+export async function deleteAdId(id: string) {
   return request<BffMutationResponse>(`/api/bff/ad-ids/${id}`, { method: 'DELETE' });
 }
 
@@ -288,7 +289,7 @@ export async function listMediaIds(params?: ListMediaIdsParams): Promise<MediaId
   return unwrapData(await request<BffDataResponse<MediaId[]>>('/api/bff/media-ids', { params }));
 }
 
-export async function getMediaId(id: number): Promise<MediaId> {
+export async function getMediaId(id: string): Promise<MediaId> {
   return unwrapData(await request<BffDataResponse<MediaId>>(`/api/bff/media-ids/${id}`));
 }
 
@@ -306,7 +307,7 @@ export async function updateMediaId(id: string, data: UpdateMediaIdInput): Promi
   }));
 }
 
-export async function deleteMediaId(id: number) {
+export async function deleteMediaId(id: string) {
   return request<BffMutationResponse>(`/api/bff/media-ids/${id}`, { method: 'DELETE' });
 }
 
@@ -321,14 +322,14 @@ export async function createDownstream(data: CreateDownstreamInput) {
   }));
 }
 
-export async function updateDownstream(id: number, data: UpdateDownstreamInput) {
+export async function updateDownstream(id: string, data: UpdateDownstreamInput) {
   return unwrapData(await request<BffDataResponse<DownstreamDto>>(`/api/bff/downstreams/${id}`, {
     method: 'PUT',
     body: data,
   }));
 }
 
-export async function deleteDownstream(id: number) {
+export async function deleteDownstream(id: string) {
   return request<BffMutationResponse>(`/api/bff/downstreams/${id}`, { method: 'DELETE' });
 }
 
@@ -350,14 +351,14 @@ export async function confirmAdvertiserEntryBatch(payload: { date: string; adSit
   }));
 }
 
-export async function unconfirmAdvertiserEntry(id: number): Promise<UnconfirmEntryResult> {
+export async function unconfirmAdvertiserEntry(id: string): Promise<UnconfirmEntryResult> {
   return unwrapData(await request<BffDataResponse<UnconfirmEntryResult>>(`/api/bff/data-entry/advertisers/${id}/unconfirm`, {
     method: 'PUT',
   }));
 }
 
-export async function listMediaEntries(params: ListMediaEntriesParams): Promise<AdvertiserEntryRow[]> {
-  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/data-entry/media', { params }));
+export async function listMediaEntries(params: ListMediaEntriesParams): Promise<MediaEntryRow[]> {
+  return unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/data-entry/media', { params }));
 }
 
 export async function confirmMediaEntryBatch(payload: { date: string; adSiteIds: string[] }): Promise<ConfirmEntryBatchResult> {
@@ -367,7 +368,7 @@ export async function confirmMediaEntryBatch(payload: { date: string; adSiteIds:
   }));
 }
 
-export async function unconfirmMediaEntry(id: number): Promise<UnconfirmEntryResult> {
+export async function unconfirmMediaEntry(id: string): Promise<UnconfirmEntryResult> {
   return unwrapData(await request<BffDataResponse<UnconfirmEntryResult>>(`/api/bff/data-entry/media/${id}/unconfirm`, {
     method: 'PUT',
   }));
@@ -416,11 +417,11 @@ export async function createUser(data: CreateUserInput): Promise<UserManagementU
   return unwrapData(await request<BffDataResponse<UserManagementUser>>('/api/users', { method: 'POST', body: data }));
 }
 
-export async function updateUser(id: number, data: UpdateUserInput): Promise<UserManagementUser> {
+export async function updateUser(id: string, data: UpdateUserInput): Promise<UserManagementUser> {
   return unwrapData(await request<BffDataResponse<UserManagementUser>>(`/api/users/${id}`, { method: 'PUT', body: data }));
 }
 
-export async function resetUserPassword(id: number, data: ResetPasswordInput): Promise<{ success: boolean }> {
+export async function resetUserPassword(id: string, data: ResetPasswordInput): Promise<{ success: boolean }> {
   return unwrapData(await request<BffDataResponse<{ success: boolean }>>(`/api/users/${id}/reset-password`, { method: 'POST', body: data }));
 }
 

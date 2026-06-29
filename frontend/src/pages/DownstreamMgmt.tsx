@@ -29,7 +29,7 @@ function getDownstreamAdTypeCodes(record: DownstreamDto): string[] {
 }
 
 interface EditState {
-  id?: number;
+  id?: string;
   adTypeIds: string[];
   name: string;
   contact: string;
@@ -165,7 +165,7 @@ export function DownstreamMgmt() {
       }
       if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
-    return a.id - b.id;
+    return String(a.id).localeCompare(String(b.id));
   }), [rows, filterDownstream, filterStatus, keyword, sortState, displayName]);
 
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [

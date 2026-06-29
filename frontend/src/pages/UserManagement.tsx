@@ -13,7 +13,7 @@ import type { Role, UserManagementUser, CreateUserInput, UpdateUserInput } from 
 
 type ModalMode = 'create' | 'edit' | 'resetPw' | null;
 
-async function disableUser(userId: number): Promise<void> {
+async function disableUser(userId: string): Promise<void> {
   await updateUser(userId, { status: 'inactive' });
 }
 

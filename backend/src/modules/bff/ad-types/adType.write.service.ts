@@ -11,16 +11,16 @@ import { prisma } from '../../../shared/prisma/client';
 import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
 import { generateShortId } from '../../../shared/ids';
 
-// Tên đơn quảng cáo (AdType) phải duy nhất toàn hệ thống, so khớp không phân biệt hoa/thường.
-async function assertNameUnique(name: string, excludeId?: string): Promise<void> {
+async function assertNameUniqueForOwner(name: string, upstreamId: string | null, excludeId?: string): Promise<void> {
   const dupe = await prisma.adType.findFirst({
     where: {
       name: { equals: name, mode: 'insensitive' },
+      upstreamId,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
     select: { id: true },
   });
-  if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${name}' đã tồn tại`);
+  if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${name}' đã tồn tại cho nhà quảng cáo này`);
 }
 
 export interface CreateAdTypeInput {
@@ -75,10 +75,11 @@ export async function createAdType(input: CreateAdTypeInput): Promise<AdTypeDto>
   const name = input.name?.trim();
   if (!name) throw new BadRequestError('name is required');
 
-  await assertNameUnique(name);
+  const upstreamId = input.upstreamId ?? null;
+  await assertNameUniqueForOwner(name, upstreamId);
 
-  if (input.upstreamId) {
-    const upstream = await prisma.upstream.findUnique({ where: { id: input.upstreamId } });
+  if (upstreamId) {
+    const upstream = await prisma.upstream.findUnique({ where: { id: upstreamId } });
     if (!upstream) throw new BadRequestError('Invalid upstreamId');
   }
 
@@ -86,7 +87,7 @@ export async function createAdType(input: CreateAdTypeInput): Promise<AdTypeDto>
     data: {
       id: generateShortId(),
       name,
-      upstreamId: input.upstreamId ?? null,
+      upstreamId,
       notes: input.notes ?? null,
       status: input.status ?? 'active',
     },
@@ -104,10 +105,12 @@ export async function updateAdType(id: string, input: UpdateAdTypeInput): Promis
   const name = input.name?.trim();
   if (input.name !== undefined && !name) throw new BadRequestError('name cannot be empty');
 
-  if (name) await assertNameUnique(name, id);
+  const nextName = name ?? existing.name;
+  const nextUpstreamId = input.upstreamId !== undefined ? input.upstreamId : existing.upstreamId;
+  await assertNameUniqueForOwner(nextName, nextUpstreamId, id);
 
-  if (input.upstreamId) {
-    const upstream = await prisma.upstream.findUnique({ where: { id: input.upstreamId } });
+  if (nextUpstreamId) {
+    const upstream = await prisma.upstream.findUnique({ where: { id: nextUpstreamId } });
     if (!upstream) throw new BadRequestError('Invalid upstreamId');
   }
 

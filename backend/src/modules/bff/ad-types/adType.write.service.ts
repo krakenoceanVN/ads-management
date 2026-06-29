@@ -37,18 +37,6 @@ export interface UpdateAdTypeInput {
   status?: 'active' | 'inactive';
 }
 
-// Check if adType is referenced by any business table (by id)
-async function isIdReferenced(id: string): Promise<boolean> {
-  const [upstream, upstreamAdType, adSite, downstreamAdType, mediaAdOrder] = await Promise.all([
-    prisma.upstream.count({ where: { defaultAdType: { id } } }),
-    prisma.upstreamAdType.count({ where: { adTypeId: id } }),
-    prisma.adSite.count({ where: { upstream: { defaultAdType: { id } } } }),
-    prisma.downstreamAdType.count({ where: { adTypeId: id } }),
-    prisma.mediaAdOrder.count({ where: { adTypeId: id } }),
-  ]);
-  return upstream > 0 || upstreamAdType > 0 || adSite > 0 || downstreamAdType > 0 || mediaAdOrder > 0;
-}
-
 export interface AdTypeDto {
   id: string;
   name: string;
@@ -133,11 +121,26 @@ export async function deleteAdType(id: string): Promise<{ deleted: boolean }> {
   const existing = await prisma.adType.findUnique({ where: { id } });
   if (!existing) throw new BadRequestError('AdType not found');
 
-  const referenced = await isIdReferenced(id);
-  if (referenced) {
-    throw new BadRequestError(`Cannot delete AdType '${existing.name}': it is referenced by existing business records`);
+  // Block only when financial records (DailyInput) hang off AdSites that select
+  // this AdType (per-AdSite adTypeId) — deleting would corrupt reports.
+  const dailyInputCount = await prisma.dailyInput.count({
+    where: { adSite: { adTypeId: id } },
+  });
+  if (dailyInputCount > 0) {
+    throw new BadRequestError(`Cannot delete AdType '${existing.name}': it is referenced by existing financial records`);
   }
 
-  await prisma.adType.delete({ where: { id } });
+  // No financial data: detach links instead of failing.
+  // Nullable FKs → set null; NOT-NULL junctions → delete the link rows.
+  await prisma.$transaction(async (tx) => {
+    await tx.adSite.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.upstream.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.mediaAdOrder.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.adSiteDownstream.updateMany({ where: { mediaAdTypeId: id }, data: { mediaAdTypeId: null } });
+    await tx.upstreamAdType.deleteMany({ where: { adTypeId: id } });
+    await tx.downstreamAdType.deleteMany({ where: { adTypeId: id } });
+    await tx.adType.delete({ where: { id } });
+  });
+
   return { deleted: true };
 }

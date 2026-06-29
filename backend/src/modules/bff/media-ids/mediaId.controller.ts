@@ -12,7 +12,7 @@ export async function getAll(req: Request, res: Response) {
   const filters = {
     mediaId: mediaId ? String(mediaId) : undefined,
     adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
-    type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
+    type: type ? (String(type) as 'CPM' | 'CPC' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
   };
 

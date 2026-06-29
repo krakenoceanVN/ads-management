@@ -371,7 +371,6 @@ export function AdvertiserList() {
     }
     const payload: CreateAdvertiserInput | UpdateAdvertiserInput = {
       name: form.name.trim(),
-      adTypeId: form.adTypeIds[0] ?? '',
       adTypeIds: form.adTypeIds,
       status: form.status,
       contact: contactValue || null,
@@ -539,8 +538,8 @@ function adIdFormFromRecord(record: AdId, adTypeId = ''): AdIdFormState {
     advertiserId: String(record.advertiserId),
     adTypeId,
     slot: record.slot ?? '',
-    type: record.type as 'CPM' | 'CPS' | 'CPA',
-    unitPrice: (record.type === 'CPM' || record.type === 'CPA') && record.rate != null ? String(record.rate) : '',
+    type: record.type as 'CPM' | 'CPC' | 'CPS' | 'CPA',
+    unitPrice: (record.type === 'CPM' || record.type === 'CPC' || record.type === 'CPA') && record.rate != null ? String(record.rate) : '',
     ratio: record.type === 'CPS' && record.rate != null ? String(record.rate) : '',
     notes: record.notes ?? '',
     status: record.status,
@@ -551,7 +550,7 @@ type AdIdFormState = {
   advertiserId: string;
   adTypeId: string;
   slot: string;
-  type: 'CPM' | 'CPS' | 'CPA';
+  type: 'CPM' | 'CPC' | 'CPS' | 'CPA';
   unitPrice: string;
   ratio: string;
   notes: string;
@@ -705,7 +704,7 @@ export function AdIdMgmt() {
     [advertiserScopedRows]
   );
   const typeOptions = React.useMemo(
-    () => Array.from(new Set(advertiserScopedRows.map(row => row.type).filter(Boolean))),
+    () => Array.from(new Set(advertiserScopedRows.map(row => row.type).filter((t): t is 'CPM' | 'CPC' | 'CPS' | 'CPA' => t === 'CPM' || t === 'CPC' || t === 'CPS' || t === 'CPA'))),
     [advertiserScopedRows]
   );
   const keyword = normalizeText(search);
@@ -789,9 +788,12 @@ export function AdIdMgmt() {
     setEditing(null);
     const advertiser = advertisers.find(item => String(item.id) === String(advFilter));
     const ids = advertiser ? getAdvertiserAdTypeIds(advertiser) : [];
-    // If orderFilter (which still carries display name) matches an advertiser adType name, resolve to id
+    // Resolve orderFilter (display name) to adTypeId, but only keep it if the adType actually
+    // belongs to the currently-filtered advertiser — otherwise fall back to the first
+    // adType of that advertiser so submit doesn't fail with "adTypeId is not linked".
     const orderFilterName = orderFilter;
-    const matchedId = orderFilterName ? adTypes.find(at => at.name === orderFilterName)?.id ?? '' : '';
+    const matchedAdType = orderFilterName ? adTypes.find(at => at.name === orderFilterName) : undefined;
+    const matchedId = matchedAdType && ids.includes(matchedAdType.id) ? matchedAdType.id : '';
     setForm({ ...defaultAdIdForm(), advertiserId: advFilter, adTypeId: matchedId || ids[0] || '' });
     setFormError('');
     setFormOpen(true);
@@ -799,7 +801,7 @@ export function AdIdMgmt() {
 
   const openEdit = (record: AdId) => {
     setEditing(record);
-    const resolvedAdTypeId = adTypes.find(at => at.name === record.adTypeCode)?.id ?? '';
+    const resolvedAdTypeId = record.adTypeId ?? adTypes.find(at => at.name === record.adTypeCode)?.id ?? '';
     setForm(adIdFormFromRecord(record, resolvedAdTypeId));
     setFormError('');
     setFormOpen(true);
@@ -826,7 +828,7 @@ export function AdIdMgmt() {
       return;
     }
     const type = form.type;
-    if (type === 'CPM' || type === 'CPA') {
+    if (type === 'CPM' || type === 'CPC' || type === 'CPA') {
       const price = parseFloat(form.unitPrice);
       if (!form.unitPrice || isNaN(price)) {
         setFormError(t('unitPriceRequired') || 'Please enter unit price');
@@ -853,7 +855,7 @@ export function AdIdMgmt() {
       adTypeId: form.adTypeId,
       slot: form.slot.trim(),
       type,
-      unitPrice: type === 'CPM' || type === 'CPA' ? parseFloat(form.unitPrice) : undefined,
+      unitPrice: type === 'CPM' || type === 'CPC' || type === 'CPA' ? parseFloat(form.unitPrice) : undefined,
       ratio: type === 'CPS' ? parseFloat(form.ratio) : undefined,
       notes: form.notes.trim() || null,
       status: form.status,
@@ -957,7 +959,16 @@ export function AdIdMgmt() {
                   const advertiser = advertisers.find(a => String(a.id) === e.target.value);
                   const ids = advertiser ? getAdvertiserAdTypeIds(advertiser) : [];
                   const currentTypeName = adTypes.find(at => at.id === prev.adTypeId)?.name;
-                  return { ...prev, advertiserId: e.target.value, adTypeId: prev.adTypeId && ids.includes(prev.adTypeId) ? prev.adTypeId : ids[0] ?? prev.adTypeId, adTypeCode: currentTypeName };
+                  return {
+                    ...prev,
+                    advertiserId: e.target.value,
+                    adTypeId: ids.length === 0
+                      ? ''
+                      : prev.adTypeId && ids.includes(prev.adTypeId)
+                        ? prev.adTypeId
+                        : ids[0],
+                    adTypeCode: currentTypeName,
+                  };
                 })}>
                   <option value="">-</option>
                   {advertisers.filter(a => !form.adTypeId || getAdvertiserAdTypeIds(a).includes(form.adTypeId)).map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}
@@ -980,13 +991,23 @@ export function AdIdMgmt() {
               </div>
               <div className="form-group"><label>{t('adId')} <span style={{ color: 'red' }}>*</span></label><input type="text" value={form.slot} onChange={e => setForm(prev => ({ ...prev, slot: e.target.value }))} /></div>
               <div className="form-group"><label>{t('type')} <span style={{ color: 'red' }}>*</span></label>
-                <select value={form.type} onChange={e => setForm(prev => ({ ...prev, type: e.target.value as 'CPM' | 'CPS' | 'CPA' }))}>
+                <select value={form.type} onChange={e => setForm(prev => {
+                  const nextType = e.target.value as 'CPM' | 'CPC' | 'CPS' | 'CPA';
+                  return {
+                    ...prev,
+                    type: nextType,
+                    ...(nextType === 'CPS'
+                      ? { unitPrice: '' }
+                      : { ratio: '' }),
+                  };
+                })}>
                   <option value="CPM">CPM</option>
+                  <option value="CPC">CPC</option>
                   <option value="CPS">CPS</option>
                   <option value="CPA">CPA</option>
                 </select>
               </div>
-              {(form.type === 'CPM' || form.type === 'CPA') && <div className="form-group"><label>{t('unitPrice')} <span style={{ color: 'red' }}>*</span></label><input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setForm(prev => ({ ...prev, unitPrice: e.target.value }))} /></div>}
+              {(form.type === 'CPM' || form.type === 'CPC' || form.type === 'CPA') && <div className="form-group"><label>{t('unitPrice')} <span style={{ color: 'red' }}>*</span></label><input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setForm(prev => ({ ...prev, unitPrice: e.target.value }))} /></div>}
               {form.type === 'CPS' && <div className="form-group"><label>{t('revenueShare')} <span style={{ color: 'red' }}>*</span></label><input type="number" step="0.0001" min="0" max="1" value={form.ratio} onChange={e => setForm(prev => ({ ...prev, ratio: e.target.value }))} /></div>}
               <div className="form-group"><label>{t('notes')}</label><textarea rows={2} value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} /></div>
               <div className="form-group"><label>{t('status')}</label>

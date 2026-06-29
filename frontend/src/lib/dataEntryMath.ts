@@ -1,4 +1,4 @@
-export type EntryType = 'CPM' | 'CPA' | 'CPS';
+export type EntryType = 'CPM' | 'CPC' | 'CPA' | 'CPS';
 
 export interface AdvertiserEntryRow {
   id: number;
@@ -65,7 +65,7 @@ export function formatAmount(val: unknown) {
 
 export function calculateAdvertiserReceivable(row: Pick<AdvertiserEntryRow, 'type' | 'rate' | 'settlement'>): CalculatedAmount {
   if (!hasValue(row.rate) || !hasValue(row.settlement)) return '';
-  if (row.type === 'CPM') return parseNumber(row.rate) * parseNumber(row.settlement) / 1000;
+  if (row.type === 'CPM' || row.type === 'CPC') return parseNumber(row.rate) * parseNumber(row.settlement) / 1000;
   if (row.type === 'CPA') return parseNumber(row.rate) * parseNumber(row.settlement);
   if (row.type === 'CPS') return parseNumber(row.settlement) * parsePercent(row.rate);
   return '';
@@ -92,7 +92,7 @@ export function getMediaInheritedTraffic(row: MediaEntryRow, upstreamRows: Adver
 export function getMediaInheritedSettlement(row: MediaEntryRow, upstreamRows: AdvertiserEntryRow[]) {
   const upstream = findUpstreamAdvertiserRow(row, upstreamRows);
   if (!upstream) return row.settlement || '';
-  if (row.type === 'CPM' || row.type === 'CPA') return upstream.settlement || row.settlement || '';
+  if (row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA') return upstream.settlement || row.settlement || '';
   const upstreamReceivable = calculateAdvertiserReceivable(upstream);
   return hasValue(upstreamReceivable) ? formatAmount(upstreamReceivable) : row.settlement || '';
 }
@@ -108,7 +108,7 @@ export function withMediaInheritedValues(row: MediaEntryRow, upstreamRows: Adver
 export function calculateMediaReceivable(row: MediaEntryRow, upstreamRows: AdvertiserEntryRow[] = []): CalculatedAmount {
   const resolved = upstreamRows.length ? withMediaInheritedValues(row, upstreamRows) : row;
   if (!hasValue(resolved.dataCoefficient) || !hasValue(resolved.settlement)) return '';
-  if (resolved.type === 'CPM') {
+  if (resolved.type === 'CPM' || resolved.type === 'CPC') {
     if (!hasValue(resolved.rate)) return '';
     return parseNumber(resolved.rate) * parseNumber(resolved.settlement) * parsePercent(resolved.dataCoefficient) / 1000;
   }

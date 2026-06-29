@@ -184,7 +184,7 @@ export async function countAdvertiserDependencies(advertiserId: string): Promise
 
 function adTypeAdSiteWhere(adTypeId: string): Prisma.AdSiteWhereInput {
   return {
-    upstream: { adTypeId },
+    adTypeId,
   };
 }
 
@@ -296,6 +296,13 @@ export async function hardDeleteAdType(id: string, ctx: HardDeleteContext): Prom
   }
 
   await prisma.$transaction(async (tx) => {
+    // Detach all references before deleting: nullable FKs → null, NOT-NULL junctions → delete rows.
+    await tx.adSite.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.upstream.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.mediaAdOrder.updateMany({ where: { adTypeId: id }, data: { adTypeId: null } });
+    await tx.adSiteDownstream.updateMany({ where: { mediaAdTypeId: id }, data: { mediaAdTypeId: null } });
+    await tx.upstreamAdType.deleteMany({ where: { adTypeId: id } });
+    await tx.downstreamAdType.deleteMany({ where: { adTypeId: id } });
     await tx.adType.delete({ where: { id } });
     await writeOperationLog(tx, ctx, 'HARD_DELETE', 'adType', id, {
       snapshot: target,

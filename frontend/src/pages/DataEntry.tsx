@@ -69,7 +69,7 @@ function errorMessage(error: unknown) {
 }
 
 function isAllowedEntryType(type: unknown): type is EntryType {
-  return type === 'CPM' || type === 'CPS' || type === 'CPA';
+  return type === 'CPM' || type === 'CPC' || type === 'CPS' || type === 'CPA';
 }
 
 function isNeutralDataCoefficient(value: unknown) {
@@ -538,10 +538,10 @@ export function AdvEntry() {
                     <td>{row.type}</td>
                     <td>{row.adId}</td>
                     <td><input {...lockedInputProps} value={row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
-                    {row.type === 'CPM' || row.type === 'CPA'
+                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
                       ? <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
                       : null}
-                    {row.type === 'CPM' || row.type === 'CPA'
+                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
                       ? <td className="amount-cell">—</td>
                       : null}
                     {row.type === 'CPS'
@@ -665,8 +665,10 @@ export function MediaDataMgmt() {
         if (!row.traffic.trim() || !row.settlement.trim()) throw new Error(t('ratioRequiresAmountValues'));
         if (Number(row.rate) <= 0) throw new Error(t('ratioMustBePositive'));
       } else {
-        // CPM and CPA require qty (traffic field) and unitPrice (rate)
+        // CPM, CPC, CPA require qty (traffic field) and unitPrice (rate)
         if (!row.traffic.trim()) throw new Error(t('requiredFields'));
+        if (Number(row.traffic) < 0) throw new Error(t('requiredFields'));
+        if (Number(row.rate) <= 0) throw new Error(t('unitPriceRequired') || t('requiredFields'));
         if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error(t('dataCoefficientNeutralRequired'));
       }
     }
@@ -876,7 +878,7 @@ export function MediaDataMgmt() {
                     <td>{row.type}</td>
                     <td>{row.mediaIdStr}</td>
                     <td><input {...lockedInputProps} value={row.rate === '—' ? '' : row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
-                    {row.type === 'CPM' || row.type === 'CPA'
+                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
                       ? <><td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
                       <td className="amount-cell">—</td>
                       <td className="amount-cell">—</td></>

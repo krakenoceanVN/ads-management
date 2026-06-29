@@ -156,9 +156,9 @@ function roundCurrency(v: number): number {
  * billingMethod comes from the AdSite (already queried).
  * shareRatio comes from DownstreamPeriod.pctHal.
  *
- * CPM:  cost = qty * rate / 1000 * shareRatio
- * CPA:  cost = qty * rate * shareRatio
- * CPS:  cost = (amount1 + amount2) * rate * shareRatio
+ * CPM/CPC: cost = qty * rate / 1000 * shareRatio
+ * CPA:     cost = qty * rate * shareRatio
+ * CPS:     cost = (amount1 + amount2) * rate * shareRatio
  */
 export function calculateCost(
   billingMethod: BillingMethod,
@@ -174,6 +174,7 @@ export function calculateCost(
 
   switch (billingMethod) {
     case 'CPM':
+    case 'CPC':
       return roundCurrency((q * r / 1000) * sr);
     case 'CPA':
       return roundCurrency(q * r * sr);
@@ -278,7 +279,7 @@ export async function aggregateDownstreamCost(
         const shareRatio = pctHal;
 
         const cost = calculateCost(
-          billingMethod,
+          billingMethod ?? 'CPM',
           toNum(di.qty),
           rate,
           shareRatio,

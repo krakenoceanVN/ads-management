@@ -32,7 +32,7 @@ export interface AdvertiserBatchItem {
 }
 
 function validateAdvertiserBatchItem(item: AdvertiserBatchItem, billingMethod: string): void {
-  if (billingMethod === 'CPM' || billingMethod === 'CPA') {
+  if (billingMethod === 'CPM' || billingMethod === 'CPC' || billingMethod === 'CPA') {
     if (!Object.prototype.hasOwnProperty.call(item, 'qty') || item.qty === undefined || item.qty === null) {
       throw new Error(`${billingMethod}: qty is required`);
     }
@@ -107,9 +107,9 @@ export async function saveAdvertiserBatch(
         ? item.ratio
         : currentRatio;
 
-      // Resolve rebate rate for CPM
+      // Resolve rebate rate for CPM/CPC
       let rebateRate: number | null = null;
-      if (billingMethod === 'CPM') {
+      if (billingMethod === 'CPM' || billingMethod === 'CPC') {
         const rebate = await resolveRebateRate(item.adSiteId, recordDate);
         rebateRate = rebate.rate;
       }

@@ -26,6 +26,7 @@ model AdType {
   mediaOrders        MediaAdOrder[]
   adSiteDownstreams  AdSiteDownstream[]   // relation via mediaAdTypeId
   defaultForUpstreams Upstream[] @relation("UpstreamDefaultAdType")
+  adSites            AdSite[]   @relation("AdSiteAdType")
 
   @@index([upstreamId])
   @@index([status])
@@ -134,9 +135,9 @@ model AdSite {
   upstreamId       String
   name             String
   notes            String?
-  billingMethod    String    // CPM | CPS | CPA
+  billingMethod    String    // CPM | CPC | CPS | CPA
   rebateRate       Float?
-  currentUnitPrice Decimal?  // for CPM
+  currentUnitPrice Decimal?  // for CPM/CPC/CPA
   currentRatio    Decimal?  // for CPS
   isActive         Boolean   @default(true)
   isArchived       Boolean   @default(false)
@@ -144,13 +145,17 @@ model AdSite {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  adTypeId         String?
+
   upstream Upstream        @relation(fields: [upstreamId], references: [id])
+  adType   AdType?         @relation("AdSiteAdType", fields: [adTypeId], references: [id], onDelete: SetNull)
   dailyInputs DailyInput[]
   downstreams AdSiteDownstream[]
   events         AdSiteEvent[]
   rebateRates    AdSiteRebateRate[]
 
   @@index([upstreamId])
+  @@index([adTypeId])
   @@index([isActive])
   @@index([isArchived])
   @@index([upstreamId, isActive, isArchived])

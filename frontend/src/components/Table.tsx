@@ -83,7 +83,7 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProp
 }
 
 export function TypeTag({ tp }: { tp: string }) {
-  const cls = tp === 'CPM' ? 'tag-cpm' : tp === 'CPA' ? 'tag-cpa' : 'tag-cps';
+  const cls = tp === 'CPM' ? 'tag-cpm' : tp === 'CPC' ? 'tag-cpc' : tp === 'CPA' ? 'tag-cpa' : 'tag-cps';
   return <span className={`tag ${cls}`}>{tp}</span>;
 }
 

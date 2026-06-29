@@ -212,6 +212,7 @@ function ReportDateRangeField({
   onClear?: () => void;
   onPreset?: (label: 'thisMonth' | 'lastMonth') => void;
 }) {
+  const { t } = useAppContext();
   // Unified event handler: works for onChange, onInput, onBlur from <input>
   function handleStart(e: React.ChangeEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) {
     const target = e.target as HTMLInputElement;
@@ -246,8 +247,8 @@ function ReportDateRangeField({
       </div>
       {onPreset && (
         <div className="report-date-range-presets">
-          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('thisMonth')}>Tháng này</button>
-          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('lastMonth')}>Tháng trước</button>
+          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('thisMonth')}>{t('thisMonth')}</button>
+          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('lastMonth')}>{t('lastMonth')}</button>
         </div>
       )}
       {onClear && (startValue || endValue) && (
@@ -578,6 +579,7 @@ export function OrderProfit() {
 
   const billingMethodOptions = [
     { value: 'CPM', label: 'CPM' },
+    { value: 'CPC', label: 'CPC' },
     { value: 'CPA', label: 'CPA' },
     { value: 'CPS', label: 'CPS' },
   ];

@@ -18,7 +18,7 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
   }
 
   if (filters?.adTypeId) {
-    where.upstream = { adTypeId: filters.adTypeId };
+    where.adTypeId = filters.adTypeId;
   }
 
   if (filters?.type) {
@@ -33,6 +33,7 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
     where,
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -45,6 +46,7 @@ export async function getAdId(id: string) {
     where: { id },
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
   });
   if (!row) return null;

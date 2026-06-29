@@ -215,7 +215,7 @@ export function AdTypeMgmt() {
         return;
       }
       await deleteAdType(editModal.id);
-      setRows(prev => prev.map(r => r.id === editModal.id ? { ...r, status: 'inactive' } : r));
+      setRows(prev => prev.filter(r => r.id !== editModal.id));
       closeModal();
     } catch (err) {
       setEditError(errorMessage(err));

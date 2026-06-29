@@ -13,7 +13,7 @@ export async function getAll(req: Request, res: Response) {
   const filters = {
     advertiserId: advertiserId ? String(advertiserId) : undefined,
     adTypeId: adTypeId ? String(adTypeId) : undefined,
-    type: type ? (String(type) as 'CPM' | 'CPS' | 'CPA') : undefined,
+    type: type ? (String(type) as 'CPM' | 'CPC' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
   };
 
@@ -37,7 +37,7 @@ export async function create(req: Request, res: Response) {
   if (!body.type) throw new BadRequestError('type is required');
   const canonicalType = normalizeBillingMethodForStorage(body.type);
   if (!canonicalType) throw new BadRequestError('Invalid billing method: ' + body.type);
-  if ((canonicalType === 'CPM' || canonicalType === 'CPA') && (body.unitPrice === undefined || body.unitPrice === null || isNaN(Number(body.unitPrice)) || Number(body.unitPrice) <= 0)) {
+  if ((canonicalType === 'CPM' || canonicalType === 'CPC' || canonicalType === 'CPA') && (body.unitPrice === undefined || body.unitPrice === null || isNaN(Number(body.unitPrice)) || Number(body.unitPrice) <= 0)) {
     throw new BadRequestError('unitPrice is required and must be greater than 0 for ' + canonicalType);
   }
   if (canonicalType === 'CPS' && (body.ratio === undefined || body.ratio === null || isNaN(Number(body.ratio)) || Number(body.ratio) <= 0)) {

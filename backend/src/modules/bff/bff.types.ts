@@ -2,13 +2,13 @@
 // These are used by BFF mappers and controllers
 
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'CPS' | 'CPA';
-export type StoredEntryType = 'CPM' | 'CPS' | 'CPA';
+export type EntryType = 'CPM' | 'CPC' | 'CPS' | 'CPA';
+export type StoredEntryType = 'CPM' | 'CPC' | 'CPS' | 'CPA';
 export type DataEntryStatus = 'pending' | 'confirmed';
 
 export function normalizeBillingMethodForStorage(type: EntryType | string | undefined): StoredEntryType | undefined {
   if (type === undefined) return undefined;
-  if (type === 'CPM' || type === 'CPS' || type === 'CPA') return type;
+  if (type === 'CPM' || type === 'CPC' || type === 'CPS' || type === 'CPA') return type;
   if (type === 'RATIO') return 'CPS';
   return undefined;
 }
@@ -64,6 +64,7 @@ export interface AdId {
   status: EntityStatus;
   advertiserId: string;
   advertiserName: string;
+  adTypeId?: string | null;
   adTypeCode: string;
   adTypeName?: string | null;
   upstreamId: string;

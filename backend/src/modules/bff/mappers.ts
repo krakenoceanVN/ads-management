@@ -38,8 +38,8 @@ export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | nul
   };
 }
 
-export function mapMedia(site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }): Media {
-  const adType = site.upstream?.defaultAdType ?? null;
+export function mapMedia(site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null }): Media {
+  const adType = site.adType ?? null;
   return {
     id: site.id,
     name: site.name,
@@ -58,10 +58,10 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { defaultAdType: 
 }
 
 export function mapAdId(
-  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }
+  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null }
 ): AdId {
-  const adType = site.upstream?.defaultAdType ?? null;
-  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
+  const adType = site.adType ?? null;
+  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA'
     ? decimalToNull(site.currentUnitPrice)
     : decimalToNull(site.currentRatio);
 
@@ -74,6 +74,7 @@ export function mapAdId(
     status: site.status as EntityStatus,
     advertiserId: site.upstreamId,
     advertiserName: site.upstream?.name ?? '',
+    adTypeId: site.adTypeId ?? null,
     adTypeCode: adType?.name ?? '',
     adTypeName: adType?.name ?? null,
     upstreamId: site.upstreamId,
@@ -85,12 +86,12 @@ export function mapAdId(
 
 export function mapMediaId(
   j: AdSiteDownstream & {
-    adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } };
+    adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null };
     downstream: Downstream;
     mediaAdType?: AdType | null;
   }
 ): MediaId {
-  const adType = j.adSite.upstream?.defaultAdType ?? null;
+  const adType = j.adSite.adType ?? null;
   return {
     id: j.adSite.id,
     junctionId: j.id,

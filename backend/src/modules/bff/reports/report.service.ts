@@ -52,13 +52,13 @@ function formatDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function actualAdType(site: { upstream: { defaultAdType?: AdType | null } | null }) {
-  return site.upstream?.defaultAdType ?? null;
+function actualAdType(site: { adType?: AdType | null }) {
+  return site.adType ?? null;
 }
 
 function actualAdTypeWhere(adTypeId: string): Prisma.AdSiteWhereInput {
   return {
-    upstream: { defaultAdType: { id: adTypeId } },
+    adTypeId,
   };
 }
 
@@ -67,6 +67,7 @@ function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
     adSite: {
       include: {
         upstream: { include: { defaultAdType: true } };
+        adType: true;
       };
     };
   };
@@ -75,13 +76,13 @@ function makeReportAdvertiserRow(di: Prisma.DailyInputGetPayload<{
   const upstream = site.upstream;
   const adType = actualAdType(site);
 
-  const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
+  const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA')
     ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di.ratioSnapshot ?? site.currentRatio);
 
   let traffic = '';
   let settlement = '';
-  if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
+  if (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA') {
     traffic = String(di.qty);
   } else {
     traffic = toStr(di.amount1);
@@ -133,27 +134,23 @@ export async function getAdvertiserReport(params: AdvertiserReportParams): Promi
     statusCondition = { not: 'quarantined' };
   }
 
-  // Gộp filter advertiserId + adTypeCode vào cùng một điều kiện `upstream`
-  // (tránh key collision khi trải `actualAdTypeWhere` vốn cũng dùng key `upstream`).
-  const upstreamWhere: Prisma.UpstreamWhereInput = {
-    ...(advertiserId != null && { id: advertiserId }),
-    ...(adTypeCode && { defaultAdType: { id: adTypeCode } }),
+  // adTypeCode lọc theo đơn QC per-AdSite (AdSite.adTypeId), advertiserId lọc theo upstream.
+  const adSiteWhere: Prisma.AdSiteWhereInput = {
+    ...(advertiserId != null && { upstream: { id: advertiserId } }),
+    ...(adTypeCode && { adTypeId: adTypeCode }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
     where: {
       ...dateFilter,
       status: statusCondition,
-      adSite: {
-        upstream: {
-          ...upstreamWhere,
-        },
-      },
+      adSite: adSiteWhere,
     },
     include: {
       adSite: {
         include: {
           upstream: { include: { defaultAdType: true } },
+          adType: true,
         },
       },
     },
@@ -170,11 +167,12 @@ function makeReportMediaRow(
         include: {
           upstream: { include: { defaultAdType: true } };
           downstreams: { include: { downstream: true } };
+          adType: true;
         };
       };
     };
   }>,
-  site: Prisma.AdSiteGetPayload<{ include: { upstream: { include: { defaultAdType: true } }; downstreams: { include: { downstream: true } } } }>,
+  site: Prisma.AdSiteGetPayload<{ include: { upstream: { include: { defaultAdType: true } }; downstreams: { include: { downstream: true } }; adType: true } }>,
   upstream: Prisma.UpstreamGetPayload<{ include: { defaultAdType: true } }>,
   junction: Prisma.AdSiteDownstreamGetPayload<{ include: { downstream: true } }>,
   shareRatioNum: number,
@@ -182,13 +180,13 @@ function makeReportMediaRow(
   const adTypeCode = actualAdType(site)?.name ?? null;
   const adTypeName = actualAdType(site)?.name ?? null;
 
-  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
+  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA'
     ? toStr(di.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di.ratioSnapshot ?? site.currentRatio);
 
   let traffic = '';
   let settlement = '';
-  if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
+  if (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA') {
     traffic = String(di.qty);
   } else {
     traffic = toStr(di.amount1);
@@ -266,6 +264,7 @@ export async function getMediaReport(params: MediaReportParams): Promise<MediaEn
           downstreams: {
             include: { downstream: true },
           },
+          adType: true,
         },
       },
     },

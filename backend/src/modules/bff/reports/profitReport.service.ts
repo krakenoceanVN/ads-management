@@ -20,12 +20,6 @@ import {
 import { getYiyiMonthly } from '../../yiyi/yiyi.service';
 import type { BillingMethod } from '../../../shared/services/revenue.service';
 
-function actualAdTypeWhere(adTypeId: string): Prisma.AdSiteWhereInput {
-  return {
-    upstream: { defaultAdType: { id: adTypeId } },
-  };
-}
-
 const TEST_UPSTREAM_NAMES = ['百战-bz'];
 const TEST_AD_SITE_NAMES = ['TestCPM', 'TestCPS'];
 
@@ -109,7 +103,6 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
-    ...(params.adTypeCode && { defaultAdType: { id: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -121,6 +114,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
+        ...(params.adTypeCode && { adTypeId: params.adTypeCode }),
       },
     },
     include: {
@@ -128,6 +122,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
         include: {
           upstream: { include: { defaultAdType: true } },
           downstreams: { include: { downstream: true } },
+          adType: true,
         },
       },
     },
@@ -243,7 +238,6 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(params.advertiserId != null && { id: params.advertiserId }),
     ...(params.upstreamId != null && { id: params.upstreamId }),
-    ...(params.adTypeCode && { defaultAdType: { id: params.adTypeCode } }),
     name: { notIn: TEST_UPSTREAM_NAMES },
   };
 
@@ -255,6 +249,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
         upstream: { ...upstreamWhere },
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
+        ...(params.adTypeCode && { adTypeId: params.adTypeCode }),
       },
     },
     include: {
@@ -262,6 +257,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
         include: {
           upstream: { include: { defaultAdType: true } },
           downstreams: { include: { downstream: true } },
+          adType: true,
         },
       },
     },
@@ -284,7 +280,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
 
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
-    const adType = upstream?.defaultAdType ?? null;
+    const adType = di.adSite.adType ?? null;
     const key = `${di.recordDate.toISOString().slice(0,10)}|${adType?.id ?? ''}|${upstream.id}|${di.adSite.billingMethod}`;
 
     if (!groups.has(key)) {

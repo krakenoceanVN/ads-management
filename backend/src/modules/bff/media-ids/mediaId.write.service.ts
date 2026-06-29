@@ -50,7 +50,7 @@ export async function createMediaId(input: CreateMediaIdInput) {
   });
   if (!downstream) throw new BadRequestError(`Downstream with id '${downstreamId}' does not exist`);
 
-  const adSiteAdTypeId = adSite.upstream.adTypeId;
+  const adSiteAdTypeId = adSite.adTypeId;
   // Only enforce adType match when both sides have an adType set
   if (adSiteAdTypeId && downstream.adTypeLinks.length > 0) {
     const allowedAdTypeIds = new Set<string>(downstream.adTypeLinks.map(link => link.adTypeId));
@@ -96,12 +96,12 @@ export async function createMediaId(input: CreateMediaIdInput) {
       status: status ?? 'active',
     },
     include: {
-      adSite: { include: { upstream: { include: { defaultAdType: true } } } },
+      adSite: { include: { upstream: { include: { defaultAdType: true } }, adType: true } },
       downstream: true,
       mediaAdType: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }; downstream: Downstream; mediaAdType: AdType | null });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType: AdType | null }; downstream: Downstream; mediaAdType: AdType | null });
 }
 
 export async function updateMediaId(junctionId: string, input: UpdateMediaIdInput) {
@@ -143,12 +143,12 @@ export async function updateMediaId(junctionId: string, input: UpdateMediaIdInpu
       ...(status !== undefined ? { status } : {}),
     },
     include: {
-      adSite: { include: { upstream: { include: { defaultAdType: true } } } },
+      adSite: { include: { upstream: { include: { defaultAdType: true } }, adType: true } },
       downstream: true,
       mediaAdType: true,
     },
   });
-  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } }; downstream: Downstream; mediaAdType: AdType | null });
+  return mapMediaId(row as AdSiteDownstream & { adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType: AdType | null }; downstream: Downstream; mediaAdType: AdType | null });
 }
 
 export async function deleteMediaId(_junctionId: string) {

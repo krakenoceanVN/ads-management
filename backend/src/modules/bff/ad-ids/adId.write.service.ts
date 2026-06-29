@@ -62,15 +62,17 @@ export async function createAdId(input: CreateAdIdInput) {
       name: slot.trim(),
       notes: rest.notes ?? null,
       billingMethod,
-      currentUnitPrice: (billingMethod === 'CPM' || billingMethod === 'CPA') ? (rest.unitPrice ?? null) : null,
+      currentUnitPrice: (billingMethod === 'CPM' || billingMethod === 'CPC' || billingMethod === 'CPA') ? (rest.unitPrice ?? null) : null,
       currentRatio: billingMethod === 'CPS' ? (rest.ratio ?? null) : null,
       status: rest.status ?? 'active',
+      adTypeId: adTypeId ?? null,
     },
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType: AdType | null });
 }
 
 export async function updateAdId(id: string | number, input: UpdateAdIdInput) {
@@ -79,10 +81,18 @@ export async function updateAdId(id: string | number, input: UpdateAdIdInput) {
   const billingMethod = normalizeBillingMethodForStorage(type);
   if (type !== undefined && !billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
 
-  if (rest.advertiserId && rest.adTypeId) {
-    const linkedAdTypes = await getAdvertiserLinkedAdTypes(String(rest.advertiserId));
-    if (!linkedAdTypes.some(at => at.id === rest.adTypeId)) {
-      throw new BadRequestError(`adTypeId ${rest.adTypeId} is not linked to advertiserId ${rest.advertiserId}`);
+  if (rest.adTypeId) {
+    // Resolve which advertiser to validate against: explicit input, else the AdSite's current owner.
+    let advForValidation = rest.advertiserId ? String(rest.advertiserId) : undefined;
+    if (!advForValidation) {
+      const current = await prisma.adSite.findUnique({ where: { id: String(id) }, select: { upstreamId: true } });
+      advForValidation = current?.upstreamId;
+    }
+    if (advForValidation) {
+      const linkedAdTypes = await getAdvertiserLinkedAdTypes(advForValidation);
+      if (!linkedAdTypes.some(at => at.id === rest.adTypeId)) {
+        throw new BadRequestError(`adTypeId ${rest.adTypeId} is not linked to advertiserId ${advForValidation}`);
+      }
     }
   }
 
@@ -93,17 +103,19 @@ export async function updateAdId(id: string | number, input: UpdateAdIdInput) {
       ...(rest.slot !== undefined && { name: rest.slot.trim() }),
       ...(rest.notes !== undefined && { notes: rest.notes }),
       ...(billingMethod !== undefined && { billingMethod }),
-      ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice !== undefined && { currentUnitPrice: unitPrice }),
-      ...((billingMethod === 'CPM' || billingMethod === 'CPA') && unitPrice === undefined && { currentUnitPrice: null }),
+      ...((billingMethod === 'CPM' || billingMethod === 'CPC' || billingMethod === 'CPA') && unitPrice !== undefined && { currentUnitPrice: unitPrice }),
+      ...((billingMethod === 'CPM' || billingMethod === 'CPC' || billingMethod === 'CPA') && unitPrice === undefined && { currentUnitPrice: null }),
       ...(billingMethod === 'CPS' && ratio !== undefined && { currentRatio: ratio }),
       ...(billingMethod === 'CPS' && ratio === undefined && { currentRatio: null }),
       ...(rest.status !== undefined && { status: rest.status }),
+      ...(rest.adTypeId !== undefined && { adTypeId: rest.adTypeId || null }),
     },
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType: AdType | null });
 }
 
 export async function deleteAdId(id: string | number) {
@@ -114,7 +126,8 @@ export async function deleteAdId(id: string | number) {
     data: { status: 'inactive' },
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
   });
-  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null } });
+  return mapAdId(row as AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType: AdType | null });
 }

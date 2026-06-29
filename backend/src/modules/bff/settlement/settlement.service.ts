@@ -30,11 +30,6 @@ import {
 } from '../../../shared/services/payout.service';
 import type { BillingMethod } from '../../../shared/services/revenue.service';
 
-function actualAdTypeWhere(adTypeId: string): Prisma.AdSiteWhereInput {
-  return {
-    upstream: { defaultAdType: { id: adTypeId } },
-  };
-}
 
 export interface AdvertiserSettlementParams {
   period?: string;
@@ -65,7 +60,6 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
 
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(advertiserId != null && { id: advertiserId }),
-    ...(adTypeId && { defaultAdType: { id: adTypeId } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
@@ -74,12 +68,14 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
       status: 'confirmed',
       adSite: {
         upstream: { ...upstreamWhere },
+        ...(adTypeId && { adTypeId }),
       },
     },
     include: {
       adSite: {
         include: {
           upstream: { include: { defaultAdType: true } },
+          adType: true,
         },
       },
     },
@@ -90,7 +86,7 @@ export async function getAdvertiserSettlement(params: AdvertiserSettlementParams
 
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
-    const adType = upstream?.defaultAdType ?? null;
+    const adType = di.adSite.adType ?? null;
     const code = adType?.name ?? null;
     const name = adType?.name ?? null;
     const key = `${upstream.id}|${code ?? ''}`;
@@ -150,7 +146,6 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
 
   const upstreamWhere: Prisma.UpstreamWhereInput = {
     ...(mediaId != null && { id: mediaId }),
-    ...(adTypeId && { defaultAdType: { id: adTypeId } }),
   };
 
   const dailyInputs = await prisma.dailyInput.findMany({
@@ -160,6 +155,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
       adSite: {
         upstream: { ...upstreamWhere },
         downstreams: { some: {} },
+        ...(adTypeId && { adTypeId }),
       },
     },
     include: {
@@ -171,6 +167,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
               downstream: true,
             },
           },
+          adType: true,
         },
       },
     },
@@ -192,7 +189,7 @@ export async function getMediaSettlement(params: MediaSettlementParams): Promise
 
   for (const di of dailyInputs) {
     const upstream = di.adSite.upstream;
-    const adType = upstream?.defaultAdType ?? null;
+    const adType = di.adSite.adType ?? null;
     const adTypeCodeResolved = adType?.name ?? null;
     const adTypeName = adType?.name ?? null;
 

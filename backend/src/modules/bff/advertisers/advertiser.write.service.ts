@@ -62,7 +62,6 @@ export async function createAdvertiser(input: CreateAdvertiserInput) {
   const adTypeIds = normalizeAdTypeIds(input);
   const row = await prisma.$transaction(async tx => {
     const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
-    const primaryAdType = adTypes[0];
     const created = await tx.upstream.create({
       data: {
         id: generateShortId(),
@@ -72,7 +71,6 @@ export async function createAdvertiser(input: CreateAdvertiserInput) {
         email: input.email ?? null,
         notes: input.notes ?? null,
         status: input.status ?? 'active',
-        adTypeId: primaryAdType?.id ?? null,
       },
     });
     await syncUpstreamAdTypes(created.id, adTypes.map(adType => adType.id), tx);
@@ -95,7 +93,6 @@ export async function updateAdvertiser(id: string, input: UpdateAdvertiserInput)
         ...(input.email !== undefined && { email: input.email }),
         ...(input.notes !== undefined && { notes: input.notes }),
         ...(input.status !== undefined && { status: input.status }),
-        ...(shouldSyncAdTypes && { adTypeId: adTypes[0]?.id ?? null }),
       },
     });
     if (shouldSyncAdTypes) {

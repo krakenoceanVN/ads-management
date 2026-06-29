@@ -27,7 +27,7 @@ export async function create(req: Request, res: Response) {
   const body = req.body as CreateMediaInput;
   if (!body || !body.name?.trim()) throw new BadRequestError('name is required');
   if (!body.upstreamId) throw new BadRequestError('upstreamId is required');
-  if ((body.billingMethod === 'CPM' || body.billingMethod === 'CPA') &&
+  if ((body.billingMethod === 'CPM' || body.billingMethod === 'CPC' || body.billingMethod === 'CPA') &&
       (body.currentUnitPrice === undefined || body.currentUnitPrice === null || isNaN(Number(body.currentUnitPrice)) || Number(body.currentUnitPrice) <= 0)) {
     throw new BadRequestError('currentUnitPrice is required and must be greater than 0 for ' + body.billingMethod);
   }

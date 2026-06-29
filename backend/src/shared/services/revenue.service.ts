@@ -2,14 +2,14 @@
  * Shared revenue calculation service.
  * All financial formulas live here — controllers call calculateRevenue().
  *
- * CPM:  baseRevenue = qty * unitPrice / 1000
- *       if rebateRate present: revenue = baseRevenue - (qty * rebateRate)
- *       else: revenue = baseRevenue
- * CPS:  revenue = (amount1 + amount2) * ratio
- * CPA:  revenue = qty * unitPrice
+ * CPM/CPC: baseRevenue = qty * unitPrice / 1000
+ *          if rebateRate present: revenue = baseRevenue - (qty * rebateRate)
+ *          else: revenue = baseRevenue
+ * CPS:     revenue = (amount1 + amount2) * ratio
+ * CPA:     revenue = qty * unitPrice
  */
 
-export type BillingMethod = 'CPM' | 'CPS' | 'CPA';
+export type BillingMethod = 'CPM' | 'CPC' | 'CPS' | 'CPA';
 
 export interface RevenueInput {
   billingMethod: string;
@@ -22,9 +22,10 @@ export interface RevenueInput {
   rebateRate?: number | null;
 }
 
-export function normalizeBillingMethod(m: string): BillingMethod {
+export function normalizeBillingMethod(m: string): BillingMethod | undefined {
   if (m === 'RATIO') return 'CPS'; // legacy alias (DB now canonical on CPS)
-  return m as BillingMethod;
+  if (m === 'CPM' || m === 'CPC' || m === 'CPS' || m === 'CPA') return m;
+  return undefined;
 }
 
 function toNum(v: string | number | null | undefined): number {
@@ -38,7 +39,8 @@ export function calculateRevenue(input: RevenueInput): number {
   const bm = normalizeBillingMethod(billingMethod);
 
   switch (bm) {
-    case 'CPM': {
+    case 'CPM':
+    case 'CPC': {
       const q = toNum(qty);
       const p = toNum(unitPrice);
       const baseRevenue = q * p / 1000;

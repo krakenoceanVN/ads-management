@@ -31,7 +31,7 @@ function toStr(d: Prisma.Decimal | null | undefined): string {
 async function adTypeFilterWhere(adTypeId: string): Promise<Prisma.AdSiteWhereInput> {
   const adType = await prisma.adType.findUnique({ where: { id: adTypeId } });
   if (!adType) return { id: '__none__' };
-  return { upstream: { adTypeId: adType.id } };
+  return { adTypeId: adType.id };
 }
 
 export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams) {
@@ -51,6 +51,7 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
     where: siteWhere,
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -78,21 +79,21 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
 }
 
 function makeAdvertiserRow(
-  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null } },
+  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null },
   recordDate: Date,
   di: Prisma.DailyInputGetPayload<{}> | null
 ): AdvertiserEntryRow {
   const upstream = site.upstream;
-  const adType = upstream.defaultAdType ?? null;
+  const adType = site.adType ?? null;
 
-  const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPA')
+  const rate = (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA')
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);
 
   let traffic = '';
   let settlement = '';
   if (di) {
-    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
+    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA') {
       traffic = String(di.qty);
     } else {
       traffic = toStr(di.amount1);
@@ -143,6 +144,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
         include: { downstream: true },
         orderBy: { id: 'asc' },
       },
+      adType: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -186,7 +188,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams) {
 }
 
 function makeMediaRow(
-  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; downstreams: (AdSiteDownstream & { downstream: Downstream })[] },
+  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; downstreams: (AdSiteDownstream & { downstream: Downstream })[]; adType?: AdType | null },
   junction: AdSiteDownstream & { downstream: Downstream },
   payoutRate: number,
   shareRatioResolved: number,
@@ -194,19 +196,19 @@ function makeMediaRow(
   di: Prisma.DailyInputGetPayload<{}> | null
 ): MediaEntryRow {
   const upstream = site.upstream;
-  const adType = upstream.defaultAdType ?? null;
+  const adType = site.adType ?? null;
 
   const adTypeCode = adType?.name ?? null;
   const adTypeName = adType?.name ?? null;
 
-  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPA'
+  const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA'
     ? toStr(di?.unitPriceSnapshot ?? site.currentUnitPrice)
     : toStr(di?.ratioSnapshot ?? site.currentRatio);
 
   let traffic = '';
   let settlement = '';
   if (di) {
-    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPA') {
+    if (site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA') {
       traffic = String(di.qty);
     } else {
       traffic = toStr(di.amount1);

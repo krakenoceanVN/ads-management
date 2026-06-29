@@ -1,5 +1,5 @@
 export type EntityStatus = 'active' | 'inactive';
-export type EntryType = 'CPM' | 'CPS' | 'CPA';
+export type EntryType = 'CPM' | 'CPC' | 'CPS' | 'CPA';
 
 export type DataEntryStatus = 'pending' | 'confirmed';
 export type DataEntryStatusParam = DataEntryStatus | 'unconfirmed';
@@ -154,6 +154,7 @@ export interface AdId {
   status: EntityStatus;
   advertiserId: string;
   advertiserName: string;
+  adTypeId?: string | null;
   adTypeCode: string;
   adTypeName?: string | null;
   upstreamId: string;
@@ -173,7 +174,7 @@ export interface CreateAdIdInput {
   advertiserId: string;
   adTypeId?: string;
   slot: string;
-  type: 'CPM' | 'CPS' | 'CPA';
+  type: 'CPM' | 'CPC' | 'CPS' | 'CPA';
   unitPrice?: number;
   ratio?: number;
   notes?: string | null;
@@ -184,7 +185,7 @@ export interface UpdateAdIdInput {
   advertiserId?: string;
   adTypeId?: string;
   slot?: string;
-  type?: 'CPM' | 'CPS' | 'CPA';
+  type?: 'CPM' | 'CPC' | 'CPS' | 'CPA';
   unitPrice?: number;
   ratio?: number;
   notes?: string | null;

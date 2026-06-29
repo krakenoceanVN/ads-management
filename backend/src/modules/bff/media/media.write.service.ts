@@ -46,7 +46,7 @@ export async function createMedia(input: CreateMediaInput) {
       currentRatio: input.currentRatio ?? null,
       status: input.status ?? 'active',
     },
-    include: { upstream: { include: { defaultAdType: true } } },
+    include: { upstream: { include: { defaultAdType: true } }, adType: true },
   });
   return mapMedia(row);
 }
@@ -69,7 +69,7 @@ export async function updateMedia(id: string, input: UpdateMediaInput) {
       ...(input.currentRatio !== undefined && { currentRatio: input.currentRatio }),
       ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
     },
-    include: { upstream: { include: { defaultAdType: true } } },
+    include: { upstream: { include: { defaultAdType: true } }, adType: true },
   });
   return mapMedia(row);
 }
@@ -78,7 +78,7 @@ export async function deleteMedia(id: string) {
   const row = await prisma.adSite.update({
     where: { id },
     data: { isArchived: true },
-    include: { upstream: { include: { defaultAdType: true } } },
+    include: { upstream: { include: { defaultAdType: true } }, adType: true },
   });
   return mapMedia(row);
 }

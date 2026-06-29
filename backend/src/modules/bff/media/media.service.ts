@@ -13,12 +13,13 @@ export async function listMedia(filters?: ListMediaFilters) {
     where.upstreamId = filters.upstreamId;
   }
   if (filters?.adTypeId) {
-    where.upstream = { defaultAdType: { id: filters.adTypeId } };
+    where.adTypeId = filters.adTypeId;
   }
   const rows = await prisma.adSite.findMany({
     where,
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -30,6 +31,7 @@ export async function getMedia(id: string) {
     where: { id },
     include: {
       upstream: { include: { defaultAdType: true } },
+      adType: true,
     },
   });
   if (!row) return null;

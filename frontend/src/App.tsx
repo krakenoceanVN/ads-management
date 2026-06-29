@@ -2,7 +2,7 @@ import React from 'react';
 import { AppProvider, useAppContext } from './AppContext';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
-import { MediaMgmt, MediaAdOrderMgmt, MediaIdMgmt } from './pages/Media';
+import { MediaAdOrderMgmt, MediaIdMgmt } from './pages/Media';
 import { AiEntry, AdvEntry, MediaDataMgmt } from './pages/DataEntry';
 import { YiyiData } from './pages/YiyiData';
 import { AdvertiserList, AdIdMgmt } from './pages/Advertiser';
@@ -76,9 +76,6 @@ function MainContent({ onLogout }: { onLogout: () => void }) {
       case 'pAdvertiserList': return <AdvertiserList />;
       case 'pAdTypeMgmt': return <AdTypeMgmt />;
       case 'pAdIdMgmt': return <AdIdMgmt />;
-      // pMediaMgmt is hidden from the sidebar (Phase 2 / Option B) but its route is
-      // kept for backward compatibility — see lib/data.ts menu note.
-      case 'pMediaMgmt': return <MediaMgmt />;
       case 'pMediaAdOrderMgmt': return <MediaAdOrderMgmt />;
       case 'pMediaIdMgmt': return <MediaIdMgmt />;
       case 'pAiEntry': return <AiEntry />;

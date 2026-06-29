@@ -6,12 +6,8 @@ import { QuarantineConfirmModal } from '../components/QuarantineConfirmModal';
 import { useQuarantineAction } from '../hooks/useQuarantineAction';
 import { HardDeleteModal } from '../components/HardDeleteModal';
 import {
-  createMedia,
   createMediaAdOrder,
   createMediaId,
-  getMedia,
-  getMediaDependencies,
-  hardDeleteMedia,
   hardDeleteMediaAdOrder,
   hardDeleteMediaId,
   listAdTypes,
@@ -20,7 +16,6 @@ import {
   listMedia,
   listMediaAdOrders,
   listMediaIds,
-  updateMedia,
   updateMediaAdOrder,
   updateMediaId,
 } from '../lib/bffApi';
@@ -29,15 +24,12 @@ import type {
   AdType,
   Advertiser,
   CreateMediaAdOrderInput,
-  CreateMediaInput,
   DownstreamDto,
   EntityStatus,
-  EntryType,
   Media,
   MediaAdOrder,
   MediaId,
   UpdateMediaAdOrderInput,
-  UpdateMediaInput,
 } from '../lib/bffTypes';
 
 type CsvColumn<T> = {
@@ -90,38 +82,12 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-type MediaFormState = {
-  name: string;
-  upstreamId: string;
-  billingMethod: EntryType;
-  currentUnitPrice: string;
-  currentRatio: string;
-  status: EntityStatus;
-};
-
 type AdOrderFormState = {
   downstreamId: string;
   name: string;
   notes: string;
   status: EntityStatus;
 };
-
-function isValidEmailForm(value: string) {
-  const raw = value.trim();
-  if (!raw) return true; // empty is allowed (optional field)
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw);
-}
-
-function defaultMediaForm(upstreamId = ''): MediaFormState {
-  return {
-    name: '',
-    upstreamId,
-    billingMethod: 'CPM',
-    currentUnitPrice: '',
-    currentRatio: '',
-    status: 'active',
-  };
-}
 
 function defaultAdOrderForm(): AdOrderFormState {
   return {
@@ -139,380 +105,6 @@ function adOrderFormFromRecord(record: MediaAdOrder): AdOrderFormState {
     notes: record.notes ?? '',
     status: record.status ?? 'active',
   };
-}
-
-function mediaFormFromRecord(record: Media, fallbackUpstreamId = ''): MediaFormState {
-  return {
-    name: record.name ?? '',
-    upstreamId: String(record.upstreamId ?? fallbackUpstreamId),
-    billingMethod: record.billingMethod ?? 'CPM',
-    currentUnitPrice: record.currentUnitPrice != null ? String(record.currentUnitPrice) : '',
-    currentRatio: record.currentRatio != null ? String(record.currentRatio) : '',
-    status: record.status ?? 'active',
-  };
-}
-
-function toOptionalNumber(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-export function MediaMgmt() {
-  const [search, setSearch] = React.useState('');
-  const [mediaAdOrderFilter, setMediaAdOrderFilter] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState('');
-  const [rows, setRows] = React.useState<Media[]>([]);
-  const [mediaAdOrders, setMediaAdOrders] = React.useState<MediaAdOrder[]>([]);
-  const [advertisers, setAdvertisers] = React.useState<Advertiser[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-  const [editing, setEditing] = React.useState<Media | null>(null);
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [form, setForm] = React.useState<MediaFormState>(defaultMediaForm());
-  const [formError, setFormError] = React.useState('');
-  const { t, displayName, can } = useAppContext();
-  const canHardDelete = can('masterData.hardDelete');
-
-  const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
-  const toggleSort = (col: string) => {
-    setSortState(prev => {
-      if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
-      return { col, dir: 'asc' };
-    });
-  };
-
-  const quarantine = useQuarantineAction({
-    scope: 'media',
-    targetId: String(editing?.id ?? ''),
-    targetName: editing?.name ?? '',
-  });
-
-  const [hardDeleteOpen, setHardDeleteOpen] = React.useState(false);
-  const [hardDeleteResult, setHardDeleteResult] = React.useState<HardDeleteResult | null>(null);
-  const [hardDeleteLoading, setHardDeleteLoading] = React.useState(false);
-  const [hardDeleteError, setHardDeleteError] = React.useState('');
-  const [hasDeps, setHasDeps] = React.useState<boolean | null>(null);
-
-  const openHardDelete = (row?: Media) => {
-    if (row) setEditing(row);
-    setHardDeleteResult(null);
-    setHardDeleteError('');
-    setHardDeleteOpen(true);
-  };
-
-  const handleHardDeleteConfirm = async () => {
-    if (!editing) return;
-    setHardDeleteLoading(true);
-    setHardDeleteError('');
-    try {
-      const result = await hardDeleteMedia(editing.id);
-      setHardDeleteResult(result);
-      if (result.success) {
-        setRows(prev => prev.filter(r => r.id !== editing.id));
-        setFormOpen(false);
-      }
-    } catch (err: any) {
-      setHardDeleteError(err?.message || 'Unexpected error');
-    } finally {
-      setHardDeleteLoading(false);
-    }
-  };
-
-  const handleHardDeleteClose = () => {
-    if (hardDeleteLoading) return;
-    setHardDeleteOpen(false);
-    setHardDeleteResult(null);
-    setHardDeleteError('');
-  };
-
-  const handleHardDeleteGoToQuarantine = () => {
-    setHardDeleteOpen(false);
-    quarantine.openModal();
-  };
-
-  const mediaColumns: CsvColumn<Media>[] = [
-    { label: t('media'), value: r => displayName(r.name) },
-    { label: t('contact'), value: r => r.contact ?? '-' },
-    { label: t('phone'), value: r => r.phone ?? '-' },
-    { label: t('email'), value: r => r.email ?? '-' },
-    { label: t('notes'), value: r => r.notes ?? '-' },
-    { label: t('status'), value: r => r.status ?? '' },
-  ];
-
-  const loadRows = React.useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [mediaRows, advertiserRows, mediaAdOrderRows] = await Promise.all([listMedia(), listAdvertisers(), listMediaAdOrders()]);
-      setRows(mediaRows);
-      setAdvertisers(advertiserRows);
-      setMediaAdOrders(mediaAdOrderRows ?? []);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
-
-  const firstUpstreamId = advertisers[0]?.id ? String(advertisers[0].id) : '';
-  const advertiserName = (id: string | undefined) => {
-    if (!id) return '-';
-    return displayName(advertisers.find(item => item.id === id)?.name ?? '-');
-  };
-
-  const keyword = normalizeText(search);
-  const visibleRows = rows.filter(row => {
-    if (statusFilter && row.status !== statusFilter) return false;
-    if (mediaAdOrderFilter && row.adTypeCode !== mediaAdOrderFilter) return false;
-    if (!keyword) return true;
-    return [row.name, row.upstreamId, advertiserName(row.upstreamId), row.billingMethod, row.status].some(value =>
-      normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword)
-    );
-  }).sort((a, b) => {
-    if (sortState) {
-      let delta = 0;
-      switch (sortState.col) {
-        case 'name':
-          delta = displayName(a.name).localeCompare(displayName(b.name), undefined, { sensitivity: 'base' });
-          break;
-        case 'contact':
-          delta = (a.contact ?? '').localeCompare(b.contact ?? '', undefined, { sensitivity: 'base' });
-          break;
-        case 'phone':
-          delta = (a.phone ?? '').localeCompare(b.phone ?? '', undefined, { sensitivity: 'base' });
-          break;
-        case 'email':
-          delta = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
-          break;
-        case 'notes':
-          delta = (a.notes ?? '').localeCompare(b.notes ?? '', undefined, { sensitivity: 'base' });
-          break;
-        case 'status':
-          delta = (a.status === 'active' ? 1 : 0) - (b.status === 'active' ? 1 : 0);
-          break;
-      }
-      if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
-    }
-    return String(a.id).localeCompare(String(b.id));
-  });
-
-  const openCreate = () => {
-    setEditing(null);
-    // v5.pdf cascade: pre-fill upstream with filter selection if set
-    setForm(defaultMediaForm(firstUpstreamId));
-    setFormError('');
-    setFormOpen(true);
-  };
-
-  const openEdit = (record: Media) => {
-    setEditing(record);
-    setForm(mediaFormFromRecord(record, firstUpstreamId));
-    setFormError('');
-    setFormOpen(true);
-    setHasDeps(null);
-    getMediaDependencies(String(record.id))
-      .then((deps: any) => {
-        const total = Object.values(deps as Record<string, number>).reduce((s: number, v: number) => s + v, 0);
-        setHasDeps(total > 0);
-      })
-      .catch(() => setHasDeps(false));
-  };
-
-  const buildPayload = (): CreateMediaInput | UpdateMediaInput | null => {
-    const upstreamId = form.upstreamId.trim();
-    if (!form.name.trim() || !upstreamId || !form.billingMethod) return null;
-    const payload: CreateMediaInput | UpdateMediaInput = {
-      name: form.name.trim(),
-      upstreamId,
-      billingMethod: form.billingMethod,
-      status: form.status,
-    };
-    if (form.billingMethod === 'CPM') payload.currentUnitPrice = toOptionalNumber(form.currentUnitPrice);
-    if (form.billingMethod === 'CPS') payload.currentRatio = toOptionalNumber(form.currentRatio);
-    return payload;
-  };
-
-  const submitForm = async () => {
-    const payload = buildPayload();
-    if (!payload) {
-      setFormError(t('requiredFields'));
-      return;
-    }
-
-    // v5.pdf: validate email format when present in the advertiser's contact
-    const selectedAdvertiser = advertisers.find(a => String(a.id) === form.upstreamId);
-    if (selectedAdvertiser?.email && !isValidEmailForm(selectedAdvertiser.email)) {
-      setFormError(t('invalidEmail') || 'Email không hợp lệ');
-      return;
-    }
-
-    setSaving(true);
-    setFormError('');
-    try {
-      if (editing) {
-        const updated = await updateMedia(editing.id, payload);
-        setRows(prev => prev.map(row => row.id === updated.id ? updated : row));
-      } else {
-        const created = await createMedia(payload as CreateMediaInput);
-        setRows(prev => [...prev, created]);
-      }
-      setFormOpen(false);
-    } catch (err) {
-      setFormError(errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const removeRecord = async () => {
-    if (!editing) return;
-    if (!window.confirm(t('confirmDelete'))) return;
-    if (canHardDelete && hasDeps === false) {
-      setSaving(true);
-      setFormError('');
-      try {
-        const result = await hardDeleteMedia(editing.id);
-        if (result.success) {
-          setRows(prev => prev.filter(r => r.id !== editing.id));
-          setFormOpen(false);
-        } else {
-          setFormError(result.message || 'Unexpected error');
-        }
-      } catch (err) {
-        setFormError(errorMessage(err));
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-    quarantine.openModal();
-  };
-
-  const updateStatus = async (record: Media, active: boolean) => {
-    const nextStatus: EntityStatus = active ? 'active' : 'inactive';
-    try {
-      const updated = await updateMedia(record.id, { status: nextStatus });
-      setRows(prev => prev.map(row => row.id === updated.id ? updated : row));
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  };
-
-  return (
-    <div className="page active">
-      <div className="page-header"><h1 className="page-title">{t('pMediaMgmt')}</h1></div>
-      <div className="card">
-        <div className="toolbar">
-          <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newMedia')}</button></div>
-          <div className="toolbar-right">
-            <select className="filter-select" value={mediaAdOrderFilter} onChange={e => setMediaAdOrderFilter(e.target.value)}>
-              <option value="">{t('selectMediaAdOrder')}</option>
-              {mediaAdOrders.map(item => <option key={item.id} value={item.adTypeCode}>{displayName(item.name)}</option>)}
-            </select>
-            <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">{t('allStatuses')}</option>
-              <option value="active">{t('online')}</option>
-              <option value="inactive">{t('offline')}</option>
-            </select>
-            <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
-            <button className="btn-outline" onClick={() => downloadCsv('media.csv', mediaColumns, visibleRows)}>{t('export')}</button>
-          </div>
-        </div>
-        {loading ? <LoadingState t={t} /> : error ? <ErrorState message={error} onRetry={loadRows} /> : (
-          <Table
-            columns={[
-              { key: '__no__', label: t('no') },
-              { key: 'name', label: t('media'), render: r => displayName(r.name), sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
-              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
-              { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
-              { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
-              { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
-              { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
-              { key: '__actions__', label: t('actions') }
-            ]}
-            data={visibleRows}
-            onEdit={openEdit}
-          />
-        )}
-      </div>
-      {formOpen && (
-        <div className="modal-backdrop open" onClick={e => { if (e.target === e.currentTarget && !saving) setFormOpen(false); }}>
-          <div className="modal">
-            <div className="modal-header">
-              <span className="modal-title">{editing ? t('editMedia') : t('newMedia')}</span>
-              <button className="modal-close" onClick={() => setFormOpen(false)} disabled={saving}>x</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group"><label>{t('mediaName')}</label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('selectAdvertiser')}</label>
-                <select value={form.upstreamId} onChange={e => setForm(prev => ({ ...prev, upstreamId: e.target.value }))}>
-                  <option value="">-</option>
-                  {advertisers.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}
-                </select>
-              </div>
-              <div className="form-row cols2">
-                <div className="form-group"><label>{t('type')}</label>
-                  <select value={form.billingMethod} onChange={e => setForm(prev => ({ ...prev, billingMethod: e.target.value as EntryType }))}>
-                    <option value="CPM">CPM</option>
-                    <option value="CPS">CPS</option>
-                    <option value="CPA">CPA</option>
-                  </select>
-                </div>
-                <div className="form-group"><label>{form.billingMethod === 'CPM' ? t('unitPrice') : form.billingMethod === 'CPA' ? t('rate') : t('revenueShare')}</label>
-                  <input
-                    type="text"
-                    value={form.billingMethod === 'CPM' ? form.currentUnitPrice : form.billingMethod === 'CPA' ? form.currentRatio : form.currentRatio}
-                    onChange={e => setForm(prev => form.billingMethod === 'CPM' ? ({ ...prev, currentUnitPrice: e.target.value }) : ({ ...prev, currentRatio: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="form-group"><label>{t('status')}</label>
-                <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>
-                  <option value="active">{t('online')}</option>
-                  <option value="inactive">{t('offline')}</option>
-                </select>
-              </div>
-              {formError && <div className="form-error">{formError}</div>}
-            </div>
-            <div className="modal-footer">
-              {editing && (
-                <button className="btn-danger" onClick={removeRecord} disabled={saving}>{t('delete')}</button>
-              )}
-              <button className="btn-outline" onClick={() => setFormOpen(false)} disabled={saving}>{t('cancel')}</button>
-              <button className="btn-primary" onClick={submitForm} disabled={saving}>{t('submit')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      <QuarantineConfirmModal
-        open={quarantine.open}
-        scope="media"
-        targetName={editing?.name ?? quarantine.targetName}
-        loading={quarantine.loading}
-        error={quarantine.error}
-        result={quarantine.result}
-        onConfirm={quarantine.confirm}
-        onClose={quarantine.closeModal}
-      />
-      <HardDeleteModal
-        open={hardDeleteOpen}
-        entityName={editing?.name ?? ''}
-        loading={hardDeleteLoading}
-        error={hardDeleteError}
-        result={hardDeleteResult}
-        onConfirm={handleHardDeleteConfirm}
-        onClose={handleHardDeleteClose}
-        onGoToQuarantine={handleHardDeleteGoToQuarantine}
-      />
-    </div>
-  );
 }
 
 export function MediaAdOrderMgmt() {

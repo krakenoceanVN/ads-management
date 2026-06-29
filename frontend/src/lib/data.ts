@@ -4,9 +4,6 @@ export const menu = [
   { key: 'mAdvertiserMgmt', icon: '📢', children: [
     { key: 'pAdvertiserList' }, { key: 'pAdTypeMgmt' }, { key: 'pAdIdMgmt' }
   ] },
-  // 'pMediaMgmt' (Quản lý MEDIA / 媒体管理) is now merged into pDownstreamMgmt
-  // (Hạ nguồn / Media) — both entities represent the same "media partner" concept.
-  // See docx ha-nguon-media.docx for the 8-field spec: Tên MEDIA, Liên hệ, SĐT, Email, Ghi chú, Trạng thái, Thao tác.
   { key: 'mTrafficMgmt', icon: '📡', children: [
     { key: 'pDownstreamMgmt' }, { key: 'pMediaAdOrderMgmt' }, { key: 'pMediaIdMgmt' }
   ] },

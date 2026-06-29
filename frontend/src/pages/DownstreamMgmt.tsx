@@ -2,8 +2,6 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
 import { Table, type Column, type SortDirection } from '../components/Table';
 import { StatusToggle } from './Advertiser';
-import { QuarantineConfirmModal } from '../components/QuarantineConfirmModal';
-import { useQuarantineAction } from '../hooks/useQuarantineAction';
 import {
   listDownstreams,
   createDownstream,
@@ -101,12 +99,6 @@ export function DownstreamMgmt() {
     });
   };
   const [editing, setEditing] = useState<DownstreamDto | null>(null);
-
-  const quarantine = useQuarantineAction({
-    scope: 'advertiser',
-    targetId: String(editing?.id ?? ''),
-    targetName: editing?.downstreamType ?? '',
-  });
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -253,10 +245,21 @@ export function DownstreamMgmt() {
     }
   };
 
-  const removeRecord = () => {
+  const removeRecord = async () => {
     if (!editing) return;
     if (!window.confirm(t('confirmDelete'))) return;
-    quarantine.openModal();
+    setSaving(true);
+    setEditError('');
+    try {
+      await deleteDownstream(editing.id);
+      setRows(prev => prev.filter(r => r.id !== editing.id));
+      setEditModal(null);
+      setEditing(null);
+    } catch (err) {
+      setEditError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateStatus = async (record: DownstreamDto, active: boolean) => {
@@ -409,16 +412,6 @@ export function DownstreamMgmt() {
           )}
         </div>
       </div>
-      <QuarantineConfirmModal
-        open={quarantine.open}
-        scope="advertiser"
-        targetName={editing?.downstreamType ?? quarantine.targetName}
-        loading={quarantine.loading}
-        error={quarantine.error}
-        result={quarantine.result}
-        onConfirm={quarantine.confirm}
-        onClose={quarantine.closeModal}
-      />
     </>
   );
 }

@@ -523,10 +523,10 @@ function defaultAdIdForm(): AdIdFormState {
   return { advertiserId: '', adTypeId: '', slot: '', type: 'CPM' as const, unitPrice: '', ratio: '', notes: '', status: 'active' as EntityStatus };
 }
 
-function adIdFormFromRecord(record: AdId): AdIdFormState {
+function adIdFormFromRecord(record: AdId, adTypeId = ''): AdIdFormState {
   return {
     advertiserId: String(record.advertiserId),
-    adTypeId: record.advertiserId ? record.adTypeCode ?? '' : '', // legacy placeholder; real value resolved via adType lookup below
+    adTypeId,
     slot: record.slot ?? '',
     type: record.type as 'CPM' | 'CPS' | 'CPA',
     unitPrice: (record.type === 'CPM' || record.type === 'CPA') && record.rate != null ? String(record.rate) : '',
@@ -788,7 +788,8 @@ export function AdIdMgmt() {
 
   const openEdit = (record: AdId) => {
     setEditing(record);
-    setForm(adIdFormFromRecord(record));
+    const resolvedAdTypeId = adTypes.find(at => at.name === record.adTypeCode)?.id ?? '';
+    setForm(adIdFormFromRecord(record, resolvedAdTypeId));
     setFormError('');
     setFormOpen(true);
     setHasDeps(null);
@@ -891,8 +892,7 @@ export function AdIdMgmt() {
   const updateStatus = async (record: AdId, active: boolean) => {
     const nextStatus: EntityStatus = active ? 'active' : 'inactive';
     try {
-      const adTypeId = adTypes.find(at => at.name === record.adTypeCode)?.id ?? '';
-      const updated = await updateAdId(record.id, { status: nextStatus, adTypeId });
+      const updated = await updateAdId(record.id, { status: nextStatus });
       setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
     } catch (err) {
       setError(errorMessage(err));

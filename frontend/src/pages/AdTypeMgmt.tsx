@@ -338,10 +338,12 @@ export function AdTypeMgmt() {
                 <option value="">{t('selectAdvertiser')}</option>
                 {advertisers.map(a => <option key={a.id} value={String(a.id)}>{displayName(a.name)}</option>)}
               </select>
-              <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
-                <option value="">{t('selectAdOrder')}</option>
-                {rows.map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
-              </select>
+              {false && (
+                <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
+                  <option value="">{t('selectAdOrder')}</option>
+                  {rows.map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
+                </select>
+              )}
               <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>
                 <option value="active">{t('online')}</option>

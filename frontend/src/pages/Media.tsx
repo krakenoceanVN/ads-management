@@ -356,10 +356,12 @@ export function MediaAdOrderMgmt() {
               <option value="">{t('selectMedia')}</option>
               {downstreams.map(d => <option key={d.id} value={String(d.id)}>{displayName(d.name ?? d.downstreamType)}</option>)}
             </select>
-            <select className="filter-select" value={mediaAdOrderFilter} onChange={e => setMediaAdOrderFilter(e.target.value)}>
-              <option value="">{t('selectMediaAdOrder')}</option>
-              {rows.map(row => <option key={row.id} value={row.id}>{displayName(row.name)}</option>)}
-            </select>
+            {false && (
+              <select className="filter-select" value={mediaAdOrderFilter} onChange={e => setMediaAdOrderFilter(e.target.value)}>
+                <option value="">{t('selectMediaAdOrder')}</option>
+                {rows.map(row => <option key={row.id} value={row.id}>{displayName(row.name)}</option>)}
+              </select>
+            )}
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">{t('allStatuses')}</option>
               <option value="active">{t('online')}</option>

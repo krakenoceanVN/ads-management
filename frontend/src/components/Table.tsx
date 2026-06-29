@@ -1,5 +1,13 @@
 import React from 'react';
 import { useAppContext } from '../AppContext';
+import {
+  Table as UITable,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from './ui/table';
 
 export type SortDirection = 'asc' | 'desc' | null;
 
@@ -33,51 +41,51 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProp
 
   return (
     <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
+      <UITable>
+        <TableHeader>
+          <TableRow>
             {columns.map((c, i) => {
               if (c.onSortClick) {
                 const arrow = c.sortDirection === 'asc' ? '▲' : c.sortDirection === 'desc' ? '▼' : '↕';
                 return (
-                  <th key={i} className="th-sortable" aria-sort={c.sortDirection === 'asc' ? 'ascending' : c.sortDirection === 'desc' ? 'descending' : 'none'}>
+                  <TableHead key={i} className="th-sortable" aria-sort={c.sortDirection === 'asc' ? 'ascending' : c.sortDirection === 'desc' ? 'descending' : 'none'}>
                     <button type="button" className="th-sort-btn" onClick={c.onSortClick}>
                       <span>{c.label}</span>
                       <span className={`th-sort-indicator ${c.sortDirection ? 'is-sorted' : ''}`} aria-hidden="true">{arrow}</span>
                     </button>
-                  </th>
+                  </TableHead>
                 );
               }
-              return <th key={i}>{c.label}</th>;
+              return <TableHead key={i}>{c.label}</TableHead>;
             })}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {data.map((row, rowIndex) => (
-            <tr key={rowIndex}>
+            <TableRow key={rowIndex}>
               {columns.map((c, colIndex) => {
-                if (c.key === '__no__') return <td key={colIndex} className="td-no">{rowIndex + 1}</td>;
+                if (c.key === '__no__') return <TableCell key={colIndex} className="td-no">{rowIndex + 1}</TableCell>;
                 if (c.key === '__actions__') {
-                  if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;
-                  if (!onEdit) return <td key={colIndex}>—</td>;
+                  if (c.render) return <TableCell key={colIndex}>{c.render(row, rowIndex)}</TableCell>;
+                  if (!onEdit) return <TableCell key={colIndex}>—</TableCell>;
                   return (
-                    <td key={colIndex}>
+                    <TableCell key={colIndex}>
                       <button
                         type="button"
                         className="action-btn"
                         title={t('edit')}
                         onClick={() => onEdit(row)}
                       >✏️</button>
-                    </td>
+                    </TableCell>
                   );
                 }
-                if (c.render) return <td key={colIndex}>{c.render(row, rowIndex)}</td>;
-                return <td key={colIndex}>{String((row as any)[c.key as any] || '')}</td>;
+                if (c.render) return <TableCell key={colIndex}>{c.render(row, rowIndex)}</TableCell>;
+                return <TableCell key={colIndex}>{String((row as any)[c.key as any] || '')}</TableCell>;
               })}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </UITable>
     </div>
   );
 }

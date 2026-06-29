@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import { visibleMenu } from '../lib/featureFlags';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible';
 
 const PAGE_PERMISSION_MAP: Record<string, string> = {
   pAdvertiserList: 'advertiser.read',
@@ -54,7 +55,7 @@ export function Sidebar() {
     setOpenGroups(init);
   }, [currentPage, can, currentUser]);
 
-  const toggleGroup = (key: string) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  const setGroupOpen = (key: string, open: boolean) => setOpenGroups(prev => ({ ...prev, [key]: open }));
 
   const username = currentUser?.username || '-';
   const avatarLetter = username.charAt(0).toUpperCase();
@@ -89,14 +90,21 @@ export function Sidebar() {
             );
           }
 
-          const isOpen = openGroups[group.key];
+          const isOpen = !!openGroups[group.key];
           return (
-            <div key={group.key} className="sb-group">
-              <div className={`sb-group-header ${isOpen ? 'open' : ''}`} onClick={() => toggleGroup(group.key)}>
-                <span><span className="icon">{group.icon}</span>{t(group.key)}</span>
-                <span className="arrow">▶</span>
-              </div>
-              <div className={`sb-children ${isOpen ? 'open' : ''}`}>
+            <Collapsible
+              key={group.key}
+              open={isOpen}
+              onOpenChange={(open) => setGroupOpen(group.key, open)}
+              className="sb-group"
+            >
+              <CollapsibleTrigger asChild>
+                <div className={`sb-group-header ${isOpen ? 'open' : ''}`}>
+                  <span><span className="icon">{group.icon}</span>{t(group.key)}</span>
+                  <span className="arrow">▶</span>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className={`sb-children ${isOpen ? 'open' : ''}`}>
                 {visibleChildren.map(c => (
                   <div key={c.key}>
                     {(c as { divider?: boolean }).divider && <div className="sb-divider" />}
@@ -105,8 +113,8 @@ export function Sidebar() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
           );
         })}
       </div>

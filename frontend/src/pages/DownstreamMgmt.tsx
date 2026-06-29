@@ -215,6 +215,12 @@ export function DownstreamMgmt() {
       setEditError(t('invalidEmail') || 'Email không hợp lệ');
       return;
     }
+    if (!id) {
+      if (!contact.trim() || !phone.trim() || !email.trim()) {
+        setEditError(t('requiredFields'));
+        return;
+      }
+    }
 
     setSaving(true);
     setEditError('');
@@ -316,7 +322,7 @@ export function DownstreamMgmt() {
                 />
               </div>
               <div className="form-group">
-                <label>{t('contact')}</label>
+                <label>{t('contact')} {!editModal.id && <span style={{ color: 'red' }}>*</span>}</label>
                 <input
                   className="input"
                   value={editModal.contact}
@@ -325,7 +331,7 @@ export function DownstreamMgmt() {
                 />
               </div>
               <div className="form-group">
-                <label>{t('phone')}</label>
+                <label>{t('phone')} {!editModal.id && <span style={{ color: 'red' }}>*</span>}</label>
                 <input
                   className="input"
                   value={editModal.phone}
@@ -334,7 +340,7 @@ export function DownstreamMgmt() {
                 />
               </div>
               <div className="form-group">
-                <label>{t('email')}</label>
+                <label>{t('email')} {!editModal.id && <span style={{ color: 'red' }}>*</span>}</label>
                 <input
                   className="input"
                   type="email"

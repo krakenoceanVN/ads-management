@@ -247,7 +247,10 @@ export function AdvertiserList() {
     [adTypes]
   );
 
-  const adTypeOptions = adTypes;
+  const adTypeOptions = React.useMemo(
+    () => Array.from(new Map(adTypes.map(at => [at.name, { id: String(at.id), name: at.name }])).values()),
+    [adTypes]
+  );
 
   // Load AdTypes for the dropdown (all AdTypes, no filtering needed)
   const loadAdTypes = React.useCallback(async () => {
@@ -354,17 +357,25 @@ export function AdvertiserList() {
 
   const submitForm = async () => {
     const emailValue = form.email.trim();
+    const contactValue = form.contact.trim();
+    const phoneValue = form.phone.trim();
     if (emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
       setFormError(t('invalidEmail') || 'Invalid email format');
       return;
+    }
+    if (!editing) {
+      if (!contactValue || !phoneValue || !emailValue) {
+        setFormError(t('requiredFields'));
+        return;
+      }
     }
     const payload: CreateAdvertiserInput | UpdateAdvertiserInput = {
       name: form.name.trim(),
       adTypeId: form.adTypeIds[0] ?? '',
       adTypeIds: form.adTypeIds,
       status: form.status,
-      contact: form.contact.trim() || null,
-      phone: form.phone.trim() || null,
+      contact: contactValue || null,
+      phone: phoneValue || null,
       email: emailValue || null,
       notes: form.notes.trim() || null,
     };
@@ -472,9 +483,9 @@ export function AdvertiserList() {
             </div>
             <div className="modal-body">
               <div className="form-group"><label>{t('advertiserName')} <span style={{ color: 'red' }}>*</span></label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('contact')}</label><input type="text" value={form.contact} onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('phone')}</label><input type="text" value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('email')}</label><input type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} /></div>
+              <div className="form-group"><label>{t('contact')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="text" value={form.contact} onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))} /></div>
+              <div className="form-group"><label>{t('phone')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="text" value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} /></div>
+              <div className="form-group"><label>{t('email')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} /></div>
               <div className="form-group"><label>{t('notes')}</label><textarea rows={2} value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} /></div>
               <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>

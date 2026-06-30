@@ -250,7 +250,7 @@ function ReportDateRangeField({
       </div>
       {onPreset && (
         <div className="report-date-range-presets">
-          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('today')}>{t('today') || 'Hôm nay'}</button>
+          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('today')}>{t('today')}</button>
           <button type="button" className="report-date-preset-btn" onClick={() => onPreset('thisMonth')}>{t('thisMonth')}</button>
           <button type="button" className="report-date-preset-btn" onClick={() => onPreset('lastMonth')}>{t('lastMonth')}</button>
         </div>

@@ -135,7 +135,10 @@ function getAdvertiserAdTypeNameList(record: Advertiser, mapById: Map<string, st
   if (record.adTypes?.length) {
     return record.adTypes.map(at => at.name);
   }
-  return getAdvertiserAdTypeIds(record).map(id => mapById.get(id) ?? id);
+  const ids = getAdvertiserAdTypeIds(record);
+  return ids
+    .map(id => mapById.get(id) ?? id)
+    .map(value => mapById.get(value) ?? value);
 }
 
 function getAdvertiserAdTypeNames(record: Advertiser, map: Map<string, string>): string {
@@ -926,7 +929,7 @@ export function AdIdMgmt() {
             columns={[
               { key: '__no__', label: t('no') },
               { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName), sortDirection: sortState?.col === 'advertiserName' ? sortState.dir : null, onSortClick: () => toggleSort('advertiserName') },
-              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adIdAdTypeLabel(r)) || '-', sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adIdAdTypeLabel(r) || '-'), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
               { key: 'slot', label: t('adId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
               { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} />, sortDirection: sortState?.col === 'type' ? sortState.dir : null, onSortClick: () => toggleSort('type') },
               { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },

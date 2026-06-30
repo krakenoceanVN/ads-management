@@ -58,9 +58,14 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { defaultAdType: 
 }
 
 export function mapAdId(
-  site: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null }
+  site: AdSite & {
+    upstream: Upstream & { defaultAdType: AdType | null; ownedAdTypes?: AdType[] };
+    adType?: AdType | null;
+  }
 ): AdId {
-  const adType = site.adType ?? null;
+  const owned = site.upstream?.ownedAdTypes ?? [];
+  const primaryOwned = owned[0] ?? null;
+  const adType = site.adType ?? primaryOwned ?? site.upstream?.defaultAdType ?? null;
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA'
     ? decimalToNull(site.currentUnitPrice)
     : decimalToNull(site.currentRatio);
@@ -74,7 +79,7 @@ export function mapAdId(
     status: site.status as EntityStatus,
     advertiserId: site.upstreamId,
     advertiserName: site.upstream?.name ?? '',
-    adTypeId: site.adTypeId ?? null,
+    adTypeId: site.adTypeId ?? adType?.id ?? null,
     adTypeCode: adType?.name ?? '',
     adTypeName: adType?.name ?? null,
     upstreamId: site.upstreamId,

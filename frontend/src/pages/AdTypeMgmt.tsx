@@ -35,7 +35,6 @@ export function AdTypeMgmt() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [advertiserFilter, setAdvertiserFilter] = useState('');
-  const [adOrderFilter, setAdOrderFilter] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [hasDeps, setHasDeps] = useState<boolean | null>(null);
   const [editError, setEditError] = useState('');
@@ -84,7 +83,6 @@ export function AdTypeMgmt() {
     const keyword = search.trim().toLowerCase();
     const filtered = rows.filter(r => {
       if (advertiserFilter && String(r.upstreamId ?? '') !== advertiserFilter) return false;
-      if (adOrderFilter && r.id !== adOrderFilter) return false;
       if (statusFilter && r.status !== statusFilter) return false;
       if (!keyword) return true;
       const owner = r.upstreamId ? advertisersById.get(String(r.upstreamId))?.name : '';
@@ -117,7 +115,7 @@ export function AdTypeMgmt() {
       return (a.id ?? '').localeCompare(b.id ?? '');
     });
     return out;
-  }, [rows, search, advertiserFilter, adOrderFilter, statusFilter, sortState, advertisersById, displayName]);
+  }, [rows, search, advertiserFilter, statusFilter, sortState, advertisersById, displayName]);
 
 
   const openCreate = () => {
@@ -340,10 +338,6 @@ export function AdTypeMgmt() {
               <select className="filter-select" value={advertiserFilter} onChange={e => setAdvertiserFilter(e.target.value)}>
                 <option value="">{t('selectAdvertiser')}</option>
                 {advertisers.map(a => <option key={a.id} value={String(a.id)}>{displayName(a.name)}</option>)}
-              </select>
-              <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
-                <option value="">{t('selectAdOrder')}</option>
-                {(advertiserFilter ? rows.filter(r => String(r.upstreamId ?? '') === advertiserFilter) : rows).map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
               </select>
               <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>

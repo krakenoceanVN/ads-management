@@ -12,6 +12,7 @@ export interface CreateMediaIdInput {
   pctHal?: number | null;
   mediaAdTypeId?: string | null;
   mediaIdName?: string | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
@@ -21,6 +22,7 @@ export interface UpdateMediaIdInput {
   pctHal?: number | null;
   mediaAdTypeId?: string | null;
   mediaIdName?: string | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
@@ -33,10 +35,14 @@ async function validateMediaAdOrder(mediaAdOrderId: string, downstreamId: string
 }
 
 export async function createMediaId(input: CreateMediaIdInput) {
-  const { adSiteId, downstreamId, mediaAdOrderId, customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
+  const { adSiteId, downstreamId, mediaAdOrderId, customPrice, pctHal, mediaAdTypeId, mediaIdName, notes, status } = input;
 
   if (!adSiteId) throw new BadRequestError('adSiteId is required');
   if (!downstreamId) throw new BadRequestError('downstreamId is required');
+  if (!mediaAdOrderId) throw new BadRequestError('mediaAdOrderId is required');
+  if (pctHal !== undefined && pctHal !== null && (!Number.isFinite(pctHal) || pctHal < 0 || pctHal > 1)) {
+    throw new BadRequestError('pctHal must be a number between 0 and 1');
+  }
 
   const adSite = await prisma.adSite.findUnique({
     where: { id: adSiteId },
@@ -93,6 +99,7 @@ export async function createMediaId(input: CreateMediaIdInput) {
       pctHal: pctHal != null ? new Prisma.Decimal(pctHal) : null,
       mediaAdTypeId: mediaAdTypeId ?? null,
       mediaIdName: mediaIdName ?? null,
+      notes: notes ?? null,
       status: status ?? 'active',
     },
     include: {
@@ -105,13 +112,21 @@ export async function createMediaId(input: CreateMediaIdInput) {
 }
 
 export async function updateMediaId(junctionId: string, input: UpdateMediaIdInput) {
-  const { mediaAdOrderId, customPrice, pctHal, mediaAdTypeId, mediaIdName, status } = input;
+  const { mediaAdOrderId, customPrice, pctHal, mediaAdTypeId, mediaIdName, notes, status } = input;
   const { Prisma } = await import('@prisma/client');
+
+  if (pctHal !== undefined && pctHal !== null && (!Number.isFinite(pctHal) || pctHal < 0 || pctHal > 1)) {
+    throw new BadRequestError('pctHal must be a number between 0 and 1');
+  }
 
   // Validate mediaAdTypeId if provided — must exist in AdType
   if (mediaAdTypeId) {
     const at = await prisma.adType.findUnique({ where: { id: mediaAdTypeId } });
     if (!at) throw new BadRequestError(`AdType with id '${mediaAdTypeId}' does not exist`);
+  }
+
+  if (mediaAdOrderId !== undefined && !mediaAdOrderId) {
+    throw new BadRequestError('mediaAdOrderId is required');
   }
 
   // Validate mediaAdOrderId if provided — must exist and belong to this junction's downstream
@@ -140,6 +155,7 @@ export async function updateMediaId(junctionId: string, input: UpdateMediaIdInpu
         : {}),
       ...(mediaAdTypeId !== undefined ? { mediaAdTypeId: mediaAdTypeId ?? null } : {}),
       ...(mediaIdName !== undefined ? { mediaIdName: mediaIdName ?? null } : {}),
+      ...(notes !== undefined ? { notes: notes ?? null } : {}),
       ...(status !== undefined ? { status } : {}),
     },
     include: {

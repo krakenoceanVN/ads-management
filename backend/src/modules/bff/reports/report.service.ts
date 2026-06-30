@@ -210,6 +210,7 @@ function makeReportMediaRow(
     mediaIdStr: site.name,
     upstreamAdId: site.name,
     upstreamAdIdNum: site.id,
+    junctionId: junction.id,
     rate,
     traffic,
     settlement,

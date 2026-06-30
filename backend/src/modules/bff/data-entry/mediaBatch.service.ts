@@ -1,58 +1,20 @@
 /**
- * Phase 3B/3C: Media Data Entry Write Service
- * Handles save batch, confirm batch, unconfirm single.
+ * Phase 3B/3C: Media Data Entry Write Service (Đợt 2 — read-only coefficient)
  *
- * CPM rebate:
- *   baseRevenue = qty * unitPrice / 1000
- *   if rebateRate exists: revenue = baseRevenue - (qty * rebateRate)
- *   else: revenue = baseRevenue
- *
- * Rebate source priority:
- *   1. Active AdSiteRebateRate (startDate <= recordDate <= endDate or endDate=null)
- *      latest startDate wins
- *   2. AdSite.rebateRate (Float)
- *   3. No rebate
+ * Media rows no longer write DailyInput. They only persist dataCoefficient
+ * and status on MediaDailyInput, keyed by (recordDate, adSiteDownstreamId).
+ * Traffic/settlement/rate stay read-only and are derived by the listing
+ * service from the advertiser DailyInput + media configuration.
  */
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../shared/prisma/client';
-import { buildRevenuePayload } from '../../../shared/services/revenue.service';
-import { resolveRebateRate } from '../../../shared/services/rebate.service';
 import type { EntryType } from '../bff.types';
 
 export interface MediaBatchItem {
-  adSiteId: string;
+  adSiteDownstreamId: string;
   recordDate: string;
-  qty?: number;
-  unitPrice?: string | number;
-  amount1?: string | number;
-  amount2?: string | number;
-  ratio?: string | number;
-  note?: string;
-}
-
-function validateMediaBatchItem(item: MediaBatchItem, billingMethod: string): void {
-  if (billingMethod === 'CPM' || billingMethod === 'CPC' || billingMethod === 'CPA') {
-    if (!Object.prototype.hasOwnProperty.call(item, 'qty') || item.qty === undefined || item.qty === null) {
-      throw new Error(`${billingMethod}: qty is required`);
-    }
-    const qty = Number(item.qty);
-    if (isNaN(qty)) throw new Error(`${billingMethod}: qty must be numeric`);
-    if (qty < 0) throw new Error(`${billingMethod}: qty must be >= 0`);
-  } else if (billingMethod === 'CPS') {
-    const hasA1 = Object.prototype.hasOwnProperty.call(item, 'amount1') && item.amount1 !== undefined && item.amount1 !== null && String(item.amount1).trim() !== '';
-    const hasA2 = Object.prototype.hasOwnProperty.call(item, 'amount2') && item.amount2 !== undefined && item.amount2 !== null && String(item.amount2).trim() !== '';
-    const hasRatio = Object.prototype.hasOwnProperty.call(item, 'ratio') && item.ratio !== undefined && item.ratio !== null && String(item.ratio).trim() !== '';
-    if (!hasA1) throw new Error(`${billingMethod}: amount1 is required`);
-    if (!hasA2) throw new Error(`${billingMethod}: amount2 is required`);
-    if (!hasRatio) throw new Error(`${billingMethod}: ratio is required`);
-    const a1 = Number(item.amount1);
-    const a2 = Number(item.amount2);
-    const r = Number(item.ratio);
-    if (isNaN(a1) || isNaN(a2)) throw new Error(`${billingMethod}: amount1 and amount2 must be numeric`);
-    if (isNaN(r)) throw new Error(`${billingMethod}: ratio must be numeric`);
-    if (r <= 0) throw new Error(`${billingMethod}: ratio must be > 0`);
-  }
+  dataCoefficient?: number | string | null;
 }
 
 export interface MediaBatchResult {
@@ -63,102 +25,89 @@ export interface MediaBatchResult {
   errors: string[];
 }
 
+function normalizeDataCoefficient(raw: unknown): number {
+  if (raw === null || raw === undefined) return 1;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw <= 0) throw new Error('dataCoefficient must be > 0');
+    return raw;
+  }
+  const text = String(raw).trim();
+  if (!text) return 1;
+  const cleaned = text.replace(/%/g, '').trim();
+  if (cleaned === '' || cleaned === '0') return 1;
+  const value = Number(cleaned);
+  if (!Number.isFinite(value)) throw new Error('dataCoefficient must be numeric');
+  if (value <= 0) throw new Error('dataCoefficient must be > 0');
+  if (value > 1 && value <= 100) return value / 100;
+  return value;
+}
+
+function mediaDailyInputId(junctionId: string, recordDate: string): string {
+  return `mdi_${junctionId}_${recordDate.replace(/-/g, '')}`;
+}
+
 export async function saveMediaBatch(
   items: MediaBatchItem[],
   userId: string
 ): Promise<MediaBatchResult> {
   const result: MediaBatchResult = { success: true, saved: 0, updated: 0, skipped: 0, errors: [] };
 
-  const siteIds = [...new Set(items.map(i => String(i.adSiteId)))];
-  const sites = await prisma.adSite.findMany({
-    where: { id: { in: siteIds } },
-    include: { upstream: { include: { defaultAdType: true } } },
-  });
-  const siteById = new Map(sites.map(s => [s.id, s]));
+  const junctionIds = [...new Set(items.map(i => String(i.adSiteDownstreamId)))];
+  const junctions = junctionIds.length
+    ? await prisma.adSiteDownstream.findMany({
+        where: { id: { in: junctionIds } },
+        select: { id: true },
+      })
+    : [];
+  const junctionIdSet = new Set(junctions.map(j => j.id));
 
   for (const item of items) {
     try {
-      const site = siteById.get(item.adSiteId);
-      if (!site) {
+      const junctionId = String(item.adSiteDownstreamId);
+      if (!junctionIdSet.has(junctionId)) {
         result.skipped++;
-        result.errors.push(`AdSite ${item.adSiteId} not found`);
+        result.errors.push(`AdSiteDownstream ${junctionId} not found`);
         continue;
       }
 
       const recordDate = new Date(item.recordDate + 'T00:00:00.000Z');
-      const billingMethod = site.billingMethod as EntryType;
+      const dataCoefficient = normalizeDataCoefficient(item.dataCoefficient);
+      const id = mediaDailyInputId(junctionId, item.recordDate);
 
-      validateMediaBatchItem(item, billingMethod);
-
-      // Resolve rebate rate for CPM/CPC
-      let rebateRate: number | null = null;
-      if (billingMethod === 'CPM' || billingMethod === 'CPC') {
-        const rebate = await resolveRebateRate(item.adSiteId, recordDate);
-        rebateRate = rebate.rate;
-      }
-
-      const revenuePayload = buildRevenuePayload({
-        billingMethod,
-        qty: item.qty,
-        unitPrice: item.unitPrice,
-        amount1: item.amount1,
-        amount2: item.amount2,
-        ratio: item.ratio,
-        rebateRate,
-      });
-
-      const existing = await prisma.dailyInput.findUnique({
-        where: { recordDate_adSiteId: { recordDate, adSiteId: item.adSiteId } },
-      });
-
+      const existing = await prisma.mediaDailyInput.findUnique({ where: { id } });
       if (existing) {
         if (existing.status === 'confirmed') {
           result.skipped++;
-          result.errors.push(`AdSite ${item.adSiteId} on ${item.recordDate}: confirmed record cannot be edited`);
+          result.errors.push(`AdSiteDownstream ${junctionId} on ${item.recordDate}: confirmed record cannot be edited`);
           continue;
         }
         if (existing.status === 'quarantined') {
           result.skipped++;
-          result.errors.push(`AdSite ${item.adSiteId} on ${item.recordDate}: quarantined record cannot be edited`);
+          result.errors.push(`AdSiteDownstream ${junctionId} on ${item.recordDate}: quarantined record cannot be edited`);
           continue;
         }
-
-        await prisma.dailyInput.update({
-          where: { id: existing.id },
+        await prisma.mediaDailyInput.update({
+          where: { id },
           data: {
-            qty: item.qty ?? 0,
-            unitPriceSnapshot: item.unitPrice != null ? new Prisma.Decimal(String(item.unitPrice)) : undefined,
-            amount1: item.amount1 != null ? new Prisma.Decimal(String(item.amount1)) : undefined,
-            amount2: item.amount2 != null ? new Prisma.Decimal(String(item.amount2)) : undefined,
-            ratioSnapshot: item.ratio != null ? new Prisma.Decimal(String(item.ratio)) : undefined,
-            rebateRateSnapshot: rebateRate != null ? new Prisma.Decimal(rebateRate) : new Prisma.Decimal(0),
-            revenue: new Prisma.Decimal(revenuePayload.toFixed(6)),
-            note: item.note ?? null,
+            dataCoefficient: new Prisma.Decimal(dataCoefficient),
           },
         });
         result.updated++;
       } else {
-        await prisma.dailyInput.create({
+        await prisma.mediaDailyInput.create({
           data: {
-            id: `di_${item.adSiteId}_${item.recordDate.replace(/-/g, '')}`,
+            id,
             recordDate,
-            adSiteId: item.adSiteId,
-            qty: item.qty ?? 0,
-            unitPriceSnapshot: item.unitPrice != null ? new Prisma.Decimal(String(item.unitPrice)) : undefined,
-            amount1: item.amount1 != null ? new Prisma.Decimal(String(item.amount1)) : undefined,
-            amount2: item.amount2 != null ? new Prisma.Decimal(String(item.amount2)) : undefined,
-            ratioSnapshot: item.ratio != null ? new Prisma.Decimal(String(item.ratio)) : undefined,
-            rebateRateSnapshot: rebateRate != null ? new Prisma.Decimal(rebateRate) : new Prisma.Decimal(0),
-            revenue: new Prisma.Decimal(revenuePayload.toFixed(6)),
-            note: item.note ?? null,
-            createdBy: userId,
+            adSiteDownstreamId: junctionId,
+            dataCoefficient: new Prisma.Decimal(dataCoefficient),
             status: 'unconfirmed',
+            createdBy: userId,
           },
         });
         result.saved++;
       }
     } catch (err: any) {
-      result.errors.push(`AdSite ${item.adSiteId}: ${err.message}`);
+      result.errors.push(`AdSiteDownstream ${item.adSiteDownstreamId}: ${err.message}`);
     }
   }
 
@@ -167,16 +116,16 @@ export async function saveMediaBatch(
 
 export async function confirmMediaBatch(
   recordDate: string,
-  adSiteIds: string[],
+  adSiteDownstreamIds: string[],
   userId: string
 ): Promise<{ success: boolean; confirmed: number; errors: string[] }> {
   const date = new Date(recordDate + 'T00:00:00.000Z');
 
   return prisma.$transaction(async (tx) => {
-    const records = await tx.dailyInput.findMany({
+    const records = await tx.mediaDailyInput.findMany({
       where: {
         recordDate: date,
-        adSiteId: { in: adSiteIds },
+        adSiteDownstreamId: { in: adSiteDownstreamIds },
         status: 'unconfirmed',
       },
     });
@@ -186,7 +135,7 @@ export async function confirmMediaBatch(
     }
 
     const ids = records.map(r => r.id);
-    await tx.dailyInput.updateMany({
+    await tx.mediaDailyInput.updateMany({
       where: { id: { in: ids } },
       data: { status: 'confirmed' },
     });
@@ -196,11 +145,11 @@ export async function confirmMediaBatch(
         id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
-        action: 'CONFIRM_MEDIA',
+        action: 'CONFIRM_MEDIA_COEF',
         module: 'dataEntry',
-        targetType: 'DailyInput',
+        targetType: 'MediaDailyInput',
         targetId: ids.join(','),
-        detail: `Confirmed ${ids.length} media records on ${recordDate} for adSiteIds=${adSiteIds.join(',')}`,
+        detail: `Confirmed ${ids.length} media coefficient records on ${recordDate} for junctions=${adSiteDownstreamIds.join(',')}`,
       },
     });
 
@@ -210,14 +159,14 @@ export async function confirmMediaBatch(
 
 export async function unconfirmMedia(id: string, userId: string) {
   return prisma.$transaction(async (tx) => {
-    const record = await tx.dailyInput.findUnique({ where: { id } });
+    const record = await tx.mediaDailyInput.findUnique({ where: { id } });
     if (!record) {
       throw new Error('Record not found');
     }
     if (record.status !== 'confirmed') {
       throw new Error(`Cannot unconfirm: record status is '${record.status}', must be 'confirmed'`);
     }
-    const updated = await tx.dailyInput.update({
+    const updated = await tx.mediaDailyInput.update({
       where: { id },
       data: { status: 'unconfirmed' },
     });
@@ -227,14 +176,16 @@ export async function unconfirmMedia(id: string, userId: string) {
         id: `opl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         userId: userId || null,
         username: null,
-        action: 'UNCONFIRM_MEDIA',
+        action: 'UNCONFIRM_MEDIA_COEF',
         module: 'dataEntry',
-        targetType: 'DailyInput',
+        targetType: 'MediaDailyInput',
         targetId: String(id),
-        detail: `Unconfirmed media record id=${id}`,
+        detail: `Unconfirmed media coefficient record id=${id}`,
       },
     });
 
     return { success: true, id: updated.id, previousStatus: 'confirmed', newStatus: updated.status };
   });
 }
+
+export type { EntryType };

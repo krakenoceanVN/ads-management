@@ -1,5 +1,5 @@
 import { prisma } from '../../../shared/prisma/client';
-import { BadRequestError } from '../../../shared/errors/AppError';
+import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
 import { mapAdvertiser } from '../mappers';
 import { generateShortId } from '../../../shared/ids';
 import type { Prisma } from '@prisma/client';
@@ -58,49 +58,96 @@ async function syncUpstreamAdTypes(upstreamId: string, adTypeIds: string[], tx: 
   })));
 }
 
+async function assertNameUnique(name: string, excludeId?: string): Promise<void> {
+  const dupe = await prisma.upstream.findFirst({
+    where: {
+      name: { equals: name, mode: 'insensitive' },
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (dupe) throw new ConflictError(`Tên nhà quảng cáo '${name}' đã tồn tại`);
+}
+
+function isUpstreamNameUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; meta?: { target?: string | string[] } };
+  if (e.code !== 'P2002') return false;
+  const target = e.meta?.target;
+  if (Array.isArray(target)) return target.some(t => String(t).toLowerCase().includes('name'));
+  return typeof target === 'string' && target.toLowerCase().includes('name');
+}
+
 export async function createAdvertiser(input: CreateAdvertiserInput) {
   const adTypeIds = normalizeAdTypeIds(input);
-  const row = await prisma.$transaction(async tx => {
-    const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
-    const created = await tx.upstream.create({
-      data: {
-        id: generateShortId(),
-        name: input.name,
-        contact: input.contact ?? null,
-        phone: input.phone ?? null,
-        email: input.email ?? null,
-        notes: input.notes ?? null,
-        status: input.status ?? 'active',
-      },
+  const name = input.name?.trim();
+  if (!name) throw new BadRequestError('name is required');
+  await assertNameUnique(name);
+
+  try {
+    const row = await prisma.$transaction(async tx => {
+      const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
+      const created = await tx.upstream.create({
+        data: {
+          id: generateShortId(),
+          name,
+          contact: input.contact ?? null,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          notes: input.notes ?? null,
+          status: input.status ?? 'active',
+        },
+      });
+      await syncUpstreamAdTypes(created.id, adTypes.map(adType => adType.id), tx);
+      return tx.upstream.findUniqueOrThrow({ where: { id: created.id }, include: advertiserInclude });
     });
-    await syncUpstreamAdTypes(created.id, adTypes.map(adType => adType.id), tx);
-    return tx.upstream.findUniqueOrThrow({ where: { id: created.id }, include: advertiserInclude });
-  });
-  return mapAdvertiser(row);
+    return mapAdvertiser(row);
+  } catch (err) {
+    if (isUpstreamNameUniqueViolation(err)) {
+      throw new ConflictError(`Tên nhà quảng cáo '${name}' đã tồn tại`);
+    }
+    throw err;
+  }
 }
 
 export async function updateAdvertiser(id: string, input: UpdateAdvertiserInput) {
+  if (!id) throw new BadRequestError('Invalid id');
+
   const shouldSyncAdTypes = input.adTypeIds !== undefined || input.adTypeId !== undefined;
   const adTypeIds = shouldSyncAdTypes ? normalizeAdTypeIds(input) : [];
-  const row = await prisma.$transaction(async tx => {
-    const adTypes = shouldSyncAdTypes ? await resolveAdTypesByIds(adTypeIds, tx) : [];
-    await tx.upstream.update({
-      where: { id },
-      data: {
-        ...(input.name !== undefined && { name: input.name }),
-        ...(input.contact !== undefined && { contact: input.contact }),
-        ...(input.phone !== undefined && { phone: input.phone }),
-        ...(input.email !== undefined && { email: input.email }),
-        ...(input.notes !== undefined && { notes: input.notes }),
-        ...(input.status !== undefined && { status: input.status }),
-      },
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) throw new BadRequestError('name cannot be empty');
+    await assertNameUnique(name, id);
+  }
+
+  try {
+    const row = await prisma.$transaction(async tx => {
+      const adTypes = shouldSyncAdTypes ? await resolveAdTypesByIds(adTypeIds, tx) : [];
+      await tx.upstream.update({
+        where: { id },
+        data: {
+          ...(input.name !== undefined && { name: input.name.trim() }),
+          ...(input.contact !== undefined && { contact: input.contact }),
+          ...(input.phone !== undefined && { phone: input.phone }),
+          ...(input.email !== undefined && { email: input.email }),
+          ...(input.notes !== undefined && { notes: input.notes }),
+          ...(input.status !== undefined && { status: input.status }),
+        },
+      });
+      if (shouldSyncAdTypes) {
+        await syncUpstreamAdTypes(id, adTypes.map(adType => adType.id), tx);
+      }
+      return tx.upstream.findUniqueOrThrow({ where: { id }, include: advertiserInclude });
     });
-    if (shouldSyncAdTypes) {
-      await syncUpstreamAdTypes(id, adTypes.map(adType => adType.id), tx);
+    return mapAdvertiser(row);
+  } catch (err) {
+    if (isUpstreamNameUniqueViolation(err)) {
+      throw new ConflictError(`Tên nhà quảng cáo '${input.name?.trim() ?? ''}' đã tồn tại`);
     }
-    return tx.upstream.findUniqueOrThrow({ where: { id }, include: advertiserInclude });
-  });
-  return mapAdvertiser(row);
+    throw err;
+  }
 }
 
 export async function deleteAdvertiser(id: string) {

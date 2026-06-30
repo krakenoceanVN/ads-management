@@ -71,6 +71,8 @@ model Upstream {
 
   @@index([adTypeId])
   @@index([adTypeId, status])
+  // Upstream.name uniqueness is enforced at DB level via functional index
+  // Upstream_name_lower_key (case-insensitive). See migration 20260630000000.
 }
 
 model UpstreamAdType {
@@ -159,6 +161,8 @@ model AdSite {
   @@index([isActive])
   @@index([isArchived])
   @@index([upstreamId, isActive, isArchived])
+  // AdSite.name uniqueness is enforced at DB level via functional index
+  // AdSite_name_lower_key (case-insensitive). See migration 20260630001000.
 }
 
 model AdSiteEvent {
@@ -193,6 +197,7 @@ model AdSiteDownstream {
   downstream Downstream @relation(fields: [downstreamId], references: [id], onDelete: Cascade)
   mediaAdType AdType?   @relation(fields: [mediaAdTypeId], references: [id], onDelete: SetNull)
   mediaAdOrder MediaAdOrder? @relation(fields: [mediaAdOrderId], references: [id], onDelete: SetNull)
+  mediaDailyInputs MediaDailyInput[]
 
   @@unique([adSiteId, downstreamId])
   @@index([adSiteId])
@@ -340,6 +345,27 @@ model DailyDownstreamRate {
   @@unique([downstreamId, date])
   @@index([downstreamId])
   @@index([date])
+}
+
+// ============================================================
+// TABLE 6c: media_daily_input
+// ============================================================
+model MediaDailyInput {
+  id                 String   @id
+  recordDate         DateTime
+  adSiteDownstreamId String
+  dataCoefficient    Decimal  @default(1.0) @db.Decimal(18, 6)
+  status             String   @default("unconfirmed") // unconfirmed | confirmed | quarantined
+  createdBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  adSiteDownstream   AdSiteDownstream @relation(fields: [adSiteDownstreamId], references: [id], onDelete: Cascade)
+
+  @@unique([recordDate, adSiteDownstreamId])
+  @@index([adSiteDownstreamId])
+  @@index([recordDate])
+  @@index([status])
 }
 
 // ============================================================

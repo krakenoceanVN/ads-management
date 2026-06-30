@@ -41,6 +41,7 @@ export async function create(req: Request, res: Response) {
     pctHal: body.pctHal ?? null,
     mediaAdTypeId: body.mediaAdTypeId ?? null,
     mediaIdName: body.mediaIdName ?? null,
+    notes: body.notes ?? null,
     status: body.status,
   });
   await recordMasterDataOperation(req, 'CREATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);
@@ -58,6 +59,7 @@ export async function update(req: Request, res: Response) {
     pctHal: body.pctHal,
     mediaAdTypeId: body.mediaAdTypeId,
     mediaIdName: body.mediaIdName,
+    notes: body.notes,
     status: body.status,
   });
   await recordMasterDataOperation(req, 'UPDATE_MEDIA_ID', 'mediaId', mediaId.id, mediaId.slot);

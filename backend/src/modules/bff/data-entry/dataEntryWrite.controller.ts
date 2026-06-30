@@ -80,14 +80,22 @@ export async function postMediaBatch(req: Request, res: Response) {
 // ─── Media Confirm Batch ─────────────────────────────────────────────────────
 
 export async function postMediaConfirmBatch(req: Request, res: Response) {
-  const { recordDate, adSiteIds } = req.body as { recordDate: string; adSiteIds: string[] };
-  if (!recordDate || !Array.isArray(adSiteIds) || adSiteIds.length === 0) {
-    res.status(400).json({ success: false, error: 'recordDate and adSiteIds[] are required', code: 'BAD_REQUEST' });
+  const { recordDate, adSiteIds, adSiteDownstreamIds } = req.body as {
+    recordDate?: string;
+    adSiteIds?: string[];
+    adSiteDownstreamIds?: string[];
+  };
+  const date = recordDate ?? '';
+  const junctions = Array.isArray(adSiteDownstreamIds) && adSiteDownstreamIds.length > 0
+    ? adSiteDownstreamIds
+    : Array.isArray(adSiteIds) ? adSiteIds : [];
+  if (!date || junctions.length === 0) {
+    res.status(400).json({ success: false, error: 'recordDate and adSiteDownstreamIds[] are required', code: 'BAD_REQUEST' });
     return;
   }
 
   const userId = String((req as any).authUser?.id ?? '');
-  const result = await confirmMediaBatch(recordDate, adSiteIds, userId);
+  const result = await confirmMediaBatch(date, junctions, userId);
   res.json(bffData(result));
 }
 

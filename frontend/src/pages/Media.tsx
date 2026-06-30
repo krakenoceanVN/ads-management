@@ -467,6 +467,9 @@ export function MediaAdOrderMgmt() {
 
 export function MediaIdMgmt() {
   const [search, setSearch] = React.useState('');
+  const [advertiserFilter, setAdvertiserFilter] = React.useState('');
+  const [adTypeFilter, setAdTypeFilter] = React.useState('');
+  const [adSiteFilter, setAdSiteFilter] = React.useState('');
   const [mediaFilter, setMediaFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
@@ -507,6 +510,7 @@ export function MediaIdMgmt() {
     mediaIdName: '',
     pctHal: '',
     customPrice: '',
+    notes: '',
     status: 'active' as EntityStatus,
   });
   const [mediaAdOrders, setMediaAdOrders] = React.useState<MediaAdOrder[]>([]);
@@ -654,14 +658,18 @@ export function MediaIdMgmt() {
   }, [mediaIdPresetFilter, clearMediaIdPresetFilter]);
 
   const adTypeNameByName = React.useMemo(() => new Map(adTypes.map(t => [t.name, t.name])), [adTypes]);
+  // Cascading filter: advertiser → adType → adSite → media → mediaAdOrder
+  const advertiserScopedRows = advertiserFilter ? rows.filter(r => String(r.upstreamId) === String(advertiserFilter)) : rows;
+  const adTypeScopedRows = adTypeFilter ? advertiserScopedRows.filter(r => r.adTypeCode === adTypeFilter) : advertiserScopedRows;
+  const adSiteScopedRows = adSiteFilter ? adTypeScopedRows.filter(r => String(r.adSiteId) === String(adSiteFilter)) : adTypeScopedRows;
+  const mediaScopedRows = mediaFilter ? adSiteScopedRows.filter(row => row.mediaId === mediaFilter) : adSiteScopedRows;
+  const availableMediaAdOrderNames = Array.from(new Set(mediaScopedRows.map(row => row.mediaAdTypeCode).filter((c): c is string => !!c)));
+  const mediaAdOrderOptions = availableMediaAdOrderNames.map(name => ({ id: name, name }));
   const mediaIdOptions = React.useMemo(() => {
     const byId = new Map<string, string>();
     rows.forEach(row => byId.set(row.mediaId, row.mediaName));
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
   }, [rows]);
-  const mediaScopedRows = mediaFilter ? rows.filter(row => row.mediaId === mediaFilter) : rows;
-  const availableMediaAdOrderNames = Array.from(new Set(mediaScopedRows.map(row => row.mediaAdTypeCode).filter((c): c is string => !!c)));
-  const mediaAdOrderOptions = availableMediaAdOrderNames.map(name => ({ id: name, name }));
   const mediaAdOrderScopedRows = orderFilter ? mediaScopedRows.filter(row => row.mediaAdTypeCode === orderFilter) : mediaScopedRows;
   const keyword = normalizeText(search);
   const visibleRows = mediaAdOrderScopedRows.filter(row => {
@@ -750,6 +758,7 @@ export function MediaIdMgmt() {
       mediaIdName: '',
       pctHal: '',
       customPrice: '',
+      notes: '',
       status: 'active',
     });
     setFormError('');
@@ -770,6 +779,7 @@ export function MediaIdMgmt() {
       mediaIdName: record.mediaIdName ?? '',
       pctHal: record.pctHal != null ? String(record.pctHal) : '',
       customPrice: record.rate != null ? String(record.rate) : '',
+      notes: record.notes ?? '',
       status: record.status,
     });
     setFormError('');
@@ -817,7 +827,17 @@ export function MediaIdMgmt() {
     if (!form.adTypeId) { setFormError('Vui lòng chọn Đơn quảng cáo'); return; }
     if (!form.adSiteId) { setFormError('Vui lòng chọn ID quảng cáo'); return; }
     if (!form.downstreamId) { setFormError('Vui lòng chọn MEDIA'); return; }
+    if (!form.mediaAdOrderId) { setFormError(t('mediaAdOrderRequired') || 'Vui lòng chọn Đơn quảng cáo MEDIA'); return; }
     if (!form.mediaIdName.trim()) { setFormError('Vui lòng nhập ID MEDIA'); return; }
+
+    const pctHalVal = form.pctHal.trim();
+    if (pctHalVal) {
+      const parsed = parseFloat(pctHalVal);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+        setFormError('Cột chia lợi nhuận (pctHal) phải là số từ 0 đến 1 (vd: 0.8 = 80%)');
+        return;
+      }
+    }
 
     setSaving(true);
     setFormError('');
@@ -828,6 +848,7 @@ export function MediaIdMgmt() {
         pctHal?: number | null;
         mediaIdName?: string | null;
         mediaAdTypeId?: string | null;
+        notes?: string | null;
       } = {
         adSiteId: form.adSiteId,
       };
@@ -840,13 +861,15 @@ export function MediaIdMgmt() {
         if (Number.isFinite(parsed)) basePayload.customPrice = parsed;
         else basePayload.customPrice = null;
       }
-      const pctHalVal = form.pctHal.trim();
-      if (pctHalVal) {
-        const parsed = parseFloat(pctHalVal);
+      const pctHalVal2 = form.pctHal.trim();
+      if (pctHalVal2) {
+        const parsed = parseFloat(pctHalVal2);
         if (Number.isFinite(parsed)) basePayload.pctHal = parsed;
         else basePayload.pctHal = null;
       }
       if (form.mediaIdName.trim()) basePayload.mediaIdName = form.mediaIdName.trim();
+      const notesVal = form.notes.trim();
+      basePayload.notes = notesVal ? notesVal : null;
 
       if (editing && editing.junctionId) {
         await updateMediaId(editing.junctionId, {
@@ -855,6 +878,7 @@ export function MediaIdMgmt() {
           pctHal: basePayload.pctHal ?? null,
           mediaIdName: basePayload.mediaIdName ?? null,
           mediaAdTypeId: basePayload.mediaAdTypeId ?? null,
+          notes: basePayload.notes ?? null,
         });
         await loadRows();
       } else {
@@ -924,6 +948,9 @@ export function MediaIdMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
           <div className="toolbar-right">
+            <select className="filter-select" value={advertiserFilter} onChange={e => { setAdvertiserFilter(e.target.value); setAdTypeFilter(''); setAdSiteFilter(''); }}><option value="">{t('selectAdvertiser') || 'Nhà QC'}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
+            <select className="filter-select" value={adTypeFilter} onChange={e => { setAdTypeFilter(e.target.value); setAdSiteFilter(''); }} disabled={!advertiserFilter}><option value="">{t('selectAdOrder') || 'Đơn QC'}</option>{Array.from(new Set(advertiserScopedRows.map(r => r.adTypeCode).filter((c): c is string => !!c))).map(code => <option key={code} value={code}>{displayName(adTypeNameByName.get(code) ?? code)}</option>)}</select>
+            <select className="filter-select" value={adSiteFilter} onChange={e => setAdSiteFilter(e.target.value)} disabled={!adTypeFilter}><option value="">{t('adId') || 'ID QC'}</option>{Array.from(new Map(adTypeScopedRows.map(r => [r.adSiteId, r.adSiteName ?? r.adSiteId])).entries()).map(([id, name]) => <option key={id} value={id}>{displayName(name)}</option>)}</select>
             <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={orderFilter} onChange={e => setOrderFilter(e.target.value)}><option value="">{t('selectMediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item.id} value={item.name}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
@@ -941,6 +968,7 @@ export function MediaIdMgmt() {
               { key: 'downstreamName', label: t('media'), render: r => displayName(r.downstreamName ?? '-'), sortDirection: sortState?.col === 'downstreamName' ? sortState.dir : null, onSortClick: () => toggleSort('downstreamName') },
               { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdTypeCode ?? '-'), sortDirection: sortState?.col === 'mediaAdTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('mediaAdTypeCode') },
               { key: 'slot', label: t('mediaId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
+              { key: 'type', label: t('type'), render: r => r.type ?? '-', sortDirection: sortState?.col === 'type' ? sortState.dir : null, onSortClick: () => toggleSort('type') },
               { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio != null ? `${r.shareRatio}` : '-', sortDirection: sortState?.col === 'shareRatio' ? sortState.dir : null, onSortClick: () => toggleSort('shareRatio') },
               { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
@@ -994,7 +1022,7 @@ export function MediaIdMgmt() {
               </div>
               {/* (5) Đơn quảng cáo MEDIA — dropdown MediaAdOrder của cùng AdSite đã chọn */}
               <div className="form-group">
-                <label>Đơn quảng cáo MEDIA</label>
+                <label>Đơn quảng cáo MEDIA <span style={{ color: 'red' }}>*</span></label>
                 <select value={form.mediaAdOrderId} onChange={e => setForm(prev => ({ ...prev, mediaAdOrderId: e.target.value }))} disabled={!form.adSiteId}>
                   <option value="">-</option>
                   {filteredMediaAdOrderOptions.map(mao => <option key={mao.id} value={mao.id}>{displayName(mao.name)}</option>)}
@@ -1014,6 +1042,11 @@ export function MediaIdMgmt() {
               <div className="form-group">
                 <label>Đơn giá Ở hạ nguồn</label>
                 <input type="number" step="0.01" min="0" value={form.customPrice} onChange={e => setForm(prev => ({ ...prev, customPrice: e.target.value }))} placeholder={t('valuePlaceholder') || 'Nhập đơn giá...'} />
+              </div>
+              {/* (9) Ghi chú (notes) */}
+              <div className="form-group">
+                <label>{t('notes')}</label>
+                <input type="text" value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} placeholder={t('notesPlaceholder') || 'Nhập ghi chú...'} />
               </div>
               {editing && <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>

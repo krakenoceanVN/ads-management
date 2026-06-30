@@ -364,7 +364,7 @@ export function AdvertiserList() {
       return;
     }
     if (!editing) {
-      if (!contactValue || !phoneValue || !emailValue) {
+      if (!contactValue || !phoneValue) {
         setFormError(t('requiredFields'));
         return;
       }
@@ -461,8 +461,8 @@ export function AdvertiserList() {
               { key: '__no__', label: t('no') },
               { key: 'name', label: t('advertiser'), render: r => displayName(r.name), sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
               { key: 'adTypeCode', label: t('adType'), render: r => getAdvertiserAdTypeNames(r, adTypeNameById), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
-              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
               { key: 'phone', label: t('phone'), render: r => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
+              { key: 'contact', label: t('contact'), render: r => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
               { key: 'email', label: t('email'), render: r => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
               { key: 'notes', label: t('notes'), render: r => displayName(r.notes ?? '-'), sortDirection: sortState?.col === 'notes' ? sortState.dir : null, onSortClick: () => toggleSort('notes') },
               { key: 'status', label: t('status'), render: r => <StatusToggle status={r.status === 'active'} onChange={status => updateStatus(r, status)} />, sortDirection: sortState?.col === 'status' ? sortState.dir : null, onSortClick: () => toggleSort('status') },
@@ -484,7 +484,7 @@ export function AdvertiserList() {
               <div className="form-group"><label>{t('advertiserName')} <span style={{ color: 'red' }}>*</span></label><input type="text" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} /></div>
               <div className="form-group"><label>{t('contact')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="text" value={form.contact} onChange={e => setForm(prev => ({ ...prev, contact: e.target.value }))} /></div>
               <div className="form-group"><label>{t('phone')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="text" value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} /></div>
-              <div className="form-group"><label>{t('email')} {!editing && <span style={{ color: 'red' }}>*</span>}</label><input type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} /></div>
+              <div className="form-group"><label>{t('email')}</label><input type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} /></div>
               <div className="form-group"><label>{t('notes')}</label><textarea rows={2} value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} /></div>
               <div className="form-group"><label>{t('status')}</label>
                 <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as EntityStatus }))}>
@@ -655,50 +655,49 @@ export function AdIdMgmt() {
   React.useEffect(() => {
     if (!adIdPresetFilter) return;
     setAdvFilter(adIdPresetFilter.ownerId);
-    setOrderFilter(adIdPresetFilter.adTypeCode);
+    const resolvedAdTypeId = adTypes.find(at => at.id === adIdPresetFilter.adTypeCode || at.name === adIdPresetFilter.adTypeCode)?.id ?? '';
+    setOrderFilter(resolvedAdTypeId);
     setAdIdFilter('');
     setTypeFilter('');
     setStatusFilter('');
     setSearch('');
     clearAdIdPresetFilter();
-  }, [adIdPresetFilter, clearAdIdPresetFilter]);
+  }, [adIdPresetFilter, adTypes, clearAdIdPresetFilter]);
 
   const adTypeNameById = React.useMemo(() => new Map(adTypes.map(at => [String(at.id), at.name])), [adTypes]);
-  const advertiserById = React.useMemo(
-    () => new Map(advertisers.map(a => [String(a.id), a])),
-    [advertisers]
-  );
-  // Một AdId thuộc về nhà QC; nhà QC có nhiều đơn QC → một AdId "mang" toàn bộ đơn QC của nhà sở hữu.
-  const adIdAdTypeNames = React.useCallback(
-    (row: AdId): string[] => {
-      const owner = advertiserById.get(String(row.advertiserId));
-      return owner ? getAdvertiserAdTypeNameList(owner, adTypeNameById) : [];
-    },
-    [advertiserById, adTypeNameById]
+  const adIdAdTypeId = React.useCallback((row: AdId) => row.adTypeId ?? '', []);
+  const adIdAdTypeLabel = React.useCallback(
+    (row: AdId) => row.adTypeName || row.adTypeCode || (row.adTypeId ? adTypeNameById.get(row.adTypeId) : '') || '',
+    [adTypeNameById]
   );
   const selectedAdvertiser = React.useMemo(
     () => advertisers.find(advertiser => String(advertiser.id) === String(advFilter)),
     [advertisers, advFilter]
   );
   const adTypeScopedRows = React.useMemo(
-    () => orderFilter ? rows.filter(row => adIdAdTypeNames(row).includes(orderFilter)) : rows,
-    [orderFilter, rows, adIdAdTypeNames]
+    () => orderFilter ? rows.filter(row => adIdAdTypeId(row) === orderFilter) : rows,
+    [orderFilter, rows, adIdAdTypeId]
   );
   const advertiserOptions = React.useMemo(
-    () => advertisers.filter(advertiser => !orderFilter || getAdvertiserAdTypeNameList(advertiser, adTypeNameById).includes(orderFilter)),
-    [advertisers, orderFilter, adTypeNameById]
+    () => advertisers.filter(advertiser => !orderFilter || rows.some(row => String(row.advertiserId) === String(advertiser.id) && adIdAdTypeId(row) === orderFilter)),
+    [advertisers, rows, orderFilter, adIdAdTypeId]
   );
   const advertiserScopedRows = React.useMemo(
     () => advFilter ? adTypeScopedRows.filter(row => String(row.advertiserId) === String(advFilter)) : adTypeScopedRows,
     [adTypeScopedRows, advFilter]
   );
   const adTypeOptions = React.useMemo(() => {
-    const names = selectedAdvertiser
-      ? getAdvertiserAdTypeNameList(selectedAdvertiser, adTypeNameById)
-      : rows.flatMap(row => adIdAdTypeNames(row));
-    // Filter so theo TÊN đơn QC → gom trùng để mỗi tên chỉ hiện 1 lần trong dropdown.
-    return Array.from(new Set(names)).filter(Boolean).map(name => ({ id: name, name }));
-  }, [rows, selectedAdvertiser, adTypeNameById, adIdAdTypeNames]);
+    const sourceRows = selectedAdvertiser
+      ? rows.filter(row => String(row.advertiserId) === String(selectedAdvertiser.id))
+      : rows;
+    const options = new Map<string, string>();
+    for (const row of sourceRows) {
+      const id = adIdAdTypeId(row);
+      if (!id || options.has(id)) continue;
+      options.set(id, adIdAdTypeLabel(row) || id);
+    }
+    return Array.from(options, ([id, name]) => ({ id, name }));
+  }, [rows, selectedAdvertiser, adIdAdTypeId, adIdAdTypeLabel]);
   const adIdOptions = React.useMemo(
     () => advertiserScopedRows.map(row => ({ id: String(row.id), name: row.slot })).filter(item => item.name),
     [advertiserScopedRows]
@@ -715,7 +714,7 @@ export function AdIdMgmt() {
     if (!keyword) return true;
     const values = [
       row.advertiserName,
-      adIdAdTypeNames(row).join(', '),
+      adIdAdTypeLabel(row),
       row.slot,
       formatBillingMethodLabel(row.type),
       row.rate,
@@ -733,7 +732,7 @@ export function AdIdMgmt() {
           delta = displayName(a.advertiserName ?? '').localeCompare(displayName(b.advertiserName ?? ''), undefined, { sensitivity: 'base' });
           break;
         case 'adTypeCode':
-          delta = adIdAdTypeNames(a).join(', ').localeCompare(adIdAdTypeNames(b).join(', '), undefined, { sensitivity: 'base' });
+          delta = adIdAdTypeLabel(a).localeCompare(adIdAdTypeLabel(b), undefined, { sensitivity: 'base' });
           break;
         case 'type':
           delta = (a.type ?? '').localeCompare(b.type ?? '', undefined, { sensitivity: 'base' });
@@ -761,7 +760,7 @@ export function AdIdMgmt() {
 
   const adIdColumns: CsvColumn<AdId>[] = [
     { label: t('advertiser'), value: r => displayName(r.advertiserName) },
-    { label: t('adType'), value: r => adIdAdTypeNames(r).map(name => displayName(name)).join(', ') },
+    { label: t('adType'), value: r => displayName(adIdAdTypeLabel(r)) },
     { label: t('adId'), value: r => r.slot ?? '' },
     { label: t('type'), value: r => r.type ?? '' },
     { label: t('rate'), value: r => formatMgmtRate(r.type, r.rate) },
@@ -777,9 +776,8 @@ export function AdIdMgmt() {
 
   React.useEffect(() => {
     if (!orderFilter || !selectedAdvertiser) return;
-    // orderFilter carries a display name; check against selected advertiser's adType names
-    const selectedNames = selectedAdvertiser ? selectedAdvertiser.adTypes?.map(at => at.name) ?? [selectedAdvertiser.adTypeCode].filter(Boolean) : [];
-    if (!selectedNames.includes(orderFilter)) {
+    const selectedIds = getAdvertiserAdTypeIds(selectedAdvertiser);
+    if (!selectedIds.includes(orderFilter)) {
       setOrderFilter('');
     }
   }, [orderFilter, selectedAdvertiser]);
@@ -788,12 +786,7 @@ export function AdIdMgmt() {
     setEditing(null);
     const advertiser = advertisers.find(item => String(item.id) === String(advFilter));
     const ids = advertiser ? getAdvertiserAdTypeIds(advertiser) : [];
-    // Resolve orderFilter (display name) to adTypeId, but only keep it if the adType actually
-    // belongs to the currently-filtered advertiser — otherwise fall back to the first
-    // adType of that advertiser so submit doesn't fail with "adTypeId is not linked".
-    const orderFilterName = orderFilter;
-    const matchedAdType = orderFilterName ? adTypes.find(at => at.name === orderFilterName) : undefined;
-    const matchedId = matchedAdType && ids.includes(matchedAdType.id) ? matchedAdType.id : '';
+    const matchedId = orderFilter && ids.includes(orderFilter) ? orderFilter : '';
     setForm({ ...defaultAdIdForm(), advertiserId: advFilter, adTypeId: matchedId || ids[0] || '' });
     setFormError('');
     setFormOpen(true);
@@ -920,7 +913,7 @@ export function AdIdMgmt() {
           <div className="toolbar-left"><button className="btn-primary" onClick={openCreate}>{t('newAdId')}</button></div>
           <div className="toolbar-right">
             <select className="filter-select" value={advFilter} onChange={e => { setAdvFilter(e.target.value); setAdIdFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdvertiser')}</option>{advertiserOptions.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
-            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setAdIdFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.id} value={type.name}>{displayName(type.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setAdIdFilter(''); setTypeFilter(''); }}><option value="">{t('selectAdOrder')}</option>{adTypeOptions.map(type => <option key={type.id} value={type.id}>{displayName(type.name)}</option>)}</select>
             <select className="filter-select" value={adIdFilter} onChange={e => setAdIdFilter(e.target.value)}><option value="">{t('selectAdId')}</option>{adIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">{t('filterType')}</option>{typeOptions.map(type => <option key={type} value={type}>{formatBillingMethodLabel(type)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
@@ -933,7 +926,7 @@ export function AdIdMgmt() {
             columns={[
               { key: '__no__', label: t('no') },
               { key: 'advertiserName', label: t('advertiser'), render: r => displayName(r.advertiserName), sortDirection: sortState?.col === 'advertiserName' ? sortState.dir : null, onSortClick: () => toggleSort('advertiserName') },
-              { key: 'adTypeCode', label: t('adType'), render: r => adIdAdTypeNames(r).map(n => displayName(n)).join(', '), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
+              { key: 'adTypeCode', label: t('adType'), render: r => displayName(adIdAdTypeLabel(r)) || '-', sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
               { key: 'slot', label: t('adId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
               { key: 'type', label: t('type'), render: r => <TypeTag tp={r.type} />, sortDirection: sortState?.col === 'type' ? sortState.dir : null, onSortClick: () => toggleSort('type') },
               { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },

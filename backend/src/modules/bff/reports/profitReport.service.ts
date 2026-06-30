@@ -62,6 +62,7 @@ export interface TotalProfitParams {
   advertiserId?: string;
   upstreamId?: string;
   adTypeCode?: string;
+  billingMethod?: BillingMethod;
 }
 
 export interface TotalProfitRow {
@@ -115,6 +116,7 @@ export async function getTotalProfit(params: TotalProfitParams): Promise<TotalPr
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
         ...(params.adTypeCode && { adTypeId: params.adTypeCode }),
+        ...(params.billingMethod && { billingMethod: params.billingMethod }),
       },
     },
     include: {
@@ -211,6 +213,7 @@ export interface OrderProfitParams {
   advertiserId?: string;
   upstreamId?: string;
   adTypeCode?: string;
+  billingMethod?: BillingMethod;
 }
 
 export interface OrderProfitRow {
@@ -250,6 +253,7 @@ export async function getOrderProfit(params: OrderProfitParams): Promise<OrderPr
         name: { notIn: TEST_AD_SITE_NAMES },
         downstreams: { some: {} },
         ...(params.adTypeCode && { adTypeId: params.adTypeCode }),
+        ...(params.billingMethod && { billingMethod: params.billingMethod }),
       },
     },
     include: {

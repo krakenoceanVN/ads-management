@@ -122,7 +122,10 @@ export function mapMediaId(
 }
 
 export function mapDownstream(
-  d: Downstream & { adTypeLinks: Array<DownstreamAdType & { adType: AdType }> }
+  d: Downstream & {
+    adTypeLinks: Array<DownstreamAdType & { adType: AdType }>;
+    mediaAdOrders?: Array<{ id: string; name: string }>;
+  }
 ): DownstreamDto {
   const linked = (d.adTypeLinks ?? []).map(l => l.adType).filter(Boolean);
   const adTypes = linked;
@@ -143,6 +146,7 @@ export function mapDownstream(
     adTypeName: primary?.name ?? null,
     payoutRate: null,
     status: d.status as EntityStatus,
+    mediaAdOrders: d.mediaAdOrders ?? [],
   };
 }
 

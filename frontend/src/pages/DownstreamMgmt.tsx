@@ -4,11 +4,12 @@ import { Table, type Column, type SortDirection } from '../components/Table';
 import { StatusToggle } from './Advertiser';
 import {
   listDownstreams,
+  listMediaAdOrders,
   createDownstream,
   updateDownstream,
   deleteDownstream,
 } from '../lib/bffApi';
-import type { DownstreamDto, EntityStatus } from '../lib/bffTypes';
+import type { DownstreamDto, EntityStatus, MediaAdOrder } from '../lib/bffTypes';
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Request failed');
@@ -83,13 +84,14 @@ export function DownstreamMgmt() {
   const { t, displayName, can } = useAppContext();
   const canWrite = can('media.update');
   const [rows, setRows] = useState<DownstreamDto[]>([]);
+  const [mediaAdOrders, setMediaAdOrders] = useState<MediaAdOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterDownstream, setFilterDownstream] = useState('');
+  const [filterMediaAdOrderId, setFilterMediaAdOrderId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [sortState, setSortState] = useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
   const toggleSort = (col: string) => {
@@ -104,12 +106,24 @@ export function DownstreamMgmt() {
     setLoading(true);
     setError('');
     try {
-      const ds = await listDownstreams();
+      const params: { mediaAdOrderId?: string; status?: EntityStatus } = {};
+      if (filterMediaAdOrderId) params.mediaAdOrderId = filterMediaAdOrderId;
+      if (filterStatus) params.status = filterStatus as EntityStatus;
+      const ds = await listDownstreams(params);
       setRows(ds ?? []);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
+    }
+  }, [filterMediaAdOrderId, filterStatus]);
+
+  const loadMediaAdOrders = useCallback(async () => {
+    try {
+      const data = await listMediaAdOrders();
+      setMediaAdOrders(data ?? []);
+    } catch (err) {
+      // non-critical: dropdown will be empty
     }
   }, []);
 
@@ -117,9 +131,12 @@ export function DownstreamMgmt() {
     void loadRows();
   }, [loadRows]);
 
+  useEffect(() => {
+    void loadMediaAdOrders();
+  }, [loadMediaAdOrders]);
+
   const keyword = normalizeText(search);
   const filteredRows = useMemo(() => rows.filter(r => {
-    if (filterDownstream && String(r.id) !== filterDownstream) return false;
     if (filterStatus && r.status !== filterStatus) return false;
     if (!keyword) return true;
     return [
@@ -158,7 +175,7 @@ export function DownstreamMgmt() {
       if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
     return String(a.id).localeCompare(String(b.id));
-  }), [rows, filterDownstream, filterStatus, keyword, sortState, displayName]);
+  }), [rows, filterStatus, keyword, sortState, displayName]);
 
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [
     { label: t('downstreamType') + ' / ' + t('media'), value: r => r.downstreamType },
@@ -216,7 +233,7 @@ export function DownstreamMgmt() {
       return;
     }
     if (!id) {
-      if (!contact.trim() || !phone.trim() || !email.trim()) {
+      if (!contact.trim() || !phone.trim()) {
         setEditError(t('requiredFields'));
         return;
       }
@@ -281,6 +298,13 @@ export function DownstreamMgmt() {
   const columns: Column<DownstreamDto>[] = [
     { key: '__no__', label: t('no') },
     { key: 'name', label: t('mediaName'), render: (r: DownstreamDto) => <code style={{ fontWeight: 600 }}>{r.name || r.downstreamType}</code>, sortDirection: sortState?.col === 'name' ? sortState.dir : null, onSortClick: () => toggleSort('name') },
+    {
+      key: 'mediaAdOrders',
+      label: t('mediaAdOrder'),
+      render: (r: DownstreamDto) => (r.mediaAdOrders && r.mediaAdOrders.length > 0)
+        ? r.mediaAdOrders.map(m => displayName(m.name)).join(', ')
+        : '-',
+    },
     { key: 'contact', label: t('contact'), render: (r: DownstreamDto) => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
     { key: 'phone', label: t('phone'), render: (r: DownstreamDto) => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },
     { key: 'email', label: t('email'), render: (r: DownstreamDto) => r.email ?? '-', sortDirection: sortState?.col === 'email' ? sortState.dir : null, onSortClick: () => toggleSort('email') },
@@ -340,7 +364,7 @@ export function DownstreamMgmt() {
                 />
               </div>
               <div className="form-group">
-                <label>{t('email')} {!editModal.id && <span style={{ color: 'red' }}>*</span>}</label>
+                <label>{t('email')}</label>
                 <input
                   className="input"
                   type="email"
@@ -395,9 +419,9 @@ export function DownstreamMgmt() {
               )}
             </div>
             <div className="toolbar-right">
-              <select className="filter-select" value={filterDownstream} onChange={e => setFilterDownstream(e.target.value)}>
-                <option value="">{t('selectDownstream')}</option>
-                {rows.map(d => <option key={d.id} value={String(d.id)}>{displayName(d.name || d.downstreamType)}</option>)}
+              <select className="filter-select" value={filterMediaAdOrderId} onChange={e => setFilterMediaAdOrderId(e.target.value)}>
+                <option value="">{t('selectMediaAdOrder') || t('selectAdOrder') || 'Đơn QC media'}</option>
+                {mediaAdOrders.map(m => <option key={m.id} value={m.id}>{displayName(m.name)}</option>)}
               </select>
               <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>

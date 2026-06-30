@@ -30,7 +30,7 @@ export async function getTotalProfitReport(req: Request, res: Response) {
 }
 
 export async function getOrderProfitReport(req: Request, res: Response) {
-  const { date, startDate, endDate, advertiserId, upstreamId, adTypeCode } = req.query;
+  const { date, startDate, endDate, advertiserId, upstreamId, adTypeCode, billingMethod } = req.query;
 
   const params: OrderProfitParams = {
     ...(date !== undefined && { date: String(date) }),
@@ -39,6 +39,7 @@ export async function getOrderProfitReport(req: Request, res: Response) {
     ...(advertiserId !== undefined && { advertiserId: String(advertiserId) }),
     ...(upstreamId !== undefined && { upstreamId: String(upstreamId) }),
     ...(adTypeCode !== undefined && { adTypeCode: String(adTypeCode) }),
+    ...(billingMethod !== undefined && { billingMethod: String(billingMethod) as OrderProfitParams['billingMethod'] }),
   };
 
   try {

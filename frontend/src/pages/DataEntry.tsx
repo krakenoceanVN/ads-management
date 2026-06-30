@@ -43,9 +43,11 @@ type EntryFilters = {
   third: string;
   status: string;
   search: string;
+  type: string;
+  rate: string;
 };
 
-const emptyFilters: EntryFilters = { startDate: todayString(), endDate: '', first: '', second: '', third: '', status: '', search: '' };
+const emptyFilters: EntryFilters = { startDate: todayString(), endDate: '', first: '', second: '', third: '', status: '', search: '', type: '', rate: '' };
 
 function todayString() {
   const d = new Date();
@@ -101,6 +103,32 @@ function datesBetween(startDate: string, endDate: string) {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+}
+
+const DATE_RANGE_MAX_DAYS = 31;
+
+function dateDiffDaysInclusive(start: string, end: string): number | null {
+  const s = new Date(start + 'T00:00:00.000Z').getTime();
+  const e = new Date(end + 'T00:00:00.000Z').getTime();
+  if (Number.isNaN(s) || Number.isNaN(e)) return null;
+  return Math.round((e - s) / 86400000) + 1;
+}
+
+function dateRangeValidation(filters: { startDate: string; endDate: string }, t: (k: string) => string): string | null {
+  if (!filters.startDate || !filters.endDate) return null;
+  if (filters.endDate < filters.startDate) return t('dateRangeInvalid');
+  const days = dateDiffDaysInclusive(filters.startDate, filters.endDate);
+  if (days == null) return t('dateRangeInvalid');
+  if (days > DATE_RANGE_MAX_DAYS) return t('dateRangeMaxExceeded');
+  return null;
+}
+
+function dateRangeParams(filters: { startDate: string; endDate: string }): { date?: string; startDate?: string; endDate?: string } {
+  if (!filters.startDate) return {};
+  if (filters.endDate && filters.endDate !== filters.startDate) {
+    return { startDate: filters.startDate, endDate: filters.endDate };
+  }
+  return { date: filters.startDate };
 }
 
 function uniqueOptions(values: string[]) {
@@ -186,12 +214,12 @@ export function AdvEntry() {
   }), []);
 
   const loadRows = React.useCallback(async () => {
-    const date = normalizeDate(filters.startDate);
-    if (!date) return;
+    const start = filters.startDate;
+    if (!start) return;
     setLoading(true);
     setError('');
     try {
-      const dateRows = await listAdvertiserEntries({ date });
+      const dateRows = await listAdvertiserEntries(dateRangeParams(filters));
       // adOrder lookup removed (AdOrder table dropped). adTypeName is on each row.
       const nextRows = (Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type));
       setRows(mergeAdvertiserDrafts(nextRows));
@@ -200,13 +228,16 @@ export function AdvEntry() {
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate, mergeAdvertiserDrafts]);
+  }, [filters.startDate, filters.endDate, mergeAdvertiserDrafts]);
 
   React.useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const scopedRows = useMemo(() => rows.filter(row => row.date === normalizeDate(filters.startDate)), [rows, filters.startDate]);
+  const scopedRows = useMemo(
+    () => rows.filter(row => matchesEntryDateRange(row.date, filters.startDate, filters.endDate)),
+    [rows, filters.startDate, filters.endDate]
+  );
 
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
@@ -214,6 +245,8 @@ export function AdvEntry() {
       && (!filters.second || (row.adTypeCode ?? row.adTypeName) === filters.second)
       && (!filters.third || row.adId === filters.third)
       && matchesStatusFilter(row.status, filters.status)
+      && (!filters.type || row.type === filters.type)
+      && (!filters.rate || row.rate === filters.rate)
       && (!keyword || [row.advertiser, row.adTypeName, row.adId, row.type, displayName(row.advertiser), displayName(row.adTypeName)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
   }), [scopedRows, filters, displayName]);
 
@@ -417,15 +450,25 @@ export function AdvEntry() {
     setMessage('');
     try {
       await saveRows(eligibleRows);
-      const date = normalizeDate(eligibleRows[0].date) ?? eligibleRows[0].date;
-      const result = await confirmAdvertiserEntryBatch({ date, adSiteIds: eligibleRows.map(r => String(r.adIdNum)) });
+      const byDate = new Map<string, string[]>();
+      for (const row of eligibleRows) {
+        const date = normalizeDate(row.date) ?? row.date;
+        const list = byDate.get(date) ?? [];
+        list.push(String(row.adIdNum));
+        byDate.set(date, list);
+      }
+      const results = await Promise.all(Array.from(byDate, ([date, adSiteIds]) =>
+        confirmAdvertiserEntryBatch({ date, adSiteIds })
+      ));
+      const totalConfirmed = results.reduce((sum, r) => sum + (r.confirmed ?? 0), 0);
+      const backendErrors = results.flatMap(r => r.errors ?? []);
       clearDrafts(eligibleRows);
       await loadRows();
       const invalidSummary = invalidRows.length
         ? ` Invalid ${invalidRows.length}: ${invalidRows.map(item => `${getAdvertiserRowKey(item.row)}: ${item.error}`).join('; ')}`
         : '';
-      const backendErrors = result.errors.length ? ` Errors: ${formatBatchErrors(result.errors)}` : '';
-      setMessage(`Confirmed ${result.confirmed} row(s); skipped ${emptyRows.length} empty row(s); invalid ${invalidRows.length}.${invalidSummary}${backendErrors}`);
+      const errSummary = backendErrors.length ? ` Errors: ${formatBatchErrors(backendErrors)}` : '';
+      setMessage(`Confirmed ${totalConfirmed} row(s); skipped ${emptyRows.length} empty row(s); invalid ${invalidRows.length}.${invalidSummary}${errSummary}`);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -447,7 +490,9 @@ export function AdvEntry() {
       String(row.receivable ?? ''),
       row.status,
     ]);
-    const dateStr = filters.startDate || new Date().toISOString().slice(0, 10);
+    const dateStr = filters.endDate && filters.endDate !== filters.startDate
+      ? `${filters.startDate}_to_${filters.endDate}`
+      : (filters.startDate || new Date().toISOString().slice(0, 10));
     downloadCsv(`data-entry-advertiser-${dateStr}.csv`, header, body);
   }, [visibleRows, filters, t]);
 
@@ -461,6 +506,7 @@ export function AdvEntry() {
       <TableCard className="data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
+          <DatePickerInput placeholder={t('endDate')} className="input-sm filter-date" value={filters.endDate} onChange={value => updateFilter(setFilters, 'endDate', value)} />
           <div className="filter-spacer"></div>
           <select className="input-sm" value={filters.first} onChange={e => setAdvertiserFilter(e.target.value)}>
             <option value="">{t('selectAdvertiser')}</option>
@@ -479,12 +525,26 @@ export function AdvEntry() {
             <option value="pending">{t('pendingConfirm')}</option>
             <option value="confirmed">{t('confirmed')}</option>
           </select>
+          <select className="input-sm" value={filters.type} onChange={e => updateFilter(setFilters, 'type', e.target.value)}>
+            <option value="">{t('type')}</option>
+            <option value="CPM">CPM</option>
+            <option value="CPC">CPC</option>
+            <option value="CPS">CPS</option>
+            <option value="CPA">CPA</option>
+          </select>
+          <select className="input-sm" value={filters.rate} onChange={e => updateFilter(setFilters, 'rate', e.target.value)}>
+            <option value="">{t('unitPriceRevenueShare')}</option>
+            {Array.from(new Set(scopedRows.map(r => r.rate).filter(Boolean))).map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
           <input type="text" placeholder={t('search')} className="input-sm filter-search" value={filters.search} onChange={e => updateFilter(setFilters, 'search', e.target.value)} />
           {/* ADV CSV DOWNLOAD */}
           <button className="btn-primary input-sm data-download-btn" onClick={() => downloadAdvertiserCsv()}>{t('dataDownload')}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
         {message && <div style={{ color: 'var(--success, #16a34a)', fontSize: '13px', marginBottom: '8px' }}>{message}</div>}
+        {dateRangeValidation(filters, t) && (
+          <div className="form-error">{dateRangeValidation(filters, t)}</div>
+        )}
 
         <div className="table-wrap entry-table-wrap entry-table-scroll">
           <table className="entry-table">
@@ -538,18 +598,8 @@ export function AdvEntry() {
                     <td>{row.type}</td>
                     <td>{row.adId}</td>
                     <td><input {...lockedInputProps} value={row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
-                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
-                      ? <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
-                      : null}
-                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
-                      ? <td className="amount-cell">—</td>
-                      : null}
-                    {row.type === 'CPS'
-                      ? <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
-                      : null}
-                    {row.type === 'CPS'
-                      ? <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
-                      : null}
+                    <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
+                    <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
                     <td><ConfirmButton confirmed={isConfirmed} onClick={() => void confirmRow(row)} /></td>
                     <td className="entry-action-cell">
@@ -591,25 +641,28 @@ export function MediaDataMgmt() {
   const [busy, setBusy] = useState(false);
 
   const loadRows = React.useCallback(async () => {
-    const date = normalizeDate(filters.startDate);
-    if (!date) return;
+    const start = filters.startDate;
+    if (!start) return;
     setLoading(true);
     setError('');
     try {
-      const dateRows = await listMediaEntries({ date });
+      const dateRows = await listMediaEntries(dateRangeParams(filters));
       setRows((Array.isArray(dateRows) ? dateRows : []).filter(row => isAllowedEntryType(row.type)));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [filters.startDate]);
+  }, [filters.startDate, filters.endDate]);
 
   React.useEffect(() => {
     void loadRows();
   }, [loadRows]);
 
-  const scopedRows = useMemo(() => rows.filter(row => row.date === normalizeDate(filters.startDate)), [rows, filters.startDate]);
+  const scopedRows = useMemo(
+    () => rows.filter(row => matchesEntryDateRange(row.date, filters.startDate, filters.endDate)),
+    [rows, filters.startDate, filters.endDate]
+  );
 
   const filteredRows = useMemo(() => scopedRows.filter(row => {
     const keyword = filters.search.trim().toLowerCase();
@@ -617,6 +670,8 @@ export function MediaDataMgmt() {
       && (!filters.second || (row.mediaAdTypeCode ?? row.mediaAdTypeName) === filters.second)
       && (!filters.third || row.mediaIdStr === filters.third)
       && matchesStatusFilter(row.status, filters.status)
+      && (!filters.type || row.type === filters.type)
+      && (!filters.rate || row.rate === filters.rate)
       && (!keyword || [row.media, row.mediaAdTypeName, row.mediaIdStr, row.type, displayName(row.media), displayName(row.mediaAdTypeName)].some(item => String(item ?? '').toLowerCase().includes(keyword)));
   }), [scopedRows, filters, displayName]);
 
@@ -654,40 +709,24 @@ export function MediaDataMgmt() {
     return adOrderNameForRow(row).trim() || adTypeCodeForRow(row);
   };
 
-  const updateRow = (uiKey: string, field: keyof Pick<MediaEntryRow, 'rate' | 'traffic' | 'settlement' | 'dataCoefficient'>, value: string) => {
+  const updateRow = (uiKey: string, field: keyof Pick<MediaEntryRow, 'dataCoefficient'>, value: string) => {
     setRows(prev => prev.map(row => row.uiKey === uiKey ? { ...row, [field]: value, status: 'pending' as DataEntryStatus } : row));
   };
 
   const saveRows = async (targetRows: MediaEntryRow[]) => {
-    for (const row of targetRows) {
-      if (!isAllowedEntryType(row.type)) throw new Error(t('onlySupportedBillingTypes'));
-      if (row.type === 'CPS') {
-        if (!row.traffic.trim() || !row.settlement.trim()) throw new Error(t('ratioRequiresAmountValues'));
-        if (Number(row.rate) <= 0) throw new Error(t('ratioMustBePositive'));
-      } else {
-        // CPM, CPC, CPA require qty (traffic field) and unitPrice (rate)
-        if (!row.traffic.trim()) throw new Error(t('requiredFields'));
-        if (Number(row.traffic) < 0) throw new Error(t('requiredFields'));
-        if (Number(row.rate) <= 0) throw new Error(t('unitPriceRequired') || t('requiredFields'));
-        if (!isNeutralDataCoefficient(row.dataCoefficient)) throw new Error(t('dataCoefficientNeutralRequired'));
-      }
-    }
-    const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ mediaId: string; type: EntryType; rate: string; traffic: string; settlement: string; dataCoefficient: string; recordDate: string }> }>();
-    for (const row of targetRows) {
-      const date = normalizeDate(row.date);
-      const adTypeCode = adTypeCodeForRow(row);
-      if (!date || !adTypeCode) throw new Error(t('requiredFields'));
-      const key = `${date}:${adTypeCode}`;
-      const group = groups.get(key) ?? { date, adTypeCode, records: [] };
-      group.records.push({
-        mediaId: row.upstreamAdIdNum,
-        type: row.type,
-        rate: row.type === 'CPS' ? row.rate : (row.rate || ''),
-        traffic: row.traffic,
-        settlement: row.settlement,
-        dataCoefficient: row.dataCoefficient,
-        recordDate: date,
-      });
+    if (!targetRows.length) return;
+    const records = targetRows.map(row => ({
+      adSiteDownstreamId: row.junctionId,
+      recordDate: row.date,
+      dataCoefficient: row.dataCoefficient,
+    }));
+    const groups = new Map<string, { date: string; records: typeof records }>();
+    for (const record of records) {
+      const date = normalizeDate(record.recordDate);
+      if (!date) throw new Error(t('requiredFields'));
+      const key = `${date}`;
+      const group = groups.get(key) ?? { date, records: [] };
+      group.records.push(record);
       groups.set(key, group);
     }
 
@@ -714,7 +753,7 @@ export function MediaDataMgmt() {
     setError('');
     try {
       await saveRows([row]);
-      await confirmMediaEntryBatch({ date: normalizeDate(row.date) ?? row.date, adSiteIds: [String(row.upstreamAdIdNum)] });
+      await confirmMediaEntryBatch({ date: normalizeDate(row.date) ?? row.date, adSiteDownstreamIds: [row.junctionId] });
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -745,10 +784,7 @@ export function MediaDataMgmt() {
     setError('');
     setRows(prev => prev.map(r => {
       if (r.uiKey !== row.uiKey) return r;
-      if (r.type === 'CPS') {
-        return { ...r, traffic: '0', settlement: '0', status: 'pending' as DataEntryStatus };
-      }
-      return { ...r, traffic: '0', settlement: '', status: 'pending' as DataEntryStatus };
+      return { ...r, dataCoefficient: '1', status: 'pending' as DataEntryStatus };
     }));
   };
 
@@ -759,8 +795,16 @@ export function MediaDataMgmt() {
     setError('');
     try {
       await saveRows(pendingRows);
-      const date = normalizeDate(pendingRows[0].date) ?? pendingRows[0].date;
-      await confirmMediaEntryBatch({ date, adSiteIds: pendingRows.map(r => String(r.upstreamAdIdNum)) });
+      const byDate = new Map<string, string[]>();
+      for (const row of pendingRows) {
+        const date = normalizeDate(row.date) ?? row.date;
+        const list = byDate.get(date) ?? [];
+        list.push(row.junctionId);
+        byDate.set(date, list);
+      }
+      await Promise.all(Array.from(byDate, ([date, junctionIds]) =>
+        confirmMediaEntryBatch({ date, adSiteDownstreamIds: junctionIds })
+      ));
       await loadRows();
     } catch (err) {
       setError(errorMessage(err));
@@ -779,14 +823,16 @@ export function MediaDataMgmt() {
       row.mediaIdStr,
       row.rate,
       row.traffic,
-      row.settlement,
+      row.settlement || '--',
       row.dataCoefficient,
       String(row.receivable ?? ''),
       row.shareRatio,
       String(row.actualReceived ?? ''),
       row.status,
     ]);
-    const dateStr = filters.startDate || new Date().toISOString().slice(0, 10);
+    const dateStr = filters.endDate && filters.endDate !== filters.startDate
+      ? `${filters.startDate}_to_${filters.endDate}`
+      : (filters.startDate || new Date().toISOString().slice(0, 10));
     downloadCsv(`data-entry-media-${dateStr}.csv`, header, body);
   }, [visibleRows, filters, t]);
 
@@ -800,6 +846,7 @@ export function MediaDataMgmt() {
       <TableCard className="data-entry-card entry-card entry-table-card">
         <div className="data-entry-filters">
           <DatePickerInput placeholder={t('startDate')} className="input-sm filter-date" value={filters.startDate} onChange={value => updateFilter(setFilters, 'startDate', value)} />
+          <DatePickerInput placeholder={t('endDate')} className="input-sm filter-date" value={filters.endDate} onChange={value => updateFilter(setFilters, 'endDate', value)} />
           <div className="filter-spacer"></div>
           <select className="input-sm" value={filters.first} onChange={e => setMediaFilter(e.target.value)}>
             <option value="">{t('selectMedia')}</option>
@@ -818,11 +865,25 @@ export function MediaDataMgmt() {
             <option value="pending">{t('pendingConfirm')}</option>
             <option value="confirmed">{t('confirmed')}</option>
           </select>
+          <select className="input-sm" value={filters.type} onChange={e => updateFilter(setFilters, 'type', e.target.value)}>
+            <option value="">{t('type')}</option>
+            <option value="CPM">CPM</option>
+            <option value="CPC">CPC</option>
+            <option value="CPS">CPS</option>
+            <option value="CPA">CPA</option>
+          </select>
+          <select className="input-sm" value={filters.rate} onChange={e => updateFilter(setFilters, 'rate', e.target.value)}>
+            <option value="">{t('unitPriceRevenueShare')}</option>
+            {Array.from(new Set(scopedRows.map(r => r.rate).filter(Boolean))).map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
           <input type="text" placeholder={t('search')} className="input-sm filter-search" value={filters.search} onChange={e => updateFilter(setFilters, 'search', e.target.value)} />
           {/* MEDIA CSV DOWNLOAD */}
           <button className="btn-primary input-sm data-download-btn" onClick={() => downloadMediaCsv()}>{t('dataDownload')}</button>
         </div>
         {error && <div className="form-error">{error}</div>}
+        {dateRangeValidation(filters, t) && (
+          <div className="form-error">{dateRangeValidation(filters, t)}</div>
+        )}
 
         <div className="table-wrap entry-table-wrap entry-table-scroll">
           <table className="entry-table media-entry-table">
@@ -850,24 +911,13 @@ export function MediaDataMgmt() {
               ) : visibleRows.map(row => {
                 const isConfirmed = row.status === 'confirmed';
                 const isLocked = isConfirmed || busy;
-                const warnLocked = () => {
-                  if (!isConfirmed) return;
-                  setError(t('confirmedRowEditWarning'));
-                };
-                const guardedChange = (handler: (value: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
-                  if (isConfirmed) {
-                    warnLocked();
-                    return;
-                  }
-                  handler(e.target.value);
-                };
-                const lockedInputProps = {
+                const coefInputProps = {
                   className: `cell-input ${isLocked ? 'cell-input-locked' : ''}`,
-                  placeholder: t('valuePlaceholder'),
+                  placeholder: '1',
                   readOnly: isConfirmed,
                   disabled: busy,
-                  onClick: warnLocked,
-                  onFocus: warnLocked,
+                  onClick: () => { if (isConfirmed) setError(t('confirmedRowEditWarning')); },
+                  onFocus: () => { if (isConfirmed) setError(t('confirmedRowEditWarning')); },
                   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (isConfirmed) e.preventDefault(); },
                 } as const;
                 return (
@@ -877,17 +927,10 @@ export function MediaDataMgmt() {
                     <td>{displayName(mediaAdOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.mediaIdStr}</td>
-                    <td><input {...lockedInputProps} value={row.rate === '—' ? '' : row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
-                    {row.type === 'CPM' || row.type === 'CPC' || row.type === 'CPA'
-                      ? <><td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
-                      <td className="amount-cell">—</td>
-                      <td className="amount-cell">—</td></>
-                      : null}
-                    {row.type === 'CPS'
-                      ? <><td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
-                      <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
-                      <td className="amount-cell">—</td></>
-                      : null}
+                    <td className="amount-cell">{row.rate || '--'}</td>
+                    <td className="amount-cell">{row.traffic || '--'}</td>
+                    <td className="amount-cell">{row.settlement || '--'}</td>
+                    <td><input {...coefInputProps} value={row.dataCoefficient} onChange={e => updateRow(row.uiKey, 'dataCoefficient', e.target.value)} /></td>
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
                     <td>{hasValue(row.shareRatio) ? row.shareRatio : '--'}</td>
                     <td className="amount-cell">{hasValue(row.actualReceived) ? formatAmount(row.actualReceived) : '--'}</td>

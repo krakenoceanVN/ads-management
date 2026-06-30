@@ -361,7 +361,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams): Promise<
   return unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/data-entry/media', { params }));
 }
 
-export async function confirmMediaEntryBatch(payload: { date: string; adSiteIds: string[] }): Promise<ConfirmEntryBatchResult> {
+export async function confirmMediaEntryBatch(payload: { date: string; adSiteDownstreamIds: string[] }): Promise<ConfirmEntryBatchResult> {
   return unwrapData(await request<BffDataResponse<ConfirmEntryBatchResult>>('/api/bff/data-entry/media/confirm-batch', {
     method: 'POST',
     body: payload,
@@ -385,8 +385,8 @@ export async function getAdvertiserReport(params: AdvertiserReportParams): Promi
   return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/advertisers', { params }));
 }
 
-export async function getMediaReport(params: MediaReportParams): Promise<AdvertiserEntryRow[]> {
-  return unwrapData(await request<BffDataResponse<AdvertiserEntryRow[]>>('/api/bff/reports/media', { params }));
+export async function getMediaReport(params: MediaReportParams): Promise<MediaEntryRow[]> {
+  return unwrapData(await request<BffDataResponse<MediaEntryRow[]>>('/api/bff/reports/media', { params }));
 }
 
 export async function getTotalProfitReport(params: TotalProfitReportParams): Promise<TotalProfitReportRow[]> {

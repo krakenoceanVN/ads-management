@@ -267,6 +267,7 @@ export interface CreateMediaIdInput {
   pctHal?: number | null;
   mediaAdTypeId?: string | null;
   mediaIdName?: string | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
@@ -276,6 +277,7 @@ export interface UpdateMediaIdInput {
   pctHal?: number | null;
   mediaAdTypeId?: string | null;
   mediaIdName?: string | null;
+  notes?: string | null;
   status?: EntityStatus;
 }
 
@@ -294,6 +296,7 @@ export interface DownstreamDto {
   adTypeName: string | null;
   payoutRate: number | null;
   status: EntityStatus;
+  mediaAdOrders?: Array<{ id: string; name: string }>;
 }
 
 export interface CreateDownstreamInput {
@@ -322,19 +325,24 @@ export interface UpdateDownstreamInput {
 
 export interface ListDownstreamsParams {
   adTypeId?: string;
+  mediaAdOrderId?: string;
   status?: EntityStatus;
   keyword?: string;
 }
 
 export interface ListAdvertiserEntriesParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   advertiserId?: string;
   adTypeId?: string;
   status?: DataEntryStatusParam;
 }
 
 export interface ListMediaEntriesParams {
-  date: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
   mediaId?: string;
   adTypeId?: string;
   status?: DataEntryStatusParam;
@@ -369,6 +377,7 @@ export interface MediaEntryRow {
   mediaIdStr: string;
   upstreamAdId: string;
   upstreamAdIdNum: string;
+  junctionId: string;
   rate: string;
   traffic: string;
   settlement: string;
@@ -392,11 +401,7 @@ export interface AdvertiserEntryBatchRecord {
 }
 
 export interface MediaEntryBatchRecord {
-  mediaId: string;
-  type: EntryType;
-  rate: string;
-  traffic: string;
-  settlement: string;
+  adSiteDownstreamId: string;
   recordDate: string;
   dataCoefficient?: unknown;
 }
@@ -409,7 +414,6 @@ export interface SaveAdvertiserEntryBatchPayload {
 
 export interface SaveMediaEntryBatchPayload {
   date: string;
-  adTypeCode: AdTypeCode;
   records: MediaEntryBatchRecord[];
 }
 

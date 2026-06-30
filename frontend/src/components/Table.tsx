@@ -22,12 +22,13 @@ export interface Column<T> {
 
 interface TableProps<T> {
   onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
   columns: Column<T>[];
   data: T[];
   emptyText?: string;
 }
 
-export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProps<T>) {
+export function Table<T>({ columns, data, emptyText = '—', onEdit, onDelete }: TableProps<T>) {
   const { t } = useAppContext();
 
   if (!data.length) {
@@ -67,15 +68,25 @@ export function Table<T>({ columns, data, emptyText = '—', onEdit }: TableProp
                 if (c.key === '__no__') return <TableCell key={colIndex} className="td-no">{rowIndex + 1}</TableCell>;
                 if (c.key === '__actions__') {
                   if (c.render) return <TableCell key={colIndex}>{c.render(row, rowIndex)}</TableCell>;
-                  if (!onEdit) return <TableCell key={colIndex}>—</TableCell>;
+                  if (!onEdit && !onDelete) return <TableCell key={colIndex}>—</TableCell>;
                   return (
-                    <TableCell key={colIndex}>
-                      <button
-                        type="button"
-                        className="action-btn"
-                        title={t('edit')}
-                        onClick={() => onEdit(row)}
-                      >✏️</button>
+                    <TableCell key={colIndex} className="td-actions">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          className="action-btn"
+                          title={t('edit')}
+                          onClick={() => onEdit(row)}
+                        >✏️</button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          className="action-btn action-btn-danger"
+                          title={t('delete')}
+                          onClick={() => onDelete(row)}
+                        >🗑️</button>
+                      )}
                     </TableCell>
                   );
                 }

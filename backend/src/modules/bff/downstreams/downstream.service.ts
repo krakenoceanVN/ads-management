@@ -5,12 +5,14 @@ import type { EntityStatus } from '../bff.types';
 
 export interface ListDownstreamsFilters {
   adTypeId?: string;
+  mediaAdOrderId?: string;
   status?: EntityStatus;
   keyword?: string;
 }
 
 export const downstreamInclude = {
   adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' as const } },
+  mediaAdOrders: { select: { id: true, name: true }, orderBy: { seq: 'asc' as const } },
 };
 
 export async function listDownstreams(filters?: ListDownstreamsFilters) {
@@ -18,6 +20,10 @@ export async function listDownstreams(filters?: ListDownstreamsFilters) {
 
   if (filters?.adTypeId) {
     where.adTypeLinks = { some: { adTypeId: filters.adTypeId } };
+  }
+
+  if (filters?.mediaAdOrderId) {
+    where.mediaAdOrders = { some: { id: filters.mediaAdOrderId } };
   }
 
   if (filters?.status) {

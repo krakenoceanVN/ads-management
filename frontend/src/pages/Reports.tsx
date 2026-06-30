@@ -7,8 +7,11 @@ import {
   getOrderProfitReport,
   getTotalProfitReport,
   listAdvertisers,
+  listAdTypes,
+  listMedia,
 } from '../lib/bffApi';
 import type {
+  AdType,
   AdvertiserEntryRow,
   MediaEntryRow,
   OrderProfitReportRow,
@@ -210,7 +213,7 @@ function ReportDateRangeField({
   placeholder: string;
   validation?: string;
   onClear?: () => void;
-  onPreset?: (label: 'thisMonth' | 'lastMonth') => void;
+  onPreset?: (label: 'today' | 'thisMonth' | 'lastMonth') => void;
 }) {
   const { t } = useAppContext();
   // Unified event handler: works for onChange, onInput, onBlur from <input>
@@ -247,6 +250,7 @@ function ReportDateRangeField({
       </div>
       {onPreset && (
         <div className="report-date-range-presets">
+          <button type="button" className="report-date-preset-btn" onClick={() => onPreset('today')}>{t('today') || 'Hôm nay'}</button>
           <button type="button" className="report-date-preset-btn" onClick={() => onPreset('thisMonth')}>{t('thisMonth')}</button>
           <button type="button" className="report-date-preset-btn" onClick={() => onPreset('lastMonth')}>{t('lastMonth')}</button>
         </div>
@@ -317,7 +321,7 @@ export function TotalProfit() {
   const [dateWarning, setDateWarning] = React.useState<string | null>(null);
 
   const dateValidation = draftStartDate && draftEndDate && draftStartDate > draftEndDate
-    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    ? t('dateRangeInvalid')
     : null;
 
   const handleClearDates = () => {
@@ -331,7 +335,7 @@ export function TotalProfit() {
 
   const handleQuery = React.useCallback(() => {
     if (!draftStartDate || !draftEndDate) {
-      setDateWarning('Vui lòng chọn khoảng ngày trước khi truy vấn.');
+      setDateWarning(t('queryDateRangeRequired'));
       return;
     }
     if (dateValidation) return;
@@ -347,7 +351,7 @@ export function TotalProfit() {
         if (!cancelled) setRows(data);
       })
       .catch(err => {
-        if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.');
+        if (!cancelled) setError(t('loadError'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -356,18 +360,61 @@ export function TotalProfit() {
 
   function handleFilterChange() { setIsDirty(true); }
 
-  function handlePreset(label: 'thisMonth' | 'lastMonth') {
-    const range = label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
+  function handlePreset(label: 'today' | 'thisMonth' | 'lastMonth') {
+    const range = label === 'today' ? todayRange() : label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
     setDraftStartDate(range.startDate);
     setDraftEndDate(range.endDate);
     if (appliedStartDate) handleFilterChange();
   }
 
-  const totalRow = rows.find(row => row.date.endsWith('-total'));
-  const dailyRows = rows.filter(row => !row.date.endsWith('-total'));
+  const dailyRows = rows;
   const visibleRows = dailyRows.filter(row =>
     matchesLocalized(displayName, search, [row.date, row.revenue, row.cost, row.profit])
   );
+  // Per-business monthly totals (spec: "Tổng lợi nhuận tháng theo từng nghiệp vụ")
+  const perBusinessMonthly = React.useMemo(() => {
+    const byKey = new Map<string, { upstream: string; upstreamId: string; billingMethod: string; revenue: number; cost: number; grossProfit: number; tax: number; profit: number; recordCount: number }>();
+    for (const row of rows) {
+      const key = `${row.upstreamId}__${row.billingMethod}`;
+      const cur = byKey.get(key) ?? { upstream: row.upstream, upstreamId: row.upstreamId, billingMethod: row.billingMethod, revenue: 0, cost: 0, grossProfit: 0, tax: 0, profit: 0, recordCount: 0 };
+      cur.revenue += row.revenue;
+      cur.cost += row.cost;
+      cur.grossProfit += row.grossProfit;
+      cur.tax += row.tax;
+      cur.profit += row.profit;
+      cur.recordCount += row.recordCount;
+      byKey.set(key, cur);
+    }
+    return Array.from(byKey.values())
+      .map(r => ({ ...r, profitRate: r.revenue > 0 ? r.profit / r.revenue : 0 }))
+      .sort((a, b) => a.upstream.localeCompare(b.upstream, undefined, { sensitivity: 'base' }));
+  }, [rows]);
+  const totalRow = React.useMemo(() => {
+    if (!rows.length) return null;
+    let revenue = 0, cost = 0, grossProfit = 0, tax = 0, profit = 0, recordCount = 0;
+    for (const r of rows) {
+      revenue += r.revenue;
+      cost += r.cost;
+      grossProfit += r.grossProfit;
+      tax += r.tax;
+      profit += r.profit;
+      recordCount += r.recordCount;
+    }
+    return {
+      date: '',
+      upstream: '',
+      upstreamId: '',
+      billingMethod: '',
+      qty: 0,
+      revenue,
+      cost,
+      grossProfit,
+      tax,
+      profit,
+      profitRate: revenue > 0 ? profit / revenue : 0,
+      recordCount,
+    };
+  }, [rows]);
 
   const columns: CsvColumn<TotalProfitReportRow>[] = [
     { label: t('date'), value: row => row.date },
@@ -382,7 +429,7 @@ export function TotalProfit() {
 
   return (
     <div className="page active">
-      <PageHeader eyebrow={t('report') || 'Report'} title={t('pTotalProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
+      <PageHeader eyebrow={t('report')} title={t('pTotalProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
       <div className="card report-card report-table-card total-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -406,24 +453,57 @@ export function TotalProfit() {
               disabled={!!dateValidation}
               title={t('query')}
             >
-              {t('query') || 'Truy vấn'}
+              {t('query')}
             </button>
             <button
               type="button"
               className="btn-primary report-download-btn data-download-btn"
               onClick={() => downloadCsv('总利润表.csv', columns, exportRows)}
-              title={isDirty ? (t('exportDirtyWarning') || 'Filters changed. Click Query first.') : t('dataDownload')}
+              title={isDirty ? t('exportDirtyWarning') : t('dataDownload')}
               disabled={isDirty || !appliedStartDate}
             >
-              {t('exportExcel') || 'Xuất Excel'}
+              {t('exportExcel')}
             </button>
           </div>
         </div>
         {isDirty && appliedStartDate && (
-          <div className="form-note">Bộ lọc đã thay đổi. Vui lòng bấm Truy vấn để cập nhật kết quả.</div>
+          <div className="form-note">{t('filterDirtyWarning')}</div>
         )}
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
+        {perBusinessMonthly.length > 0 && (
+          <div className="table-wrap report-table-wrap" style={{ marginBottom: 16 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>{t('monthlyTotalByBusiness') || 'Tổng lợi nhuận tháng theo từng nghiệp vụ'}</div>
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>{t('business')}</th>
+                  <th>{t('billingMethod')}</th>
+                  <th>{t('revenue')}</th>
+                  <th>{t('expense')}</th>
+                  <th>{t('taxAmount')}</th>
+                  <th>{t('profit')}</th>
+                  <th>{t('profitMargin')}</th>
+                  <th>{t('recordCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perBusinessMonthly.map(r => (
+                  <tr key={`${r.upstreamId}-${r.billingMethod}`}>
+                    <td>{displayName(r.upstream)}</td>
+                    <td>{r.billingMethod}</td>
+                    <td className="amount-cell">{formatAmount(r.revenue)}</td>
+                    <td>{formatAmount(r.cost)}</td>
+                    <td>{formatAmount(r.tax)}</td>
+                    <td className="amount-cell">{formatAmount(r.profit)}</td>
+                    <td>{formatPercent(r.profitRate)}</td>
+                    <td>{r.recordCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table">
             <thead>
@@ -447,9 +527,9 @@ export function TotalProfit() {
                   <td>{formatPercent(row.profitRate)}</td>
                 </tr>
               )) : !appliedStartDate ? (
-                <tr><td colSpan={6} className="empty-state-text">Chọn khoảng ngày rồi bấm Truy vấn để xem dữ liệu.</td></tr>
+                <tr><td colSpan={6} className="empty-state-text">{t('emptyStateHint')}</td></tr>
               ) : (
-                <tr><td colSpan={6} className="empty-state-text">Không có dữ liệu trong khoảng ngày/bộ lọc đã chọn.</td></tr>
+                <tr><td colSpan={6} className="empty-state-text">{t('emptyStateNoData')}</td></tr>
               )}
             </tbody>
             {totalRow && (
@@ -492,6 +572,12 @@ function lastMonthRange() {
   return { startDate, endDate };
 }
 
+function todayRange() {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return { startDate: today, endDate: today };
+}
+
 export function OrderProfit() {
   const { t, displayName } = useAppContext();
   const [draftStartDate, setDraftStartDate] = React.useState('');
@@ -502,6 +588,7 @@ export function OrderProfit() {
   const [appliedEndDate, setAppliedEndDate] = React.useState('');
   const [appliedBillingMethod, setAppliedBillingMethod] = React.useState('');
   const [rows, setRows] = React.useState<OrderProfitReportRow[]>([]);
+  const [mediaRows, setMediaRows] = React.useState<MediaEntryRow[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [isDirty, setIsDirty] = React.useState(false);
@@ -509,7 +596,7 @@ export function OrderProfit() {
   const [dateWarning, setDateWarning] = React.useState<string | null>(null);
 
   const dateValidation = draftStartDate && draftEndDate && draftStartDate > draftEndDate
-    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    ? t('dateRangeInvalid')
     : null;
 
   const handleClearDates = () => {
@@ -523,7 +610,7 @@ export function OrderProfit() {
 
   const handleQuery = React.useCallback(() => {
     if (!draftStartDate || !draftEndDate) {
-      setDateWarning('Vui lòng chọn khoảng ngày trước khi truy vấn.');
+      setDateWarning(t('queryDateRangeRequired'));
       return;
     }
     if (dateValidation) return;
@@ -544,10 +631,22 @@ export function OrderProfit() {
         if (!cancelled) setRows(data);
       })
       .catch(err => {
-        if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.');
+        if (!cancelled) setError(t('loadError'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    // Detail: per-media actualReceived (parallel fetch)
+    getMediaReport({
+      startDate: draftStartDate,
+      endDate: draftEndDate,
+      status: 'confirmed',
+    })
+      .then(data => {
+        if (!cancelled) setMediaRows(data);
+      })
+      .catch(() => {
+        // non-critical: detail section will just show empty
       });
   }, [draftStartDate, draftEndDate, draftBillingMethod, dateValidation]);
 
@@ -566,8 +665,8 @@ export function OrderProfit() {
     // Search is local-only, not a query param — no dirty flag needed
   }
 
-  function handlePreset(label: 'thisMonth' | 'lastMonth') {
-    const range = label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
+  function handlePreset(label: 'today' | 'thisMonth' | 'lastMonth') {
+    const range = label === 'today' ? todayRange() : label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
     setDraftStartDate(range.startDate);
     setDraftEndDate(range.endDate);
     if (appliedStartDate) handleFilterChange();
@@ -576,6 +675,31 @@ export function OrderProfit() {
   const visibleRows = rows.filter(row =>
     matchesLocalized(displayName, draftSearch, [row.advertiser, row.adTypeCode, row.adTypeName])
   );
+
+  // Detail blocks: per-advertiser receivable (sum of revenue from main table),
+  // and per-media actualReceived (from parallel media report).
+  const advertiserReceivableSummary = React.useMemo(() => {
+    const byKey = new Map<string, { advertiser: string; advertiserId: string; receivable: number; recordCount: number }>();
+    for (const r of rows) {
+      const key = r.advertiserId;
+      const cur = byKey.get(key) ?? { advertiser: r.advertiser, advertiserId: r.advertiserId, receivable: 0, recordCount: 0 };
+      cur.receivable += r.revenue;
+      cur.recordCount += r.recordCount;
+      byKey.set(key, cur);
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.advertiser.localeCompare(b.advertiser, undefined, { sensitivity: 'base' }));
+  }, [rows]);
+
+  const mediaCostSummary = React.useMemo(() => {
+    const byKey = new Map<string, { media: string; actualReceived: number }>();
+    for (const m of mediaRows) {
+      const name = m.media || m.mediaId || '-';
+      const cur = byKey.get(name) ?? { media: name, actualReceived: 0 };
+      cur.actualReceived += (m.actualReceived ?? 0);
+      byKey.set(name, cur);
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.media.localeCompare(b.media, undefined, { sensitivity: 'base' }));
+  }, [mediaRows]);
 
   const billingMethodOptions = [
     { value: 'CPM', label: 'CPM' },
@@ -590,13 +714,18 @@ export function OrderProfit() {
     { label: t('adOrder'), value: row => displayName(row.adTypeName) },
     { label: t('billingMethod'), value: row => billingMethodLabel(row.billingMethod) },
     { label: t('revenue'), value: row => formatAmount(row.revenue) },
+    { label: t('expense'), value: row => formatAmount(row.cost) },
+    { label: t('grossProfit'), value: row => formatAmount(row.grossProfit) },
+    { label: t('taxAmount'), value: row => formatAmount(row.tax) },
+    { label: t('profit'), value: row => formatAmount(row.profit) },
+    { label: t('profitMargin'), value: row => formatPercent(row.profitRate) },
     { label: t('trafficData'), value: row => formatAmount(row.qty) },
-    { label: 'Records', value: row => row.recordCount },
+    { label: t('recordCount'), value: row => row.recordCount },
   ];
 
   return (
     <div className="page active">
-      <PageHeader eyebrow={t('report') || 'Report'} title={t('pOrderProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
+      <PageHeader eyebrow={t('report')} title={t('pOrderProfit')} description={appliedStartDate && appliedEndDate ? `${appliedStartDate} - ${appliedEndDate}` : t('date')} />
       <div className="card report-card report-table-card order-profit-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -632,24 +761,68 @@ export function OrderProfit() {
               disabled={!!dateValidation}
               title={t('query')}
             >
-              {t('query') || 'Truy vấn'}
+              {t('query')}
             </button>
             <button
               type="button"
               className="btn-primary report-download-btn data-download-btn"
               onClick={() => downloadCsv('广告单利润表.csv', columns, visibleRows)}
-              title={isDirty ? (t('exportDirtyWarning') || 'Filters changed. Click Query first.') : t('dataDownload')}
+              title={isDirty ? t('exportDirtyWarning') : t('dataDownload')}
               disabled={isDirty || !appliedStartDate}
             >
-              {t('exportExcel') || 'Xuất Excel'}
+              {t('exportExcel')}
             </button>
           </div>
         </div>
         {isDirty && appliedStartDate && (
-          <div className="form-note">{t('filterDirtyWarning') || 'Bộ lọc đã thay đổi. Vui lòng bấm Truy vấn để cập nhật kết quả.'}</div>
+          <div className="form-note">{t('filterDirtyWarning')}</div>
         )}
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
+        {advertiserReceivableSummary.length > 0 && (
+          <div className="table-wrap report-table-wrap" style={{ marginBottom: 16 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>{t('revenueFromAdvertisers') || 'Thu từ nhà quảng cáo'}</div>
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>{t('advertiser')}</th>
+                  <th>{t('receivableAmount')}</th>
+                  <th>{t('recordCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {advertiserReceivableSummary.map(r => (
+                  <tr key={r.advertiserId}>
+                    <td>{displayName(r.advertiser)}</td>
+                    <td className="amount-cell">{formatAmount(r.receivable)}</td>
+                    <td>{r.recordCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {mediaCostSummary.length > 0 && (
+          <div className="table-wrap report-table-wrap" style={{ marginBottom: 16 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>{t('costForMedia') || 'Chi cho media'}</div>
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>{t('media')}</th>
+                  <th>{t('actualReceivedAmount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mediaCostSummary.map(r => (
+                  <tr key={r.media}>
+                    <td>{displayName(r.media)}</td>
+                    <td className="amount-cell">{formatAmount(r.actualReceived)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="table-wrap report-table-wrap report-table-scroll">
           <table className="report-table">
             <thead>
@@ -659,32 +832,47 @@ export function OrderProfit() {
                 <th>{t('adOrder')}</th>
                 <th>{t('billingMethod')}</th>
                 <th>{t('revenue')}</th>
+                <th>{t('expense')}</th>
+                <th>{t('grossProfit')}</th>
+                <th>{t('taxAmount')}</th>
+                <th>{t('profit')}</th>
+                <th>{t('profitMargin')}</th>
                 <th>{t('trafficData')}</th>
-                <th>Records</th>
+                <th>{t('recordCount')}</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? <LoadingRow colSpan={7} /> : visibleRows.length ? visibleRows.map(row => (
+              {loading ? <LoadingRow colSpan={12} /> : visibleRows.length ? visibleRows.map(row => (
                 <tr key={`${row.date}-${row.advertiserId}-${row.billingMethod}`}>
                   <td>{row.date}</td>
                   <td>{displayName(row.advertiser)}</td>
                   <td>{displayName(row.adTypeName)}</td>
                   <td>{billingMethodLabel(row.billingMethod)}</td>
                   <td className="amount-cell">{formatAmount(row.revenue)}</td>
+                  <td>{formatAmount(row.cost)}</td>
+                  <td>{formatAmount(row.grossProfit)}</td>
+                  <td>{formatAmount(row.tax)}</td>
+                  <td className="amount-cell">{formatAmount(row.profit)}</td>
+                  <td>{formatPercent(row.profitRate)}</td>
                   <td>{formatAmount(row.qty)}</td>
                   <td>{row.recordCount}</td>
                 </tr>
               )) : !appliedStartDate ? (
-                <tr><td colSpan={7} className="empty-state-text">Chọn khoảng ngày rồi bấm Truy vấn để xem dữ liệu.</td></tr>
+                <tr><td colSpan={12} className="empty-state-text">{t('emptyStateHint')}</td></tr>
               ) : (
-                <tr><td colSpan={7} className="empty-state-text">Không có dữ liệu trong khoảng ngày/bộ lọc đã chọn.</td></tr>
+                <tr><td colSpan={12} className="empty-state-text">{t('emptyStateNoData')}</td></tr>
               )}
             </tbody>
             <tfoot>
               <tr className="report-total-row report-total-sticky">
                 <td>{t('total')}</td>
-                <td colSpan={3}></td>
+                <td colSpan={4}></td>
                 <td>{formatAmount(sumRows(visibleRows, row => row.revenue))}</td>
+                <td>{formatAmount(sumRows(visibleRows, row => row.cost))}</td>
+                <td>{formatAmount(sumRows(visibleRows, row => row.grossProfit))}</td>
+                <td>{formatAmount(sumRows(visibleRows, row => row.tax))}</td>
+                <td>{formatAmount(sumRows(visibleRows, row => row.profit))}</td>
+                <td>{(() => { const rev = sumRows(visibleRows, row => row.revenue); const prof = sumRows(visibleRows, row => row.profit); return rev > 0 ? formatPercent(prof / rev) : '--'; })()}</td>
                 <td>{formatAmount(sumRows(visibleRows, row => row.qty))}</td>
                 <td>{sumRows(visibleRows, row => row.recordCount)}</td>
               </tr>
@@ -699,7 +887,7 @@ export function OrderProfit() {
 export function AdvQuery() {
   const { t, displayName } = useAppContext();
   const [advertisers, setAdvertisers] = React.useState<{ id: string; name: string }[]>([]);
-  const [adTypes, setAdTypes] = React.useState<{ code: string; name: string }[]>([]);
+  const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
 
   const [draftFilters, setDraftFilters] = React.useState({
     startDate: '',
@@ -721,13 +909,13 @@ export function AdvQuery() {
   const [dateWarning, setDateWarning] = React.useState<string | null>(null);
 
   const dateValidation = draftFilters.startDate && draftFilters.endDate && draftFilters.startDate > draftFilters.endDate
-    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    ? t('dateRangeInvalid')
     : null;
 
   // Load advertiser and ad type master data once
   React.useEffect(() => {
     listAdvertisers().then(data => setAdvertisers(data.map(a => ({ id: a.id, name: a.name })))).catch(() => {});
-    import('../lib/bffApi').then(m => m.listAdTypes ? m.listAdTypes() : Promise.resolve([])).then((data: unknown) => setAdTypes((data as { code: string; name: string }[]) ?? [])).catch(() => {});
+    listAdTypes().then((data) => setAdTypes(data ?? [])).catch(() => {});
   }, []);
 
   const getReportParams = React.useCallback(() => ({
@@ -745,7 +933,7 @@ export function AdvQuery() {
 
   const handleQuery = React.useCallback(() => {
     if (!draftFilters.startDate || !draftFilters.endDate) {
-      setDateWarning('Vui lòng chọn khoảng ngày trước khi truy vấn.');
+      setDateWarning(t('queryDateRangeRequired'));
       return;
     }
     if (dateValidation) return;
@@ -757,14 +945,14 @@ export function AdvQuery() {
     setError('');
     loadAdvQueryRows()
       .then(data => { if (!cancelled) setRows(data); })
-      .catch(err => { if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.'); })
+      .catch(err => { if (!cancelled) setError(t('loadError')); })
       .finally(() => { if (!cancelled) setLoading(false); });
   }, [draftFilters, dateValidation, loadAdvQueryRows]);
 
   function handleFilterChange() { setIsDirty(true); }
 
-  function handlePreset(label: 'thisMonth' | 'lastMonth') {
-    const range = label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
+  function handlePreset(label: 'today' | 'thisMonth' | 'lastMonth') {
+    const range = label === 'today' ? todayRange() : label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
     setDraftFilters(prev => ({ ...prev, startDate: range.startDate, endDate: range.endDate }));
     if (appliedFilters.startDate) handleFilterChange();
   }
@@ -811,11 +999,14 @@ export function AdvQuery() {
     { label: t('status'), value: row => row.status === 'confirmed' ? t('confirmed') : t('pendingConfirm') },
   ];
 
-  const businessOptions = adTypes.map(at => ({ value: at.code, label: at.name }));
+  const adIdOptions = Array.from(new Set(rows.map(row => row.adId).filter((v): v is string => !!v))).sort();
+  const rateOptions = Array.from(new Set(rows.map(row => row.rate).filter((v): v is string => !!v))).sort();
+
+  const businessOptions = adTypes.map(at => ({ value: at.name, label: at.name }));
 
   return (
     <div className="page active">
-      <PageHeader eyebrow={t('report') || 'Report'} title={t('pAdvQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
+      <PageHeader eyebrow={t('report')} title={t('pAdvQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
       <div className="card report-card report-table-card adv-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -833,8 +1024,11 @@ export function AdvQuery() {
           <div className="report-toolbar-right">
             <ReportBusinessSelect value={draftFilters.business} onChange={value => update('business', value)} options={businessOptions} />
             <select className="report-control report-select" value={String(draftFilters.advertiserId)} onChange={event => update('advertiserId', event.target.value)}><option value="">{t('advertiser')}</option>{advertisers.map(a => <option key={a.id} value={String(a.id)}>{displayName(a.name)}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.adTypeCode} onChange={event => update('adTypeCode', event.target.value)}><option value="">{t('adOrder')}</option>{adTypes.map(at => <option key={at.name} value={at.name}>{displayName(at.name)}</option>)}</select>
             <ReportSearchField placeholder={compactSearchPlaceholder(t('search'))} value={draftFilters.search} onChange={value => { setDraftFilters(prev => ({ ...prev, search: value })); }} />
-            <select className="report-control report-select report-select-small" value={draftFilters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
+            <select className="report-control report-select report-select-small" value={draftFilters.adId} onChange={event => update('adId', event.target.value)}><option value="">{t('adId')}</option>{adIdOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.rate} onChange={event => update('rate', event.target.value)}><option value="">{t('unitPriceRevenueShare')}</option>{rateOptions.map(item => <option key={item} value={item}>{item}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPC">CPC</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
             <select className="report-control report-select report-status-select" value={draftFilters.status} onChange={event => update('status', event.target.value)}>
               <option value="">{t('status')}</option>
               <option value="all">{t('allStatuses')}</option>
@@ -848,21 +1042,21 @@ export function AdvQuery() {
               disabled={!!dateValidation}
               title={t('query')}
             >
-              {t('query') || 'Truy vấn'}
+              {t('query')}
             </button>
             <button
               type="button"
               className="btn-primary report-download-btn data-download-btn"
               onClick={() => downloadCsv('广告主数据查询.csv', columns, visibleRows)}
-              title={isDirty ? (t('exportDirtyWarning') || 'Filters changed. Click Query first.') : t('dataDownload')}
+              title={isDirty ? t('exportDirtyWarning') : t('dataDownload')}
               disabled={isDirty || !appliedFilters.startDate}
             >
-              {t('exportExcel') || 'Xuất Excel'}
+              {t('exportExcel')}
             </button>
           </div>
         </div>
         {isDirty && appliedFilters.startDate && (
-          <div className="form-note">Bộ lọc đã thay đổi. Vui lòng bấm Truy vấn để cập nhật kết quả.</div>
+          <div className="form-note">{t('filterDirtyWarning')}</div>
         )}
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
@@ -897,9 +1091,9 @@ export function AdvQuery() {
                   <td><StatusBadge status={row.status} /></td>
                 </tr>
               )) : !appliedFilters.startDate ? (
-                <tr><td colSpan={10} className="empty-state-text">Chọn khoảng ngày rồi bấm Truy vấn để xem dữ liệu.</td></tr>
+                <tr><td colSpan={10} className="empty-state-text">{t('emptyStateHint')}</td></tr>
               ) : (
-                <tr><td colSpan={10} className="empty-state-text">Không có dữ liệu trong khoảng ngày/bộ lọc đã chọn.</td></tr>
+                <tr><td colSpan={10} className="empty-state-text">{t('emptyStateNoData')}</td></tr>
               )}
             </tbody>
             <tfoot>
@@ -920,7 +1114,7 @@ export function AdvQuery() {
 export function MediaQuery() {
   const { t, displayName } = useAppContext();
   const [mediaList, setMediaList] = React.useState<{ id: string; name: string }[]>([]);
-  const [adTypes, setAdTypes] = React.useState<{ code: string; name: string }[]>([]);
+  const [adTypes, setAdTypes] = React.useState<AdType[]>([]);
 
   const [draftFilters, setDraftFilters] = React.useState({
     startDate: '',
@@ -943,13 +1137,13 @@ export function MediaQuery() {
   const [dateWarning, setDateWarning] = React.useState<string | null>(null);
 
   const dateValidation = draftFilters.startDate && draftFilters.endDate && draftFilters.startDate > draftFilters.endDate
-    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    ? t('dateRangeInvalid')
     : null;
 
   // Load media and ad type master data once
   React.useEffect(() => {
-    import('../lib/bffApi').then(m => m.listMedia ? m.listMedia() : Promise.resolve([])).then((data: unknown) => setMediaList((data as { id: string; name: string }[]) ?? [])).catch(() => {});
-    import('../lib/bffApi').then(m => m.listAdTypes ? m.listAdTypes() : Promise.resolve([])).then((data: unknown) => setAdTypes((data as { code: string; name: string }[]) ?? [])).catch(() => {});
+    listMedia().then((data) => setMediaList((data as { id: string; name: string }[]) ?? [])).catch(() => {});
+    listAdTypes().then((data) => setAdTypes(data ?? [])).catch(() => {});
   }, []);
 
   const getReportParams = React.useCallback(() => ({
@@ -967,7 +1161,7 @@ export function MediaQuery() {
 
   const handleQuery = React.useCallback(() => {
     if (!draftFilters.startDate || !draftFilters.endDate) {
-      setDateWarning('Vui lòng chọn khoảng ngày trước khi truy vấn.');
+      setDateWarning(t('queryDateRangeRequired'));
       return;
     }
     if (dateValidation) return;
@@ -979,14 +1173,14 @@ export function MediaQuery() {
     setError('');
     loadMediaQueryRows()
       .then(data => { if (!cancelled) setRows(data as unknown as MediaEntryRow[]); })
-      .catch(err => { if (!cancelled) setError('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối hoặc đăng nhập lại.'); })
+      .catch(err => { if (!cancelled) setError(t('loadError')); })
       .finally(() => { if (!cancelled) setLoading(false); });
   }, [draftFilters, dateValidation, loadMediaQueryRows]);
 
   function handleFilterChange() { setIsDirty(true); }
 
-  function handlePreset(label: 'thisMonth' | 'lastMonth') {
-    const range = label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
+  function handlePreset(label: 'today' | 'thisMonth' | 'lastMonth') {
+    const range = label === 'today' ? todayRange() : label === 'thisMonth' ? thisMonthRange() : lastMonthRange();
     setDraftFilters(prev => ({ ...prev, startDate: range.startDate, endDate: range.endDate }));
     if (appliedFilters.startDate) handleFilterChange();
   }
@@ -1038,11 +1232,14 @@ export function MediaQuery() {
     { label: t('status'), value: row => row.status === 'confirmed' ? t('confirmed') : t('pendingConfirm') },
   ];
 
-  const businessOptions = adTypes.map(at => ({ value: at.code, label: at.name }));
+  const businessOptions = adTypes.map(at => ({ value: at.name, label: at.name }));
+  const mediaAdOrderOptions = Array.from(new Set(rows.map(row => row.mediaAdTypeName).filter((v): v is string => !!v))).sort();
+  const mediaIdOptions = Array.from(new Set(rows.map(row => row.mediaIdStr).filter((v): v is string => !!v))).sort();
+  const shareRatioOptions = Array.from(new Set(rows.map(row => row.shareRatio).filter((v): v is string => !!v))).sort();
 
   return (
     <div className="page active">
-      <PageHeader eyebrow={t('report') || 'Report'} title={t('pMediaQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
+      <PageHeader eyebrow={t('report')} title={t('pMediaQuery')} description={appliedFilters.startDate && appliedFilters.endDate ? `${appliedFilters.startDate} - ${appliedFilters.endDate}` : t('date')} />
       <div className="card report-card report-table-card media-query-card">
         <div className="report-toolbar">
           <div className="report-toolbar-left">
@@ -1060,8 +1257,11 @@ export function MediaQuery() {
           <div className="report-toolbar-right">
             <ReportBusinessSelect value={draftFilters.business} onChange={value => update('business', value)} options={businessOptions} />
             <select className="report-control report-select" value={String(draftFilters.mediaId)} onChange={event => update('mediaId', event.target.value)}><option value="">{t('media')}</option>{mediaList.map(m => <option key={m.id} value={String(m.id)}>{displayName(m.name)}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.mediaAdOrder} onChange={event => update('mediaAdOrder', event.target.value)}><option value="">{t('mediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.mediaIdStr} onChange={event => update('mediaIdStr', event.target.value)}><option value="">{t('mediaId')}</option>{mediaIdOptions.map(item => <option key={item} value={item}>{displayName(item)}</option>)}</select>
+            <select className="report-control report-select report-select-small" value={draftFilters.shareRatio} onChange={event => update('shareRatio', event.target.value)}><option value="">{t('shareRatio')}</option>{shareRatioOptions.map(item => <option key={item} value={item}>{item}</option>)}</select>
             <ReportSearchField placeholder={compactSearchPlaceholder(t('search'))} value={draftFilters.search} onChange={value => { setDraftFilters(prev => ({ ...prev, search: value })); }} />
-            <select className="report-control report-select report-select-small" value={draftFilters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
+            <select className="report-control report-select report-select-small" value={draftFilters.type} onChange={event => update('type', event.target.value)}><option value="">{t('type')}</option><option value="CPM">CPM</option><option value="CPC">CPC</option><option value="CPS">CPS</option><option value="CPA">CPA</option></select>
             <select className="report-control report-select report-status-select" value={draftFilters.status} onChange={event => update('status', event.target.value)}>
               <option value="">{t('status')}</option>
               <option value="all">{t('allStatuses')}</option>
@@ -1075,21 +1275,21 @@ export function MediaQuery() {
               disabled={!!dateValidation}
               title={t('query')}
             >
-              {t('query') || 'Truy vấn'}
+              {t('query')}
             </button>
             <button
               type="button"
               className="btn-primary report-download-btn data-download-btn"
               onClick={() => downloadCsv('媒体数据查询.csv', columns, visibleRows)}
-              title={isDirty ? (t('exportDirtyWarning') || 'Filters changed. Click Query first.') : t('dataDownload')}
+              title={isDirty ? t('exportDirtyWarning') : t('dataDownload')}
               disabled={isDirty || !appliedFilters.startDate}
             >
-              {t('exportExcel') || 'Xuất Excel'}
+              {t('exportExcel')}
             </button>
           </div>
         </div>
         {isDirty && appliedFilters.startDate && (
-          <div className="form-note">Bộ lọc đã thay đổi. Vui lòng bấm Truy vấn để cập nhật kết quả.</div>
+          <div className="form-note">{t('filterDirtyWarning')}</div>
         )}
         {dateWarning && <div className="form-note">{dateWarning}</div>}
         {error && <div className="form-error">{error}</div>}
@@ -1130,9 +1330,9 @@ export function MediaQuery() {
                   <td><StatusBadge status={row.status} /></td>
                 </tr>
               )) : !appliedFilters.startDate ? (
-                <tr><td colSpan={13} className="empty-state-text">Chọn khoảng ngày rồi bấm Truy vấn để xem dữ liệu.</td></tr>
+                <tr><td colSpan={13} className="empty-state-text">{t('emptyStateHint')}</td></tr>
               ) : (
-                <tr><td colSpan={13} className="empty-state-text">Không có dữ liệu trong khoảng ngày/bộ lọc đã chọn.</td></tr>
+                <tr><td colSpan={13} className="empty-state-text">{t('emptyStateNoData')}</td></tr>
               )}
             </tbody>
             <tfoot>

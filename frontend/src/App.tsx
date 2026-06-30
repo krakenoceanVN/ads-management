@@ -93,7 +93,6 @@ function MainContent({ onLogout }: { onLogout: () => void }) {
       case 'pUserManagement': return <UserManagement />;
       case 'pRoleManagement': return <RoleManagement />;
       case 'pQuarantineMgmt': return <QuarantineMgmt />;
-      case 'pAdTypeMgmt': return <AdTypeMgmt />;
       case 'pDownstreamMgmt': return <DownstreamMgmt />;
       default: return <div className="empty-state"><div className="empty-state-icon">🚧</div><div className="empty-state-text">{currentPage}</div></div>;
     }

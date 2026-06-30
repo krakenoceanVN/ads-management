@@ -31,6 +31,7 @@ export interface MediaEntryRow {
   mediaIdStr: string;
   upstreamAdId: string;
   upstreamAdIdNum: string;
+  junctionId: string;
   rate: string;
   traffic: string;
   settlement: string;

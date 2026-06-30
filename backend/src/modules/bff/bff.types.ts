@@ -119,6 +119,7 @@ export interface DownstreamDto {
   adTypeName: string | null;
   payoutRate: number | null;
   status: EntityStatus;
+  mediaAdOrders?: Array<{ id: string; name: string }>;
 }
 
 // MediaAdOrder → MediaAdOrder (per-AdSite ad order)

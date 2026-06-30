@@ -214,8 +214,11 @@ export function AdTypeMgmt() {
         }
         return;
       }
-      await deleteAdType(editModal.id);
-      setRows(prev => prev.filter(r => r.id !== editModal.id));
+      // Has related data → soft-delete (hide from frontend per spec).
+      // Backend updateAdType persists status='inactive'; row stays in list
+      // so user can still find it via status filter = "Tắt".
+      await updateAdType(editModal.id, { status: 'inactive' });
+      setRows(prev => prev.map(r => r.id === editModal.id ? { ...r, status: 'inactive' } : r));
       closeModal();
     } catch (err) {
       setEditError(errorMessage(err));
@@ -338,12 +341,10 @@ export function AdTypeMgmt() {
                 <option value="">{t('selectAdvertiser')}</option>
                 {advertisers.map(a => <option key={a.id} value={String(a.id)}>{displayName(a.name)}</option>)}
               </select>
-              {false && (
-                <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
-                  <option value="">{t('selectAdOrder')}</option>
-                  {rows.map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
-                </select>
-              )}
+              <select className="filter-select" value={adOrderFilter} onChange={e => setAdOrderFilter(e.target.value)}>
+                <option value="">{t('selectAdOrder')}</option>
+                {(advertiserFilter ? rows.filter(r => String(r.upstreamId ?? '') === advertiserFilter) : rows).map(r => <option key={r.id} value={r.id}>{displayName(r.name)}</option>)}
+              </select>
               <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>
                 <option value="active">{t('online')}</option>

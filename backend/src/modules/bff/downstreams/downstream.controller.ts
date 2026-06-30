@@ -7,10 +7,11 @@ import { recordMasterDataOperation } from '../operation-logs/oplog.write.service
 import type { EntityStatus } from '../bff.types';
 
 export async function getAll(req: Request, res: Response) {
-  const { adTypeId, status, keyword } = req.query;
+  const { adTypeId, mediaAdOrderId, status, keyword } = req.query;
 
   const filters = {
     adTypeId: adTypeId ? String(adTypeId) : undefined,
+    mediaAdOrderId: mediaAdOrderId ? String(mediaAdOrderId) : undefined,
     status: status ? (String(status) as EntityStatus) : undefined,
     keyword: keyword ? String(keyword) : undefined,
   };

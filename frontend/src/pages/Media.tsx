@@ -204,7 +204,11 @@ export function MediaAdOrderMgmt() {
       }
       if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
-    return a.id.localeCompare(b.id);
+    const aDownstream = downstreamById.get(a.downstreamId);
+    const bDownstream = downstreamById.get(b.downstreamId);
+    const mediaDelta = displayName(aDownstream?.name ?? aDownstream?.downstreamType ?? '').localeCompare(displayName(bDownstream?.name ?? bDownstream?.downstreamType ?? ''), undefined, { sensitivity: 'base' });
+    if (mediaDelta !== 0) return mediaDelta;
+    return (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
   });
 
   const updateStatus = async (record: MediaAdOrder, active: boolean) => {
@@ -218,13 +222,14 @@ export function MediaAdOrderMgmt() {
   };
 
   const mediaAdOrderColumns: CsvColumn<MediaAdOrder>[] = [
-    { label: t('mediaAdOrder'), value: r => displayName(r.name) },
-    { label: t('adType'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
     { label: t('media'), value: r => {
       const downstream = downstreamById.get(r.downstreamId);
       return displayName(downstream?.name ?? downstream?.downstreamType ?? '-');
     } },
+    { label: t('mediaAdOrder'), value: r => displayName(r.name) },
+    { label: t('linkCount'), value: r => r.linkCount ?? 0 },
     { label: t('notes'), value: r => r.notes ?? '-' },
+    { label: t('status'), value: r => r.status ?? '' },
   ];
 
   const openCreate = () => {
@@ -472,6 +477,7 @@ export function MediaIdMgmt() {
   const [adSiteFilter, setAdSiteFilter] = React.useState('');
   const [mediaFilter, setMediaFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
+  const [mediaIdFilter, setMediaIdFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
   const [sortState, setSortState] = React.useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
   const toggleSort = (col: string) => {
@@ -580,7 +586,13 @@ export function MediaIdMgmt() {
     const adv = advertisers.find(a => String(a.id) === form.advertiserId);
     if (!adv) return [];
     const names = (adv.adTypeCodes && adv.adTypeCodes.length) ? adv.adTypeCodes : (adv.adTypeCode ? [adv.adTypeCode] : []);
-    return adTypes.filter(at => names.includes(at.name));
+    const byId = new Map<string, AdType>();
+    adTypes.filter(at => names.includes(at.name)).forEach(at => byId.set(at.id, at));
+    const byName = new Map<string, AdType>();
+    Array.from(byId.values()).forEach(at => {
+      if (!byName.has(at.name)) byName.set(at.name, at);
+    });
+    return Array.from(byName.values());
   }, [form.advertiserId, advertisers, adTypes]);
 
   // Cascade (2) Advertiser → AdSite options (lọc theo upstreamId)
@@ -606,7 +618,9 @@ export function MediaIdMgmt() {
   // Cascade (5) Đơn QC MEDIA: dropdown MediaAdOrder của cùng Downstream đã chọn
   const filteredMediaAdOrderOptions = React.useMemo(() => {
     if (!form.downstreamId) return [];
-    return mediaAdOrders.filter(mao => mao.downstreamId === form.downstreamId);
+    const byId = new Map<string, MediaAdOrder>();
+    mediaAdOrders.filter(mao => mao.downstreamId === form.downstreamId).forEach(mao => byId.set(mao.id, mao));
+    return Array.from(byId.values());
   }, [mediaAdOrders, form.downstreamId]);
 
   // Load MediaAdOrders khi đã chọn Downstream
@@ -658,27 +672,44 @@ export function MediaIdMgmt() {
   }, [mediaIdPresetFilter, clearMediaIdPresetFilter]);
 
   const adTypeNameByName = React.useMemo(() => new Map(adTypes.map(t => [t.name, t.name])), [adTypes]);
-  // Cascading filter: advertiser → adType → adSite → media → mediaAdOrder
+  // Cascading filter: advertiser → adType → adSite → media/downstream → mediaAdOrder → mediaIdName
   const advertiserScopedRows = advertiserFilter ? rows.filter(r => String(r.upstreamId) === String(advertiserFilter)) : rows;
   const adTypeScopedRows = adTypeFilter ? advertiserScopedRows.filter(r => r.adTypeCode === adTypeFilter) : advertiserScopedRows;
   const adSiteScopedRows = adSiteFilter ? adTypeScopedRows.filter(r => String(r.adSiteId) === String(adSiteFilter)) : adTypeScopedRows;
-  const mediaScopedRows = mediaFilter ? adSiteScopedRows.filter(row => row.mediaId === mediaFilter) : adSiteScopedRows;
-  const availableMediaAdOrderNames = Array.from(new Set(mediaScopedRows.map(row => row.mediaAdTypeCode).filter((c): c is string => !!c)));
-  const mediaAdOrderOptions = availableMediaAdOrderNames.map(name => ({ id: name, name }));
-  const mediaIdOptions = React.useMemo(() => {
+  const mediaOptions = React.useMemo(() => {
     const byId = new Map<string, string>();
-    rows.forEach(row => byId.set(row.mediaId, row.mediaName));
+    adSiteScopedRows.forEach(row => {
+      if (row.downstreamId) byId.set(row.downstreamId, row.downstreamName ?? row.downstreamId);
+    });
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
-  }, [rows]);
-  const mediaAdOrderScopedRows = orderFilter ? mediaScopedRows.filter(row => row.mediaAdTypeCode === orderFilter) : mediaScopedRows;
+  }, [adSiteScopedRows]);
+  const mediaScopedRows = mediaFilter ? adSiteScopedRows.filter(row => row.downstreamId === mediaFilter) : adSiteScopedRows;
+  const mediaAdOrderOptions = React.useMemo(() => {
+    const byId = new Map<string, string>();
+    mediaScopedRows.forEach(row => {
+      if (row.mediaAdOrderId) byId.set(row.mediaAdOrderId, row.mediaAdOrderName ?? row.mediaAdTypeCode ?? row.mediaAdOrderId);
+    });
+    return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
+  }, [mediaScopedRows]);
+  const mediaAdOrderScopedRows = orderFilter ? mediaScopedRows.filter(row => row.mediaAdOrderId === orderFilter) : mediaScopedRows;
+  const mediaIdOptions = React.useMemo(() => {
+    const values = Array.from(new Set(mediaAdOrderScopedRows.map(row => row.mediaIdName).filter((name): name is string => !!name)));
+    return values.map(name => ({ id: name, name }));
+  }, [mediaAdOrderScopedRows]);
+  const mediaIdScopedRows = mediaIdFilter ? mediaAdOrderScopedRows.filter(row => row.mediaIdName === mediaIdFilter) : mediaAdOrderScopedRows;
   const keyword = normalizeText(search);
-  const visibleRows = mediaAdOrderScopedRows.filter(row => {
+  const visibleRows = mediaIdScopedRows.filter(row => {
     if (statusFilter && row.status !== statusFilter) return false;
     if (!keyword) return true;
     const values = [
-      row.mediaName,
+      row.upstreamName,
       adTypeNameByName.get(row.adTypeCode ?? '') ?? row.adTypeCode,
-      row.slot,
+      row.adSiteName,
+      row.downstreamName,
+      row.mediaAdOrderName,
+      row.mediaAdTypeCode,
+      row.mediaIdName,
+      row.notes,
       row.type,
       row.rate,
       row.shareRatio,
@@ -702,10 +733,10 @@ export function MediaIdMgmt() {
           delta = displayName(a.downstreamName ?? '').localeCompare(displayName(b.downstreamName ?? ''), undefined, { sensitivity: 'base' });
           break;
         case 'mediaAdTypeCode':
-          delta = displayName(a.mediaAdTypeCode ?? '').localeCompare(displayName(b.mediaAdTypeCode ?? ''), undefined, { sensitivity: 'base' });
+          delta = displayName(a.mediaAdOrderName ?? a.mediaAdTypeCode ?? '').localeCompare(displayName(b.mediaAdOrderName ?? b.mediaAdTypeCode ?? ''), undefined, { sensitivity: 'base' });
           break;
         case 'slot':
-          delta = (a.slot ?? '').localeCompare(b.slot ?? '', undefined, { sensitivity: 'base' });
+          delta = (a.mediaIdName ?? a.slot ?? '').localeCompare(b.mediaIdName ?? b.slot ?? '', undefined, { sensitivity: 'base' });
           break;
         case 'shareRatio': {
           if (a.shareRatio == null && b.shareRatio != null) return sortState.dir === 'asc' ? 1 : -1;
@@ -738,9 +769,9 @@ export function MediaIdMgmt() {
   });
 
   const mediaIdColumns: CsvColumn<MediaId>[] = [
-    { label: t('media'), value: r => displayName(r.mediaName) },
-    { label: t('mediaAdOrder'), value: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? '') },
-    { label: t('mediaId'), value: r => r.slot ?? '' },
+    { label: t('media'), value: r => displayName(r.downstreamName ?? '-') },
+    { label: t('mediaAdOrder'), value: r => displayName(r.mediaAdOrderName ?? r.mediaAdTypeCode ?? '-') },
+    { label: t('mediaId'), value: r => r.mediaIdName ?? r.slot ?? '' },
     { label: t('type'), value: r => r.type ?? '' },
     { label: t('rate'), value: r => formatMgmtRate(r.type, r.rate) },
     { label: t('shareRatio'), value: r => r.shareRatio ?? '-' },
@@ -948,11 +979,12 @@ export function MediaIdMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
           <div className="toolbar-right">
-            <select className="filter-select" value={advertiserFilter} onChange={e => { setAdvertiserFilter(e.target.value); setAdTypeFilter(''); setAdSiteFilter(''); }}><option value="">{t('selectAdvertiser') || 'Nhà QC'}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
-            <select className="filter-select" value={adTypeFilter} onChange={e => { setAdTypeFilter(e.target.value); setAdSiteFilter(''); }} disabled={!advertiserFilter}><option value="">{t('selectAdOrder') || 'Đơn QC'}</option>{Array.from(new Set(advertiserScopedRows.map(r => r.adTypeCode).filter((c): c is string => !!c))).map(code => <option key={code} value={code}>{displayName(adTypeNameByName.get(code) ?? code)}</option>)}</select>
-            <select className="filter-select" value={adSiteFilter} onChange={e => setAdSiteFilter(e.target.value)} disabled={!adTypeFilter}><option value="">{t('adId') || 'ID QC'}</option>{Array.from(new Map(adTypeScopedRows.map(r => [r.adSiteId, r.adSiteName ?? r.adSiteId])).entries()).map(([id, name]) => <option key={id} value={id}>{displayName(name)}</option>)}</select>
-            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
-            <select className="filter-select" value={orderFilter} onChange={e => setOrderFilter(e.target.value)}><option value="">{t('selectMediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item.id} value={item.name}>{displayName(item.name)}</option>)}</select>
+            <select className="filter-select" value={advertiserFilter} onChange={e => { setAdvertiserFilter(e.target.value); setAdTypeFilter(''); setAdSiteFilter(''); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }}><option value="">{t('selectAdvertiser') || 'Nhà QC'}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
+            <select className="filter-select" value={adTypeFilter} onChange={e => { setAdTypeFilter(e.target.value); setAdSiteFilter(''); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }} disabled={!advertiserFilter}><option value="">{t('selectAdOrder') || 'Đơn QC'}</option>{Array.from(new Set(advertiserScopedRows.map(r => r.adTypeCode).filter((c): c is string => !!c))).map(code => <option key={code} value={code}>{displayName(adTypeNameByName.get(code) ?? code)}</option>)}</select>
+            <select className="filter-select" value={adSiteFilter} onChange={e => { setAdSiteFilter(e.target.value); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }} disabled={!adTypeFilter}><option value="">{t('adId') || 'ID QC'}</option>{Array.from(new Map(adTypeScopedRows.map(r => [r.adSiteId, r.adSiteName ?? r.adSiteId])).entries()).map(([id, name]) => <option key={id} value={id}>{displayName(name)}</option>)}</select>
+            <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setMediaIdFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
+            <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setMediaIdFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
+            <select className="filter-select" value={mediaIdFilter} onChange={e => setMediaIdFilter(e.target.value)}><option value="">{t('mediaId')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">{t('allStatuses')}</option><option value="active">{t('online')}</option><option value="inactive">{t('offline')}</option></select>
             <input className="search-input" placeholder={t('search')} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn-outline" onClick={() => downloadCsv('media-ids.csv', mediaIdColumns, visibleRows)}>{t('export')}</button>
@@ -966,8 +998,8 @@ export function MediaIdMgmt() {
               { key: 'adTypeCode', label: t('adType'), render: r => displayName(adTypeNameByName.get(r.adTypeCode ?? '') ?? r.adTypeCode ?? ''), sortDirection: sortState?.col === 'adTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('adTypeCode') },
               { key: 'adSiteName', label: t('adId'), render: r => displayName(r.adSiteName ?? '-'), sortDirection: sortState?.col === 'adSiteName' ? sortState.dir : null, onSortClick: () => toggleSort('adSiteName') },
               { key: 'downstreamName', label: t('media'), render: r => displayName(r.downstreamName ?? '-'), sortDirection: sortState?.col === 'downstreamName' ? sortState.dir : null, onSortClick: () => toggleSort('downstreamName') },
-              { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdTypeCode ?? '-'), sortDirection: sortState?.col === 'mediaAdTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('mediaAdTypeCode') },
-              { key: 'slot', label: t('mediaId'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
+              { key: 'mediaAdTypeCode', label: t('mediaAdOrder'), render: r => displayName(r.mediaAdOrderName ?? r.mediaAdTypeCode ?? '-'), sortDirection: sortState?.col === 'mediaAdTypeCode' ? sortState.dir : null, onSortClick: () => toggleSort('mediaAdTypeCode') },
+              { key: 'slot', label: t('mediaId'), render: r => displayName(r.mediaIdName ?? r.slot ?? '-'), sortDirection: sortState?.col === 'slot' ? sortState.dir : null, onSortClick: () => toggleSort('slot') },
               { key: 'type', label: t('type'), render: r => r.type ?? '-', sortDirection: sortState?.col === 'type' ? sortState.dir : null, onSortClick: () => toggleSort('type') },
               { key: 'shareRatio', label: t('shareRatio'), render: r => r.shareRatio != null ? `${r.shareRatio}` : '-', sortDirection: sortState?.col === 'shareRatio' ? sortState.dir : null, onSortClick: () => toggleSort('shareRatio') },
               { key: 'rate', label: t('rate'), render: r => formatMgmtRate(r.type, r.rate), sortDirection: sortState?.col === 'rate' ? sortState.dir : null, onSortClick: () => toggleSort('rate') },

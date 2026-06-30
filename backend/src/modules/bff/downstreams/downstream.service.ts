@@ -31,7 +31,12 @@ export async function listDownstreams(filters?: ListDownstreamsFilters) {
   }
 
   if (filters?.keyword) {
-    where.downstreamType = { contains: filters.keyword, mode: 'insensitive' };
+    where.OR = [
+      { downstreamType: { contains: filters.keyword, mode: 'insensitive' } },
+      { name: { contains: filters.keyword, mode: 'insensitive' } },
+      { notes: { contains: filters.keyword, mode: 'insensitive' } },
+      { mediaAdOrders: { some: { name: { contains: filters.keyword, mode: 'insensitive' } } } },
+    ];
   }
 
   const rows = await prisma.downstream.findMany({

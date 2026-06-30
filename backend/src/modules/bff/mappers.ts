@@ -89,6 +89,7 @@ export function mapMediaId(
     adSite: AdSite & { upstream: Upstream & { defaultAdType: AdType | null }; adType?: AdType | null };
     downstream: Downstream;
     mediaAdType?: AdType | null;
+    mediaAdOrder?: MediaAdOrder | null;
   }
 ): MediaId {
   const adType = j.adSite.adType ?? null;
@@ -115,6 +116,7 @@ export function mapMediaId(
     isActive: j.adSite.isActive,
     isArchived: j.adSite.isArchived,
     mediaAdOrderId: j.mediaAdOrderId ?? null,
+    mediaAdOrderName: j.mediaAdOrder?.name ?? null,
     mediaAdTypeCode: j.mediaAdType?.name ?? null,
     mediaIdName: j.mediaIdName ?? null,
     pctHal: j.pctHal ? Number(j.pctHal) : null,

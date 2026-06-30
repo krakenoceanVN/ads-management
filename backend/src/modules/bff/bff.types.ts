@@ -98,6 +98,7 @@ export interface MediaId {
   isArchived: boolean;
   // Extended fields for "Tạo ID media" form (docx §2.3)
   mediaAdOrderId?: string | null;
+  mediaAdOrderName?: string | null;
   mediaAdTypeCode?: string | null;
   mediaIdName?: string | null;
   pctHal?: number | null;

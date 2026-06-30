@@ -1,8 +1,9 @@
 import { prisma } from '../../../shared/prisma/client';
 import { mapMediaAdOrder } from '../mappers';
 import type { Prisma } from '@prisma/client';
+import type { EntityStatus } from '../bff.types';
 
-export async function listMediaAdOrders(params?: { downstreamId?: string; adTypeId?: string }) {
+export async function listMediaAdOrders(params?: { downstreamId?: string; adTypeId?: string; status?: EntityStatus; keyword?: string }) {
   const where: Prisma.MediaAdOrderWhereInput = {};
 
   if (params?.downstreamId != null) {
@@ -11,6 +12,20 @@ export async function listMediaAdOrders(params?: { downstreamId?: string; adType
 
   if (params?.adTypeId) {
     where.adTypeId = params.adTypeId;
+  }
+
+  if (params?.status) {
+    where.status = params.status;
+  }
+
+  if (params?.keyword) {
+    where.OR = [
+      { name: { contains: params.keyword, mode: 'insensitive' } },
+      { notes: { contains: params.keyword, mode: 'insensitive' } },
+      { downstream: { name: { contains: params.keyword, mode: 'insensitive' } } },
+      { downstream: { downstreamType: { contains: params.keyword, mode: 'insensitive' } } },
+      { adType: { name: { contains: params.keyword, mode: 'insensitive' } } },
+    ];
   }
 
   const rows = await prisma.mediaAdOrder.findMany({

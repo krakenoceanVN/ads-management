@@ -5,14 +5,16 @@ import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
 import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
 import { isValidId } from '../../../shared/ids';
+import type { EntityStatus } from '../bff.types';
 import type { CreateMediaAdOrderInput, UpdateMediaAdOrderInput } from './mediaAdOrder.write.service';
 
 export async function getAll(req: Request, res: Response) {
-  const { adTypeId } = req.query;
-  const downstreamId = req.query['downstreamId'] ? String(req.query['downstreamId']) : undefined;
+  const { downstreamId, adTypeId, status, keyword } = req.query;
   const params = {
-    downstreamId: downstreamId && isValidId(downstreamId) ? downstreamId : undefined,
+    downstreamId: downstreamId ? String(downstreamId) : undefined,
     adTypeId: adTypeId ? String(adTypeId) : undefined,
+    status: status ? (String(status) as EntityStatus) : undefined,
+    keyword: keyword ? String(keyword) : undefined,
   };
   const data = await listMediaAdOrders(params);
   res.json(bffData(data));

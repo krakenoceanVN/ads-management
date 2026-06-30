@@ -233,7 +233,7 @@ export async function deleteMedia(id: string) {
   return request<BffMutationResponse>(`/api/bff/media/${id}`, { method: 'DELETE' });
 }
 
-export async function listMediaAdOrders(params?: { downstreamId?: string; adTypeCode?: string }): Promise<MediaAdOrder[]> {
+export async function listMediaAdOrders(params?: { downstreamId?: string; adTypeId?: string; status?: EntityStatus; keyword?: string }): Promise<MediaAdOrder[]> {
   return unwrapData(await request<BffDataResponse<MediaAdOrder[]>>('/api/bff/media-ad-orders', { params }));
 }
 

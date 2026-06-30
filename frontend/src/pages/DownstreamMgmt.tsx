@@ -27,6 +27,10 @@ function getDownstreamAdTypeCodes(record: DownstreamDto): string[] {
   return [];
 }
 
+function getMediaAdOrderNames(record: DownstreamDto): string {
+  return record.mediaAdOrders?.map(order => order.name).filter(Boolean).join(', ') ?? '';
+}
+
 interface EditState {
   id?: string;
   adTypeIds: string[];
@@ -146,6 +150,7 @@ export function DownstreamMgmt() {
       r.phone,
       r.email,
       r.notes,
+      getMediaAdOrderNames(r),
       getDownstreamAdTypeCodes(r).join(' '),
       r.status,
     ].some(value => normalizeText(value).includes(keyword) || normalizeText(displayName(value)).includes(keyword));
@@ -155,6 +160,9 @@ export function DownstreamMgmt() {
       switch (sortState.col) {
         case 'name':
           delta = (a.name ?? a.downstreamType ?? '').localeCompare(b.name ?? b.downstreamType ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'mediaAdOrder':
+          delta = getMediaAdOrderNames(a).localeCompare(getMediaAdOrderNames(b), undefined, { sensitivity: 'base' });
           break;
         case 'contact':
           delta = (a.contact ?? '').localeCompare(b.contact ?? '', undefined, { sensitivity: 'base' });
@@ -180,6 +188,7 @@ export function DownstreamMgmt() {
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [
     { label: t('downstreamType') + ' / ' + t('media'), value: r => r.downstreamType },
     { label: t('mediaName'), value: r => r.name ?? '' },
+    { label: t('mediaAdOrder'), value: getMediaAdOrderNames },
     { label: t('contact'), value: r => r.contact ?? '' },
     { label: t('phone'), value: r => r.phone ?? '' },
     { label: t('email'), value: r => r.email ?? '' },
@@ -301,9 +310,9 @@ export function DownstreamMgmt() {
     {
       key: 'mediaAdOrders',
       label: t('mediaAdOrder'),
-      render: (r: DownstreamDto) => (r.mediaAdOrders && r.mediaAdOrders.length > 0)
-        ? r.mediaAdOrders.map(m => displayName(m.name)).join(', ')
-        : '-',
+      render: (r: DownstreamDto) => getMediaAdOrderNames(r) ? displayName(getMediaAdOrderNames(r)) : '-',
+      sortDirection: sortState?.col === 'mediaAdOrder' ? sortState.dir : null,
+      onSortClick: () => toggleSort('mediaAdOrder'),
     },
     { key: 'contact', label: t('contact'), render: (r: DownstreamDto) => displayName(r.contact ?? '-'), sortDirection: sortState?.col === 'contact' ? sortState.dir : null, onSortClick: () => toggleSort('contact') },
     { key: 'phone', label: t('phone'), render: (r: DownstreamDto) => r.phone ?? '-', sortDirection: sortState?.col === 'phone' ? sortState.dir : null, onSortClick: () => toggleSort('phone') },

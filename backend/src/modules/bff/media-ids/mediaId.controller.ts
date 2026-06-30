@@ -5,13 +5,35 @@ import { bffData } from '../../../shared/response/success';
 import { NotFoundError, BadRequestError } from '../../../shared/errors/AppError';
 import { recordMasterDataOperation } from '../operation-logs/oplog.write.service';
 import type { CreateMediaIdInput, UpdateMediaIdInput } from './mediaId.write.service';
+import type { EntityStatus } from '../bff.types';
 
 export async function getAll(req: Request, res: Response) {
-  const { mediaId, adTypeCode, type, archived } = req.query;
+  const {
+    mediaId,
+    advertiserId,
+    adTypeId,
+    adTypeCode,
+    adSiteId,
+    downstreamId,
+    mediaAdOrderId,
+    mediaIdName,
+    status,
+    keyword,
+    type,
+    archived,
+  } = req.query;
 
   const filters = {
     mediaId: mediaId ? String(mediaId) : undefined,
+    advertiserId: advertiserId ? String(advertiserId) : undefined,
+    adTypeId: adTypeId ? String(adTypeId) : undefined,
     adTypeCode: adTypeCode ? String(adTypeCode) : undefined,
+    adSiteId: adSiteId ? String(adSiteId) : undefined,
+    downstreamId: downstreamId ? String(downstreamId) : undefined,
+    mediaAdOrderId: mediaAdOrderId ? String(mediaAdOrderId) : undefined,
+    mediaIdName: mediaIdName ? String(mediaIdName) : undefined,
+    status: status ? (String(status) as EntityStatus) : undefined,
+    keyword: keyword ? String(keyword) : undefined,
     type: type ? (String(type) as 'CPM' | 'CPC' | 'CPS' | 'CPA') : undefined,
     archived: archived !== undefined ? archived === 'true' : undefined,
   };

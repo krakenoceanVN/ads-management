@@ -597,9 +597,17 @@ export function AdvEntry() {
                     <td>{displayName(adOrderDisplayForRow(row))}</td>
                     <td>{row.type}</td>
                     <td>{row.adId}</td>
-                    <td><input {...lockedInputProps} value={row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} /></td>
-                    <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} /></td>
-                    <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} /></td>
+                    {row.type === 'CPS' ? (
+                      <td><input {...lockedInputProps} value={row.rate} onChange={guardedChange(value => updateRow(row.uiKey, 'rate', value))} placeholder={t('valuePlaceholder')} /></td>
+                    ) : (
+                      <td className="amount-cell" title={t('unitPriceAutoFilled') || 'Auto-filled from AdSite'}>{row.rate || '--'}</td>
+                    )}
+                    <td><input {...lockedInputProps} value={row.traffic} onChange={guardedChange(value => updateRow(row.uiKey, 'traffic', value))} placeholder={row.type === 'CPS' ? t('amount1') || t('valuePlaceholder') : t('valuePlaceholder')} /></td>
+                    {row.type === 'CPS' ? (
+                      <td><input {...lockedInputProps} className={`${lockedInputProps.className} cell-input-wide`} value={row.settlement} onChange={guardedChange(value => updateRow(row.uiKey, 'settlement', value))} placeholder={t('amount2') || t('valuePlaceholder')} /></td>
+                    ) : (
+                      <td className="amount-cell text-secondary">—</td>
+                    )}
                     <td className="amount-cell">{hasValue(row.receivable) ? formatAmount(row.receivable) : '--'}</td>
                     <td><ConfirmButton confirmed={isConfirmed} onClick={() => void confirmRow(row)} /></td>
                     <td className="entry-action-cell">

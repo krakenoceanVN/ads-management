@@ -45,20 +45,24 @@ export async function listAdTypes(): Promise<AdTypeDto[]> {
     select: { id: true, name: true },
   });
   const ownerMap = new Map(owners.map(o => [o.id, o.name]));
-  // "Số lượng link" = số ID quảng cáo (AdSite) thuộc nhà QC sở hữu đơn QC này.
-  // AdSite gắn với Upstream; đơn QC suy ra qua owner (AdType.upstreamId).
+  // "Số lượng link" = số ID quảng cáo (AdSite) thuộc cặp (nhà QC, đơn QC) này.
+  // AdSite gắn với Upstream qua upstreamId và với AdType qua adTypeId; cả 2 phải khớp.
   const adSiteCounts = ownerIds.length
     ? await prisma.adSite.groupBy({
-        by: ['upstreamId'],
+        by: ['upstreamId', 'adTypeId'],
         where: { upstreamId: { in: ownerIds } },
         _count: { _all: true },
       })
     : [];
-  const adSiteCountByUpstream = new Map(adSiteCounts.map(c => [c.upstreamId, c._count._all]));
+  const adSiteCountKey = (upstreamId: string, adTypeId: string | null) =>
+    `${upstreamId}::${adTypeId ?? ''}`;
+  const adSiteCountByPair = new Map(
+    adSiteCounts.map(c => [adSiteCountKey(c.upstreamId, c.adTypeId), c._count._all])
+  );
   return rows.map(r => ({
     ...toDto(r),
     upstreamName: r.upstreamId ? (ownerMap.get(r.upstreamId) ?? null) : null,
-    adSiteCount: r.upstreamId ? (adSiteCountByUpstream.get(r.upstreamId) ?? 0) : 0,
+    adSiteCount: r.upstreamId ? (adSiteCountByPair.get(adSiteCountKey(r.upstreamId, r.id)) ?? 0) : 0,
   }));
 }
 

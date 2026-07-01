@@ -338,16 +338,28 @@ export async function listAdvertiserEntries(params: ListAdvertiserEntriesParams)
 }
 
 export async function saveAdvertiserEntryBatch(payload: SaveAdvertiserEntryBatchPayload): Promise<SaveEntryBatchResult> {
+  // Backend expects { items: [...] }; translate { date, adTypeCode, records }
+  const items = payload.records.map(r => ({
+    adSiteId: r.adId,
+    recordDate: r.recordDate,
+    qty: r.traffic,
+    unitPrice: r.rate,
+    amount1: r.type === 'CPS' ? r.traffic : r.settlement,
+    amount2: r.type === 'CPS' ? r.settlement : undefined,
+    ratio: r.type === 'CPS' ? r.rate : undefined,
+    type: r.type,
+    note: undefined,
+  }));
   return unwrapData(await request<BffDataResponse<SaveEntryBatchResult>>('/api/bff/data-entry/advertisers/batch', {
     method: 'POST',
-    body: payload,
+    body: { items },
   }));
 }
 
 export async function confirmAdvertiserEntryBatch(payload: { date: string; adSiteIds: string[] }): Promise<ConfirmEntryBatchResult> {
   return unwrapData(await request<BffDataResponse<ConfirmEntryBatchResult>>('/api/bff/data-entry/advertisers/confirm-batch', {
     method: 'POST',
-    body: payload,
+    body: { recordDate: payload.date, adSiteIds: payload.adSiteIds },
   }));
 }
 
@@ -364,7 +376,7 @@ export async function listMediaEntries(params: ListMediaEntriesParams): Promise<
 export async function confirmMediaEntryBatch(payload: { date: string; adSiteDownstreamIds: string[] }): Promise<ConfirmEntryBatchResult> {
   return unwrapData(await request<BffDataResponse<ConfirmEntryBatchResult>>('/api/bff/data-entry/media/confirm-batch', {
     method: 'POST',
-    body: payload,
+    body: { recordDate: payload.date, adSiteDownstreamIds: payload.adSiteDownstreamIds },
   }));
 }
 
@@ -375,9 +387,14 @@ export async function unconfirmMediaEntry(id: string): Promise<UnconfirmEntryRes
 }
 
 export async function saveMediaEntryBatch(payload: SaveMediaEntryBatchPayload): Promise<SaveEntryBatchResult> {
+  const items = payload.records.map(r => ({
+    adSiteDownstreamId: r.adSiteDownstreamId,
+    recordDate: r.recordDate,
+    dataCoefficient: r.dataCoefficient,
+  }));
   return unwrapData(await request<BffDataResponse<SaveEntryBatchResult>>('/api/bff/data-entry/media/batch', {
     method: 'POST',
-    body: payload,
+    body: { items },
   }));
 }
 

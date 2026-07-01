@@ -330,6 +330,11 @@ export function AdvEntry() {
     }
     const groups = new Map<string, { date: string; adTypeCode: string; records: Array<{ adId: string; type: EntryType; rate: string; traffic: string; settlement: string; recordDate: string }> }>();
     for (const row of targetRows) {
+      const traffic = (row.traffic ?? '').toString().trim();
+      const settlement = (row.settlement ?? '').toString().trim();
+      const rate = (row.rate ?? '').toString().trim();
+      const hasAny = traffic !== '' || settlement !== '' || rate !== '';
+      if (!hasAny) continue;
       const date = normalizeDate(row.date);
       const adTypeCode = adTypeCodeForRow(row);
       if (!date || !adTypeCode) throw new Error(t('requiredFields'));
@@ -338,9 +343,9 @@ export function AdvEntry() {
       group.records.push({
         adId: row.adIdNum,
         type: row.type,
-        rate: row.rate,
-        traffic: row.traffic,
-        settlement: row.settlement,
+        rate,
+        traffic,
+        settlement,
         recordDate: date,
       });
       groups.set(key, group);

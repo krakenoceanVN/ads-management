@@ -48,12 +48,12 @@ export async function generateAndCreateMediaAdOrder(
           _max: { seq: true },
         });
         const seq = (agg._max.seq ?? 0) + 1;
-        // Tên đơn quảng cáo phải duy nhất toàn hệ thống (không phân biệt hoa/thường).
+        // Media ad order name is unique per downstream (Media), not global.
         const dupe = await tx.mediaAdOrder.findFirst({
-          where: { name: { equals: finalName, mode: 'insensitive' } },
+          where: { name: { equals: finalName, mode: 'insensitive' }, downstreamId: input.downstreamId },
           select: { id: true },
         });
-        if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${finalName}' đã tồn tại`);
+        if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${finalName}' đã tồn tại trong Media này`);
         const { generateShortId } = await import('../../../shared/ids');
         return await tx.mediaAdOrder.create({
           data: {

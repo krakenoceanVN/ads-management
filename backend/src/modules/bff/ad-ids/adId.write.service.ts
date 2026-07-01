@@ -53,11 +53,18 @@ async function getAdvertiserLinkedAdTypes(advertiserId: string) {
     include: {
       defaultAdType: true,
       adTypeLinks: { include: { adType: true }, orderBy: { adTypeId: 'asc' } },
+      ownedAdTypes: { orderBy: { id: 'asc' } },
     },
   });
   if (!advertiser) throw new BadRequestError('Invalid advertiserId: ' + advertiserId);
-  const linkedAdTypes = advertiser.adTypeLinks.map(link => link.adType);
-  return linkedAdTypes.length ? linkedAdTypes : advertiser.defaultAdType ? [advertiser.defaultAdType] : [];
+  const candidates = [
+    ...advertiser.adTypeLinks.map(link => link.adType),
+    ...(advertiser.ownedAdTypes ?? []),
+    ...(advertiser.defaultAdType ? [advertiser.defaultAdType] : []),
+  ].filter((at): at is NonNullable<typeof at> => Boolean(at));
+  const byId = new Map<string, typeof candidates[number]>();
+  for (const at of candidates) byId.set(at.id, at);
+  return Array.from(byId.values());
 }
 
 export async function createAdId(input: CreateAdIdInput) {
@@ -66,17 +73,19 @@ export async function createAdId(input: CreateAdIdInput) {
   if (!billingMethod) throw new BadRequestError('Invalid billing method: ' + type);
 
   const advId = String(advertiserId);
-  if (!isValidId(advId)) throw new BadRequestError('Invalid advertiserId');
+  if (!advId) throw new BadRequestError('Invalid advertiserId');
 
   const trimmedSlot = slot.trim();
   if (!trimmedSlot) throw new BadRequestError('slot is required');
   await assertSlotUnique(trimmedSlot);
 
-  if (adTypeId) {
-    const linkedAdTypes = await getAdvertiserLinkedAdTypes(advId);
-    if (!linkedAdTypes.some(at => at.id === adTypeId)) {
-      throw new BadRequestError(`adTypeId ${adTypeId} is not linked to advertiserId ${advId}`);
-    }
+  // Validate advertiser + adType linkage (covers legacy IDs like UP001).
+  const linkedAdTypes = await getAdvertiserLinkedAdTypes(advId);
+  if (adTypeId && !linkedAdTypes.some(at => at.id === adTypeId)) {
+    throw new BadRequestError(`adTypeId ${adTypeId} is not linked to advertiserId ${advId}`);
+  }
+  if (!linkedAdTypes.length && !adTypeId) {
+    throw new BadRequestError(`Advertiser ${advId} has no linked adType; please pick one`);
   }
 
   try {

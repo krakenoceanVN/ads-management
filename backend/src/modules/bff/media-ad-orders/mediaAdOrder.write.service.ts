@@ -59,13 +59,14 @@ export async function updateMediaAdOrder(id: string, input: UpdateMediaAdOrderIn
 
   if (rest.name !== undefined) {
     const name = (rest.name ?? '').trim();
-    // Tên đơn quảng cáo phải duy nhất toàn hệ thống (không phân biệt hoa/thường).
+    // Media ad order name is unique per downstream (Media), not global.
     if (name) {
+      const targetDownstream = downstreamId ?? existing.downstreamId;
       const dupe = await prisma.mediaAdOrder.findFirst({
-        where: { name: { equals: name, mode: 'insensitive' }, NOT: { id } },
+        where: { name: { equals: name, mode: 'insensitive' }, downstreamId: targetDownstream, NOT: { id } },
         select: { id: true },
       });
-      if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${name}' đã tồn tại`);
+      if (dupe) throw new ConflictError(`Tên đơn quảng cáo '${name}' đã tồn tại trong Media này`);
     }
     updateData['name'] = rest.name;
   }

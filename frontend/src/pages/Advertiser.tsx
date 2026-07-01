@@ -122,8 +122,11 @@ type AdvertiserFormState = {
 };
 
 function getAdvertiserAdTypeIds(record: Advertiser): string[] {
+  // Trả về AdType NAMES (không phải ID) để filter theo tên hiển thị.
+  // Trong DB có thể tồn tại nhiều AdType records cùng name nhưng khác id
+  // (vd migrate nhiều lần) — filter theo name tránh miss record cùng loại đơn.
   return record.adTypes?.length
-    ? record.adTypes.map(at => String(at.id))
+    ? Array.from(new Set(record.adTypes.map(at => at.name)))
     : record.adTypeCodes?.length
       ? record.adTypeCodes
       : record.adTypeCode
@@ -133,7 +136,7 @@ function getAdvertiserAdTypeIds(record: Advertiser): string[] {
 
 function getAdvertiserAdTypeNameList(record: Advertiser, mapById: Map<string, string>): string[] {
   if (record.adTypes?.length) {
-    return record.adTypes.map(at => at.name);
+    return Array.from(new Set(record.adTypes.map(at => at.name)));
   }
   const ids = getAdvertiserAdTypeIds(record);
   return ids
@@ -250,8 +253,10 @@ export function AdvertiserList() {
     [adTypes]
   );
 
+  // Dropdown filter "Đơn quảng cáo" dùng NAME (không phải ID) để match qua các AdType
+  // records trùng tên trong DB. value = name, label = name.
   const adTypeOptions = React.useMemo(
-    () => Array.from(new Map(adTypes.map(at => [at.name, { id: String(at.id), name: at.name }])).values()),
+    () => Array.from(new Map(adTypes.map(at => [at.name, { id: at.name, name: at.name }])).values()),
     [adTypes]
   );
 
@@ -374,7 +379,10 @@ export function AdvertiserList() {
     }
     const payload: CreateAdvertiserInput | UpdateAdvertiserInput = {
       name: form.name.trim(),
-      adTypeIds: form.adTypeIds,
+      // adTypeIds có thể chứa name (legacy từ form filter) — map name → id qua adTypes state.
+      adTypeIds: form.adTypeIds
+        .map(value => adTypes.find(at => at.id === value)?.id ?? adTypes.find(at => at.name === value)?.id ?? value)
+        .filter(id => adTypes.some(at => at.id === id)),
       status: form.status,
       contact: contactValue || null,
       phone: phoneValue || null,

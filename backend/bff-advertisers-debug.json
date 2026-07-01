@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": "I2mGim",
+      "name": "圣乐游",
+      "adTypeCode": "360-m",
+      "adTypeCodes": ["360-m", "8888"],
+      "adTypes": [
+        {"id": "1CX4l9", "name": "360-m"},
+        {"id": "CwcZju", "name": "8888"}
+      ]
+    },
+    {
+      "id": "X5c7TY",
+      "name": "罗强",
+      "adTypeCode": "360-m",
+      "adTypeCodes": ["360-m", "8888"],
+      "adTypes": [
+        {"id": "zrSkwd", "name": "360-m"},
+        {"id": "CwcZju", "name": "8888"}
+      ]
+    }
+  ]
+}

@@ -95,8 +95,8 @@ export function DownstreamMgmt() {
   const [editError, setEditError] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterMediaAdOrderId, setFilterMediaAdOrderId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterMediaAdOrderName, setFilterMediaAdOrderName] = useState(''); // dùng name (không id) — backend có thể có nhiều MediaAdOrder cùng name
   const [sortState, setSortState] = useState<{ col: string; dir: 'asc' | 'desc' } | null>(null);
   const toggleSort = (col: string) => {
     setSortState(prev => {
@@ -110,8 +110,7 @@ export function DownstreamMgmt() {
     setLoading(true);
     setError('');
     try {
-      const params: { mediaAdOrderId?: string; status?: EntityStatus } = {};
-      if (filterMediaAdOrderId) params.mediaAdOrderId = filterMediaAdOrderId;
+      const params: { status?: EntityStatus } = {};
       if (filterStatus) params.status = filterStatus as EntityStatus;
       const ds = await listDownstreams(params);
       setRows(ds ?? []);
@@ -120,7 +119,7 @@ export function DownstreamMgmt() {
     } finally {
       setLoading(false);
     }
-  }, [filterMediaAdOrderId, filterStatus]);
+  }, [filterStatus]);
 
   const loadMediaAdOrders = useCallback(async () => {
     try {
@@ -142,6 +141,7 @@ export function DownstreamMgmt() {
   const keyword = normalizeText(search);
   const filteredRows = useMemo(() => rows.filter(r => {
     if (filterStatus && r.status !== filterStatus) return false;
+    if (filterMediaAdOrderName && !(r.mediaAdOrders ?? []).some(o => o.name === filterMediaAdOrderName)) return false;
     if (!keyword) return true;
     return [
       r.downstreamType,
@@ -183,7 +183,7 @@ export function DownstreamMgmt() {
       if (delta !== 0) return sortState.dir === 'asc' ? delta : -delta;
     }
     return String(a.id).localeCompare(String(b.id));
-  }), [rows, filterStatus, keyword, sortState, displayName]);
+  }), [rows, filterStatus, filterMediaAdOrderName, keyword, sortState, displayName]);
 
   const downstreamColumns: CsvColumn<DownstreamDto>[] = [
     { label: t('downstreamType') + ' / ' + t('media'), value: r => r.downstreamType },
@@ -428,9 +428,9 @@ export function DownstreamMgmt() {
               )}
             </div>
             <div className="toolbar-right">
-              <select className="filter-select" value={filterMediaAdOrderId} onChange={e => setFilterMediaAdOrderId(e.target.value)}>
+              <select className="filter-select" value={filterMediaAdOrderName} onChange={e => setFilterMediaAdOrderName(e.target.value)}>
                 <option value="">{t('selectMediaAdOrder') || t('selectAdOrder') || 'Đơn QC media'}</option>
-                {mediaAdOrders.map(m => <option key={m.id} value={m.id}>{displayName(m.name)}</option>)}
+                {Array.from(new Map(mediaAdOrders.map(m => [m.name, m]))).map(([, m]) => <option key={m.id} value={m.name}>{displayName(m.name)}</option>)}
               </select>
               <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                 <option value="">{t('allStatuses')}</option>

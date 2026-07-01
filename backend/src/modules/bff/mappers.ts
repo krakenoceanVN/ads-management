@@ -19,10 +19,15 @@ function decimalToNull(d: Decimal | null | undefined): number | null {
 }
 
 export function mapAdvertiser(upstream: Upstream & { defaultAdType: AdType | null; adTypeLinks?: Array<UpstreamAdType & { adType: AdType }>; ownedAdTypes?: AdType[] }): Advertiser {
-  // Đơn QC của một nhà QC được suy ra TỪ quyền sở hữu (AdType.upstreamId = owner),
-  // không lấy từ defaultAdType/adTypeLinks (chiều ngược, là dữ liệu legacy).
-  const ownedAdTypes = (upstream.ownedAdTypes ?? []).filter(Boolean);
-  const uniqueAdTypes = Array.from(new Map(ownedAdTypes.map(adType => [adType.id, adType])).values());
+  // Đơn QC của nhà QC = hợp của cả hai nguồn:
+  //   (1) ownedAdTypes — AdType.upstreamId = upstream.id (cũ)
+  //   (2) adTypeLinks  — UpstreamAdType junction (mới — write service chỉ sync junction, không set AdType.upstreamId)
+  const fromOwned = (upstream.ownedAdTypes ?? []).filter(Boolean);
+  const fromLinks = (upstream.adTypeLinks ?? [])
+    .map(link => link?.adType)
+    .filter((adType): adType is AdType => !!adType);
+  const merged = [...fromOwned, ...fromLinks];
+  const uniqueAdTypes = Array.from(new Map(merged.map(adType => [adType.id, adType])).values());
   const adTypeCodes = Array.from(new Set(uniqueAdTypes.map(adType => adType.name)));
   return {
     id: upstream.id,
@@ -59,12 +64,20 @@ export function mapMedia(site: AdSite & { upstream: Upstream & { defaultAdType: 
 
 export function mapAdId(
   site: AdSite & {
-    upstream: Upstream & { defaultAdType: AdType | null; ownedAdTypes?: AdType[] };
+    upstream: Upstream & {
+      defaultAdType: AdType | null;
+      ownedAdTypes?: AdType[];
+      adTypeLinks?: Array<UpstreamAdType & { adType: AdType }>;
+    };
     adType?: AdType | null;
   }
 ): AdId {
   const owned = site.upstream?.ownedAdTypes ?? [];
-  const primaryOwned = owned[0] ?? null;
+  const fromLinks = (site.upstream?.adTypeLinks ?? [])
+    .map(link => link?.adType)
+    .filter((adType): adType is AdType => !!adType);
+  const merged = [...owned, ...fromLinks];
+  const primaryOwned = merged[0] ?? null;
   const adType = site.adType ?? primaryOwned ?? site.upstream?.defaultAdType ?? null;
   const rate = site.billingMethod === 'CPM' || site.billingMethod === 'CPC' || site.billingMethod === 'CPA'
     ? decimalToNull(site.currentUnitPrice)

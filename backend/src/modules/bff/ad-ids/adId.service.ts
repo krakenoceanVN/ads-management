@@ -32,7 +32,7 @@ export async function listAdIds(filters?: ListAdIdsFilters) {
   const rows = await prisma.adSite.findMany({
     where,
     include: {
-      upstream: { include: { defaultAdType: true, ownedAdTypes: true } },
+      upstream: { include: { defaultAdType: true, ownedAdTypes: true, adTypeLinks: { include: { adType: true } } } },
       adType: true,
     },
     orderBy: { id: 'asc' },
@@ -45,7 +45,7 @@ export async function getAdId(id: string) {
   const row = await prisma.adSite.findUnique({
     where: { id },
     include: {
-      upstream: { include: { defaultAdType: true, ownedAdTypes: true } },
+      upstream: { include: { defaultAdType: true, ownedAdTypes: true, adTypeLinks: { include: { adType: true } } } },
       adType: true,
     },
   });

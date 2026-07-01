@@ -473,8 +473,6 @@ export function MediaAdOrderMgmt() {
 export function MediaIdMgmt() {
   const [search, setSearch] = React.useState('');
   const [advertiserFilter, setAdvertiserFilter] = React.useState('');
-  const [adTypeFilter, setAdTypeFilter] = React.useState('');
-  const [adSiteFilter, setAdSiteFilter] = React.useState('');
   const [mediaFilter, setMediaFilter] = React.useState('');
   const [orderFilter, setOrderFilter] = React.useState('');
   const [mediaIdFilter, setMediaIdFilter] = React.useState('');
@@ -669,18 +667,22 @@ export function MediaIdMgmt() {
   }, [mediaIdPresetFilter, clearMediaIdPresetFilter]);
 
   const adTypeNameByName = React.useMemo(() => new Map(adTypes.map(t => [t.name, t.name])), [adTypes]);
-  // Cascading filter: advertiser → adType → adSite → media/downstream → mediaAdOrder → mediaIdName
-  const advertiserScopedRows = advertiserFilter ? rows.filter(r => String(r.upstreamId) === String(advertiserFilter)) : rows;
-  const adTypeScopedRows = adTypeFilter ? advertiserScopedRows.filter(r => r.adTypeCode === adTypeFilter) : advertiserScopedRows;
-  const adSiteScopedRows = adSiteFilter ? adTypeScopedRows.filter(r => String(r.adSiteId) === String(adSiteFilter)) : adTypeScopedRows;
+  // Cascading filter: advertiser → media/downstream → mediaAdOrder → mediaIdName
+  const advertiserScopedRows = React.useMemo(
+    () => advertiserFilter ? rows.filter(r => String(r.upstreamId) === String(advertiserFilter)) : rows,
+    [rows, advertiserFilter]
+  );
   const mediaOptions = React.useMemo(() => {
     const byId = new Map<string, string>();
-    adSiteScopedRows.forEach(row => {
+    advertiserScopedRows.forEach(row => {
       if (row.downstreamId) byId.set(row.downstreamId, row.downstreamName ?? row.downstreamId);
     });
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
-  }, [adSiteScopedRows]);
-  const mediaScopedRows = mediaFilter ? adSiteScopedRows.filter(row => row.downstreamId === mediaFilter) : adSiteScopedRows;
+  }, [advertiserScopedRows]);
+  const mediaScopedRows = React.useMemo(
+    () => mediaFilter ? advertiserScopedRows.filter(row => row.downstreamId === mediaFilter) : advertiserScopedRows,
+    [advertiserScopedRows, mediaFilter]
+  );
   const mediaAdOrderOptions = React.useMemo(() => {
     const byId = new Map<string, string>();
     mediaScopedRows.forEach(row => {
@@ -688,12 +690,18 @@ export function MediaIdMgmt() {
     });
     return Array.from(byId.entries()).map(([id, name]) => ({ id, name }));
   }, [mediaScopedRows]);
-  const mediaAdOrderScopedRows = orderFilter ? mediaScopedRows.filter(row => row.mediaAdOrderId === orderFilter) : mediaScopedRows;
+  const mediaAdOrderScopedRows = React.useMemo(
+    () => orderFilter ? mediaScopedRows.filter(row => row.mediaAdOrderId === orderFilter) : mediaScopedRows,
+    [mediaScopedRows, orderFilter]
+  );
   const mediaIdOptions = React.useMemo(() => {
     const values = Array.from(new Set(mediaAdOrderScopedRows.map(row => row.mediaIdName).filter((name): name is string => !!name)));
     return values.map(name => ({ id: name, name }));
   }, [mediaAdOrderScopedRows]);
-  const mediaIdScopedRows = mediaIdFilter ? mediaAdOrderScopedRows.filter(row => row.mediaIdName === mediaIdFilter) : mediaAdOrderScopedRows;
+  const mediaIdScopedRows = React.useMemo(
+    () => mediaIdFilter ? mediaAdOrderScopedRows.filter(row => row.mediaIdName === mediaIdFilter) : mediaAdOrderScopedRows,
+    [mediaAdOrderScopedRows, mediaIdFilter]
+  );
   const keyword = normalizeText(search);
   const visibleRows = mediaIdScopedRows.filter(row => {
     if (statusFilter && row.status !== statusFilter) return false;
@@ -976,9 +984,7 @@ export function MediaIdMgmt() {
             <button className="btn-primary" onClick={openCreate}>{t('newMediaId')}</button>
           </div>
           <div className="toolbar-right">
-            <select className="filter-select" value={advertiserFilter} onChange={e => { setAdvertiserFilter(e.target.value); setAdTypeFilter(''); setAdSiteFilter(''); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }}><option value="">{t('selectAdvertiser') || 'Nhà QC'}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
-            <select className="filter-select" value={adTypeFilter} onChange={e => { setAdTypeFilter(e.target.value); setAdSiteFilter(''); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }} disabled={!advertiserFilter}><option value="">{t('selectAdOrder') || 'Đơn QC'}</option>{Array.from(new Set(advertiserScopedRows.map(r => r.adTypeCode).filter((c): c is string => !!c))).map(code => <option key={code} value={code}>{displayName(adTypeNameByName.get(code) ?? code)}</option>)}</select>
-            <select className="filter-select" value={adSiteFilter} onChange={e => { setAdSiteFilter(e.target.value); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }} disabled={!adTypeFilter}><option value="">{t('adId') || 'ID QC'}</option>{Array.from(new Map(adTypeScopedRows.map(r => [r.adSiteId, r.adSiteName ?? r.adSiteId])).entries()).map(([id, name]) => <option key={id} value={id}>{displayName(name)}</option>)}</select>
+            <select className="filter-select" value={advertiserFilter} onChange={e => { setAdvertiserFilter(e.target.value); setMediaFilter(''); setOrderFilter(''); setMediaIdFilter(''); }}><option value="">{t('selectAdvertiser') || 'Nhà QC'}</option>{advertisers.map(a => <option key={a.id} value={a.id}>{displayName(a.name)}</option>)}</select>
             <select className="filter-select" value={mediaFilter} onChange={e => { setMediaFilter(e.target.value); setOrderFilter(''); setMediaIdFilter(''); }}><option value="">{t('selectMedia')}</option>{mediaOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={orderFilter} onChange={e => { setOrderFilter(e.target.value); setMediaIdFilter(''); }}><option value="">{t('selectMediaAdOrder')}</option>{mediaAdOrderOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>
             <select className="filter-select" value={mediaIdFilter} onChange={e => setMediaIdFilter(e.target.value)}><option value="">{t('mediaId')}</option>{mediaIdOptions.map(item => <option key={item.id} value={item.id}>{displayName(item.name)}</option>)}</select>

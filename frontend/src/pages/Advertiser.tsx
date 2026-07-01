@@ -668,7 +668,7 @@ export function AdIdMgmt() {
   }, [adIdPresetFilter, adTypes, clearAdIdPresetFilter]);
 
   const adTypeNameById = React.useMemo(() => new Map(adTypes.map(at => [String(at.id), at.name])), [adTypes]);
-  const adIdAdTypeId = React.useCallback((row: AdId) => row.adTypeId ?? '', []);
+  const adIdAdTypeId = React.useCallback((row: AdId) => String(row.adTypeId ?? ''), []);
   const adIdAdTypeLabel = React.useCallback(
     (row: AdId) => row.adTypeName || row.adTypeCode || (row.adTypeId ? adTypeNameById.get(row.adTypeId) : '') || '',
     [adTypeNameById]

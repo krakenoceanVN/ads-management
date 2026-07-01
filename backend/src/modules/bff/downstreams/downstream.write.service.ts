@@ -97,6 +97,15 @@ export async function createDownstream(input: CreateDownstreamInput): Promise<Do
   const status = validateStatus(input.status ?? 'active');
   const adTypeIds = normalizeAdTypeIds(input);
 
+  const trimmedName = input.name?.trim();
+  if (trimmedName) {
+    const nameDup = await prisma.downstream.findFirst({
+      where: { name: { equals: trimmedName, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (nameDup) throw new ConflictError(`Media name '${trimmedName}' already exists`);
+  }
+
   const row = await prisma.$transaction(async tx => {
     const adTypes = await resolveAdTypesByIds(adTypeIds, tx);
 
@@ -156,7 +165,17 @@ export async function updateDownstream(id: string, input: UpdateDownstreamInput)
     data.status = validateStatus(input.status);
   }
 
-  if (input.name !== undefined) data.name = input.name ?? null;
+  if (input.name !== undefined) {
+    const trimmedName = input.name?.trim();
+    if (trimmedName) {
+      const nameDup = await prisma.downstream.findFirst({
+        where: { name: { equals: trimmedName, mode: 'insensitive' }, id: { not: id } },
+        select: { id: true },
+      });
+      if (nameDup) throw new ConflictError(`Media name '${trimmedName}' already exists`);
+    }
+    data.name = input.name ?? null;
+  }
   if (input.contact !== undefined) data.contact = input.contact ?? null;
   if (input.phone !== undefined) data.phone = input.phone ?? null;
   if (input.email !== undefined) data.email = input.email ?? null;

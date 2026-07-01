@@ -609,11 +609,8 @@ export function MediaIdMgmt() {
     }
   }, [selectedAdTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cascade (4) MEDIA: dropdown Downstream (ML/LE/YIYI) — filter theo AdSite's adType
-  const filteredDownstreamOptions = React.useMemo(() => {
-    if (!selectedAdTypeId) return downstreams;
-    return downstreams.filter(d => d.adTypeIds.includes(selectedAdTypeId));
-  }, [downstreams, selectedAdTypeId]);
+  // Cascade (4) MEDIA: dropdown Downstream (ML/LE/YIYI) — always show all
+  const filteredDownstreamOptions = downstreams;
 
   // Cascade (5) Đơn QC MEDIA: dropdown MediaAdOrder của cùng Downstream đã chọn
   const filteredMediaAdOrderOptions = React.useMemo(() => {
